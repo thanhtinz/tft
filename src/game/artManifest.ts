@@ -41,6 +41,9 @@ export const UNIT_ART: Record<string, number> = {
 
 export const SCENE_ART: Record<string, number> = {
   "arena": require('../../assets/art/scenes/arena.webp'),
+  "arena-desert": require('../../assets/art/scenes/arena-desert.webp'),
+  "arena-ice": require('../../assets/art/scenes/arena-ice.webp'),
+  "arena-sunset": require('../../assets/art/scenes/arena-sunset.webp'),
   "banner-desert": require('../../assets/art/scenes/banner-desert.webp'),
   "banner-forest": require('../../assets/art/scenes/banner-forest.webp'),
   "banner-ice": require('../../assets/art/scenes/banner-ice.webp'),

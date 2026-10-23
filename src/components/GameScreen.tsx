@@ -6,7 +6,8 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { ItemArt } from './ChibiArt';
 import SpriteUnit, { SceneArtImage } from './SpriteUnit';
 import { AmbientParticles, EnvOverlay } from './SceneArt';
-import { LevelPillarFx, OrbFlight, OrbFlightLayer, StarBurstFx } from './StageFx';
+import { AnnouncerFx, BeamFx, ItemRewardPopup, LevelPillarFx, MergeSwirlFx, OrbFlight, OrbFlightLayer, PowFx, ShakeWrap, StarBurstFx } from './StageFx';
+import { arenaForContext } from '../game/arenaTheme';
 import { rowDepth, stateForUnit } from '../game/rig';
 import { AUGMENTS, BOT_NAMES, CHAMPIONS, SHOP_ODDS, TRAITS, champById, itemById, monsterById, traitName } from '../game/data';
 import { AUG_ROUNDS_TFT as AUG_ROUNDS, BattleResult, PlacedUnit, computeSynergies, interestOf, isCarouselRound, isPveStageRound, lossDamage, makeAiTeam, makeMonsterTeam, newUid, pveEnemiesForRound, randomItem, rollShop, roundLabel, sellValue, simulateBattle, stageSub, streakBonus, xpToNext } from '../game/engine';
@@ -70,9 +71,21 @@ export function SwordBadge({ size = 22 }: { size?: number }) {
   </View>);
 }
 // ===== Lop trinh bay phu: banner / hieu ung giao tranh / o phat sang (chi hien thi, khong chua logic game) =====
-type FxKind = 'dmg' | 'heal' | 'proj' | 'burst' | 'soul' | 'stun' | 'tele' | 'sparks';
+type FxKind = 'dmg' | 'heal' | 'proj' | 'burst' | 'soul' | 'stun' | 'tele' | 'sparks' | 'beam' | 'pow';
 interface FxItem { id: number; kind: FxKind; x: number; y: number; x2?: number; y2?: number; text?: string; crit?: boolean; color?: string; radius?: number; born: number; ox?: number; oy?: number; rp?: number; seed?: number; }
-const FX_LIFE: Record<FxKind, number> = { dmg: 750, heal: 750, proj: 380, burst: 500, soul: 900, stun: 750, tele: 260, sparks: 480 };
+const FX_LIFE: Record<FxKind, number> = { dmg: 750, heal: 750, proj: 380, burst: 500, soul: 900, stun: 750, tele: 260, sparks: 480, beam: 280, pow: 260 };
+// Vet mat dat sau ky nang (lua/doc/bang): ellipse mo duoi chan tuong, song 1200ms
+interface GroundMark { id: number; x: number; y: number; kind: 'fire' | 'poison' | 'ice'; born: number; }
+const MARK_COLORS: Record<GroundMark['kind'], string> = { fire: '#fb8500', poison: '#9d4edd', ice: '#48cae4' };
+function GroundMarksLayer({ marks }: { marks: GroundMark[] }) {
+  const [, setTick] = useState(0);
+  useEffect(() => { const iv = setInterval(() => setTick(t => t + 1), 50); return () => clearInterval(iv); }, []);
+  const now = Date.now();
+  return (<View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 5 }}>
+    {marks.map(mk => { const age = now - mk.born; if (age < 0 || age > 1200) return null; const p = age / 1200;
+      return (<View key={mk.id} style={{ position: 'absolute', left: mk.x - 26, top: mk.y - 9, width: 52, height: 18, borderRadius: 999, backgroundColor: MARK_COLORS[mk.kind], opacity: 0.35 * (1 - p) }} />); })}
+  </View>);
+}
 const BURST_COLORS: Record<string, string> = { aoe: '#fb8500', freeze: '#48cae4', stun: '#9d4edd', heal: '#38b000', shield: '#7ee0ff' };
 const STAR_SCALE = (s: number) => s === 1 ? 1 : s === 2 ? 1.15 : 1.3;
 function starPoints(cx: number, cy: number, r: number) { return cx + ',' + (cy - r) + ' ' + (cx + r * 0.28) + ',' + (cy - r * 0.28) + ' ' + (cx + r) + ',' + cy + ' ' + (cx + r * 0.28) + ',' + (cy + r * 0.28) + ' ' + cx + ',' + (cy + r) + ' ' + (cx - r * 0.28) + ',' + (cy + r * 0.28) + ' ' + (cx - r) + ',' + cy + ' ' + (cx - r * 0.28) + ',' + (cy - r * 0.28); }
@@ -132,7 +145,7 @@ function UnitBars({ sz, star, hpFrac, manaFrac, items, ghostFrac }: { sz: number
   useEffect(() => { const iv = setInterval(() => setTick(t => needPulse ? t + 1 : t), 260); return () => clearInterval(iv); }, [needPulse]);
   const pulseOn = tick % 2 === 0;
   return (<View pointerEvents="none" style={{ position: 'absolute', top: -sz * 0.17, left: (sz - bw) / 2, width: bw, zIndex: 60 }}>
-    <Text style={{ fontSize: Math.max(8, sz * 0.13), fontWeight: '900', color: '#ffd60a', lineHeight: Math.max(10, sz * 0.15), textShadowColor: 'rgba(0,0,0,0.85)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>{'★'.repeat(star)}</Text>
+    <Text style={{ fontSize: Math.max(8, sz * 0.13), fontWeight: '900', color: star === 2 ? '#d7dde8' : '#ffd60a', lineHeight: Math.max(10, sz * 0.15), textShadowColor: 'rgba(0,0,0,0.85)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>{'★'.repeat(star)}</Text>
     <View style={{ position: 'relative' }}>
       <SegmentBar frac={hpFrac} color="#43c62f" h={Math.max(5, sz * 0.062)} ghostFrac={ghostFrac} />
       {hpLow && <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, borderRadius: 2, backgroundColor: 'rgba(239,71,111,' + (pulseOn ? 0.4 : 0) + ')' }} />}
@@ -199,14 +212,32 @@ function FxLayer({ items }: { items: FxItem[] }) {
     {items.map(it => {
       const life = FX_LIFE[it.kind]; const age = now - it.born; if (age < 0 || age > life) return null; const p = age / life;
       if (it.kind === 'dmg' || it.kind === 'heal' || it.kind === 'stun') {
+        // So kieu Kanto: sat thuong cam-vang 2 lop (sau #fb8500, truoc #ffb703 lech
+        // -1px) tren nen 4 ban sao den 4 huong lam vien; crit 34, thuong 24, heal 20 xanh la.
         const isHeal = it.kind === 'heal';
-        const fontSize = it.crit ? 26 : isHeal ? 17 : 16;
+        const isDodge = it.text === 'NÉ';
+        const isDamage = !!it.text && it.text.startsWith('-');
+        const fontSize = it.crit ? 34 : isHeal ? 20 : 24;
         const q = Math.min(1, p / 0.22); const easeOut = 1 - (1 - q) * (1 - q);
-        const popScale = p < 0.22 ? (it.crit ? 1.8 - 0.62 * easeOut : 1.45 - 0.45 * easeOut) : (it.crit ? 1.18 : 1);
+        const popScale = p < 0.22 ? (it.crit ? 1.7 - 0.55 * easeOut : 1.4 - 0.4 * easeOut) : (it.crit ? 1.15 : 1);
         const fade = p > 0.55 ? 1 - (p - 0.55) / 0.45 : 1;
         const ty = -44 * p + (p > 0.55 ? (p - 0.55) * 16 : 0);
         const tx = it.crit && p < 0.4 ? Math.sin(age * 0.09) * 1.3 : 0;
-        return (<Text key={it.id} style={{ position: 'absolute', left: (it.x + (it.ox ?? 0)) - 45, top: (it.y + (it.oy ?? 0)) - 14, width: 90, textAlign: 'center', fontWeight: '900', fontSize, color: it.color ?? (isHeal ? '#57e389' : it.crit ? '#ffd60a' : '#ffffff'), opacity: fade, transform: [{ translateX: tx }, { translateY: ty }, { scale: popScale }], textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: it.crit ? 4 : 3 }}>{it.crit ? 'CRIT ' : ''}{it.text}</Text>);
+        const frontColor = isHeal ? '#57e389' : isDodge ? '#e8ecff' : !isDamage && it.color ? it.color : '#ffb703';
+        const showBack = isDamage && !isDodge;
+        const outlineOff: [number, number][] = [[-1.6, 0], [1.6, 0], [0, -1.6], [0, 1.6]];
+        const layerBase = { position: 'absolute' as const, left: 0, top: 0, width: 90, textAlign: 'center' as const, fontWeight: '900' as const, fontSize };
+        return (<View key={it.id} pointerEvents="none" style={{ position: 'absolute', left: (it.x + (it.ox ?? 0)) - 45, top: (it.y + (it.oy ?? 0)) - 16, width: 90, height: fontSize + 10, opacity: fade, transform: [{ translateX: tx }, { translateY: ty }, { scale: popScale }] }}>
+          {outlineOff.map(([dx, dy], oi) => (<Text key={oi} style={{ ...layerBase, left: dx, top: dy, color: '#14100a' }}>{it.text}</Text>))}
+          {showBack && <Text style={{ ...layerBase, color: '#fb8500' }}>{it.text}</Text>}
+          <Text style={{ ...layerBase, left: -1, top: -1, color: frontColor }}>{it.text}</Text>
+        </View>);
+      }
+      if (it.kind === 'beam') {
+        return (<BeamFx key={it.id} x1={it.x} y1={it.y} x2={it.x2 ?? it.x} y2={it.y2 ?? it.y} color={it.color ?? '#ffd60a'} born={it.born} />);
+      }
+      if (it.kind === 'pow') {
+        return (<PowFx key={it.id} x={it.x} y={it.y} born={it.born} />);
       }
       if (it.kind === 'proj') {
         const x2 = it.x2 ?? it.x, y2 = it.y2 ?? it.y;
@@ -254,7 +285,7 @@ function ArenaBanner({ title, sub, tone, onDone }: { title: string; sub?: string
   const accent = tone === 'lose' ? '#ef476f' : tone === 'win' ? '#57e389' : '#f5d67b';
   return (<View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: '36%', zIndex: 150, alignItems: 'center', opacity }}>
     <View style={{ transform: [{ scale }], backgroundColor: 'rgba(12,16,32,0.9)', borderWidth: 2, borderColor: accent, borderRadius: 12, paddingHorizontal: 34, paddingVertical: 10, alignItems: 'center', minWidth: 260 }}>
-      <Text style={{ fontSize: 34, fontWeight: '900', color: accent, letterSpacing: 4 }}>{title}</Text>
+      {!!title && <Text style={{ fontSize: 34, fontWeight: '900', color: accent, letterSpacing: 4 }}>{title}</Text>}
       {!!sub && <Text style={{ fontSize: 13, fontWeight: '700', color: '#eef1ff', marginTop: 2 }}>{sub}</Text>}
     </View>
   </View>);
@@ -322,6 +353,33 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   const [orbs, setOrbs] = useState<OrbFlight[]>([]);
   const [combineFx, setCombineFx] = useState<{ uid: string; born: number } | null>(null);
   const [lvlFxBorn, setLvlFxBorn] = useState(0);
+  // Do hoa dot 2: don manh (heavy), rung man khi ket lieu nang, gop sao bien hinh,
+  // popup trang bi, chu ho ket qua, vet mat dat
+  const [heavyUids, setHeavyUids] = useState<Set<string>>(new Set());
+  const [shakeBorn, setShakeBorn] = useState(0);
+  const [mergeFx, setMergeFx] = useState<{ x: number; y: number; froms: { x: number; y: number }[]; born: number; key: number } | null>(null);
+  const [itemPopup, setItemPopup] = useState<{ name: string; desc: string; color: string; born: number; key: number } | null>(null);
+  const [announcer, setAnnouncer] = useState<{ text: string; color: string; born: number } | null>(null);
+  const [groundMarks, setGroundMarks] = useState<GroundMark[]>([]);
+  const heavyTimerRef = useRef<any>(null);
+  const mergeTimerRef = useRef<any>(null);
+  const markDedupeRef = useRef(new Map<string, number>());
+  // Vi tri san khau (he stageWrap) cua arena + bench de tinh toa do gop sao:
+  // arenaStageOff = middlePos + arenaLayout; benchRowPos + tung o bench do bang onLayout.
+  const arenaStageOffRef = useRef<{ x: number; y: number }>({ x: 0, y: 46 });
+  const middlePosRef = useRef<{ x: number; y: number }>({ x: 0, y: 46 });
+  const benchRowPosRef = useRef<{ x: number; y: number } | null>(null);
+  const benchCellPosRef = useRef(new Map<number, { x: number; y: number }>());
+  function stagePosOfBoard(x: number, y: number) { const c = hexCenter(hm, x, y); return { x: c.cx + arenaStageOffRef.current.x, y: c.cy + arenaStageOffRef.current.y }; }
+  function stagePosOfBench(idx: number) { const row = benchRowPosRef.current; const cell = benchCellPosRef.current.get(idx); if (!row || !cell) return null; return { x: row.x + cell.x, y: row.y + cell.y }; }
+  function showItemPopup(itemId: string) { const def = itemById(itemId); if (!def) return; setItemPopup({ name: def.name, desc: def.desc, color: def.color, born: Date.now(), key: Date.now() }); }
+  function showAnnouncer(win: boolean, bossFight: boolean) {
+    if (win && bossFight) setAnnouncer({ text: 'HẠ GỤC BOSS!', color: '#fb8500', born: Date.now() });
+    else if (win) setAnnouncer({ text: 'THẮNG!', color: '#ffd60a', born: Date.now() });
+    else setAnnouncer({ text: 'THUA!', color: '#ff5d73', born: Date.now() });
+  }
+  useEffect(() => { if (!announcer) return; const tm = setTimeout(() => setAnnouncer(null), 1500); return () => clearTimeout(tm); }, [announcer]);
+  useEffect(() => { if (!itemPopup) return; const tm = setTimeout(() => setItemPopup(null), 2450); return () => clearTimeout(tm); }, [itemPopup]);
   const orbIdRef = useRef(1);
   const orbArrivedRef = useRef(new Set<number>());
   const orbMetaRef = useRef(new Map<number, { amount?: number; gem?: boolean }>());
@@ -360,21 +418,39 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   function addUnit(defId: string, toBoard = false) {
     const u: PlacedUnit = { uid: newUid(), defId, star: 1, items: [], x: 0, y: 0 };
     let nb = [...bench], nd = [...board]; let combined = false; let mergedUid: string | null = null;
+    let mergeCapture: { x: number; y: number; froms: { x: number; y: number }[] } | null = null;
     if (toBoard && nd.length < level) { u.x = nd.length % 7; u.y = champById(defId).range <= 1 ? 2 : 3; nd.push(u); } else nb.push(u);
     for (let star = 1; star <= 2; star++) {
       const all = [...nd, ...nb]; const same = all.filter(x => x.defId===defId && x.star===star);
       if (same.length >= 3) {
         combined = true;
-        const removeIds = new Set(same.slice(0,3).map(x => x.uid)); const items = same.slice(0,3).flatMap(x => x.items).slice(0,3);
+        // TRUOC khi hut: chup toa do san khau cua 3 ban sao sap bien mat (o board
+        // qua hexCenter + offset arena; o bench qua onLayout cua o bench). O nao
+        // khong truy duoc vi tri thi bo qua khoi froms (MergeSwirlFx van chay).
+        const merging = same.slice(0, 3);
+        const froms: { x: number; y: number }[] = [];
+        for (const su of merging) {
+          const di = nd.findIndex(v => v.uid === su.uid); const bi = nb.findIndex(v => v.uid === su.uid);
+          const p = di >= 0 ? stagePosOfBoard(su.x, su.y) : bi >= 0 ? stagePosOfBench(bi) : null;
+          if (p) froms.push(p);
+        }
+        const removeIds = new Set(merging.map(x => x.uid)); const items = merging.flatMap(x => x.items).slice(0,3);
         nd = nd.filter(x => !removeIds.has(x.uid)); nb = nb.filter(x => !removeIds.has(x.uid));
         const merged: PlacedUnit = { uid: newUid(), defId, star: star+1, items, x: same[0].x, y: same[0].y };
         mergedUid = merged.uid;
         if (nd.length < level) nd.push(merged); else nb.push(merged);
+        // Vi tri tuong ket qua: tren board neu duoc dat len board, khong thi o bench noi no xuat hien
+        let resultPos: { x: number; y: number } | null = null;
+        if (nd.some(v => v.uid === merged.uid)) resultPos = stagePosOfBoard(merged.x, merged.y);
+        else { const bi = nb.findIndex(v => v.uid === merged.uid); if (bi >= 0) resultPos = stagePosOfBench(bi); }
+        if (!resultPos && froms.length) resultPos = froms[0];
+        if (resultPos) mergeCapture = { x: resultPos.x, y: resultPos.y, froms: froms.filter(f => Math.abs(f.x - resultPos!.x) > 1 || Math.abs(f.y - resultPos!.y) > 1) };
         say(`${champById(defId).name} đã lên ${star+1} sao!`);
       }
     }
     setBoard(nd); setBench(nb.slice(0, 9));
     if (mergedUid) setCombineFx({ uid: mergedUid, born: Date.now() });
+    if (mergeCapture) { const cap = mergeCapture; const born = Date.now(); setMergeFx({ ...cap, born, key: born }); if (mergeTimerRef.current) clearTimeout(mergeTimerRef.current); mergeTimerRef.current = setTimeout(() => setMergeFx(null), 800); }
     if (combined) { audio.playSfx('starup'); emitRef.current('combine'); }
   }
   function buy(i: number) {
@@ -531,14 +607,43 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
     const spawned: FxItem[] = []; const now = Date.now();
     const pveFight = mode !== 'arena' || isPveStageRound(round);
     let enemyDiedPve = false;
+    // Don ket lieu trong cung cua so event + don MANH (crit hoac >= 15% maxHp muc tieu)
+    const deathTargets = new Set(evs.filter(e => e.type === 'death').map(e => e.targetUid ?? e.uid).filter(Boolean) as string[]);
+    const heavyTargets = new Set<string>();
+    const newMarks: GroundMark[] = [];
+    const addMark = (kind: GroundMark['kind'], uid: string | undefined, pos: { x: number; y: number } | null) => {
+      if (!pos || !uid) return;
+      const key = uid + ':' + kind; const last = markDedupeRef.current.get(key) ?? -9999;
+      if (now - last < 300) return;
+      markDedupeRef.current.set(key, now);
+      newMarks.push({ id: fxIdRef.current++, x: pos.x, y: pos.y, kind, born: now });
+    };
     for (const e of evs) {
       const tgt = posOf(e.tx, e.ty, e.targetUid ?? e.uid); const src = posOf(e.ax, e.ay, e.attackerUid);
+      const tgtUnit = cur.units.find(v => v.uid === (e.targetUid ?? e.uid));
+      const atkUnit = e.attackerUid ? cur.units.find(v => v.uid === e.attackerUid) : undefined;
+      const atkArtId = atkUnit?.artId ?? atkUnit?.defId;
       if ((e.type === 'attack' || e.type === 'hit' || e.type === 'poison') && e.amount) {
-        if (tgt) { const id = fxIdRef.current++; spawned.push({ id, kind: 'dmg', x: tgt.x, y: tgt.y - m.size * 0.4, text: '-' + e.amount, crit: !!e.crit, color: e.type === 'poison' ? '#c77dff' : e.kind === 'magic' ? '#e0aaff' : undefined, born: now, ox: ((id * 37) % 5 - 2) * 10, oy: ((id * 29) % 3) * 7 }); }
-        if (e.type === 'attack' && e.ranged && src && tgt) spawned.push({ id: fxIdRef.current++, kind: 'proj', x: src.x, y: src.y - m.size * 0.3, x2: tgt.x, y2: tgt.y - m.size * 0.3, born: now });
+        const isKill = !!e.targetUid && deathTargets.has(e.targetUid);
+        const heavy = !!e.crit || (!!tgtUnit && e.amount >= 0.15 * tgtUnit.maxHp);
+        if (heavy && e.targetUid) heavyTargets.add(e.targetUid);
+        if (tgt) { const id = fxIdRef.current++; spawned.push({ id, kind: 'dmg', x: tgt.x, y: tgt.y - m.size * 0.4, text: '-' + e.amount + ((e.crit || isKill) ? '!' : ''), crit: !!e.crit, color: e.type === 'poison' ? '#c77dff' : e.kind === 'magic' ? '#e0aaff' : undefined, born: now, ox: ((id * 37) % 5 - 2) * 10, oy: ((id * 29) % 3) * 7 }); }
+        if (heavy && tgt) spawned.push({ id: fxIdRef.current++, kind: 'pow', x: tgt.x, y: tgt.y - m.size * 0.15, born: now });
+        if (e.skillKind === 'poison' || e.type === 'poison') addMark('poison', e.targetUid ?? e.uid, tgt);
+        if (e.type === 'attack' && e.ranged && src && tgt) {
+          // Dan cua tuong cost >= 4 + tam >= 3 doi thanh tia BeamFx 3 lop
+          const aDef = atkArtId ? CHAMPIONS.find(c => c.id === atkArtId) : undefined;
+          if (aDef && aDef.cost >= 4 && aDef.range >= 3) spawned.push({ id: fxIdRef.current++, kind: 'beam', x: src.x, y: src.y - m.size * 0.3, x2: tgt.x, y2: tgt.y - m.size * 0.3, color: aDef.color, born: now });
+          else spawned.push({ id: fxIdRef.current++, kind: 'proj', x: src.x, y: src.y - m.size * 0.3, x2: tgt.x, y2: tgt.y - m.size * 0.3, born: now });
+        }
       } else if (e.type === 'heal' && e.amount) {
         if (tgt) { const id = fxIdRef.current++; spawned.push({ id, kind: 'heal', x: tgt.x, y: tgt.y - m.size * 0.4, text: '+' + e.amount, born: now, ox: ((id * 37) % 5 - 2) * 10, oy: ((id * 29) % 3) * 7 }); }
       } else if (e.type === 'cast') {
+        // Beam rieng: Rero (Tia Laser) / Zaza (Sam Lien Hoan) ban tia 3 lop tu nguoi dung toi muc tieu
+        if ((atkArtId === 'rero' || atkArtId === 'zaza') && src && tgt) spawned.push({ id: fxIdRef.current++, kind: 'beam', x: src.x, y: src.y - m.size * 0.3, x2: tgt.x, y2: tgt.y - m.size * 0.3, color: atkUnit?.color ?? '#ffd60a', born: now });
+        // Vet mat dat theo ky nang: freeze -> bang; aoe/burst cua Drago/Phoenix/Fifi -> lua
+        if (e.skillKind === 'freeze') addMark('ice', e.targetUid ?? e.uid, tgt);
+        if ((e.skillKind === 'aoe' || e.skillKind === 'burst') && (atkArtId === 'drago' || atkArtId === 'phoenix' || atkArtId === 'fifi')) addMark('fire', e.targetUid ?? e.uid, tgt);
         if (tgt) { const col = BURST_COLORS[e.skillKind ?? ''] ?? '#ffd60a';
           if (e.radius) { const rpVal = e.radius * m.size * 1.05;
             spawned.push({ id: fxIdRef.current++, kind: 'tele', x: tgt.x, y: tgt.y, color: col, rp: rpVal, born: now });
@@ -557,6 +662,14 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
       }
     }
     if (spawned.length) setFxItems(prevItems => [...prevItems.filter(i => now - i.born < 1000), ...spawned].slice(-64));
+    if (newMarks.length) setGroundMarks(prev => [...prev.filter(mk => now - mk.born < 1200), ...newMarks].slice(-12));
+    if (heavyTargets.size) {
+      setHeavyUids(new Set(heavyTargets));
+      if (heavyTimerRef.current) clearTimeout(heavyTimerRef.current);
+      heavyTimerRef.current = setTimeout(() => setHeavyUids(new Set()), 380);
+      // Ket lieu bang don nang -> rung man nhe ~220ms (ShakeWrap + shakeBorn)
+      for (const uid of heavyTargets) if (deathTargets.has(uid)) { setShakeBorn(now); break; }
+    }
     if (enemyDiedPve) audio.playSfx('sparkle');
     if (evs.some(e => e.crit && (e.amount ?? 0) >= 120)) { setShake(true); if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current); shakeTimerRef.current = setTimeout(() => setShake(false), 320); }
   }, [frameIdx, phase, result, arenaSize]);
@@ -566,8 +679,8 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   function resolveBattle() {
     if (!result) return; const win = result.winner===0; setPhase('done'); audio.playSfx(win ? 'win' : 'lose');
     const dmgArr = computeDmg(result); const dealt = dmgArr.filter(d => d.team===0).reduce((a,d) => a+d.dmg, 0); const taken = dmgArr.filter(d => d.team===1).reduce((a,d) => a+d.dmg, 0); setSummary({ win, dealt, taken });
-    if (mode==='tutorial') { emitTut('battleEnd'); say(win ? 'Thắng trận luyện tập! Tướng của bạn tự đánh và tung kỹ năng khi đầy mana đó.' : 'Thua trận luyện tập cũng không sao — hướng dẫn vẫn tiếp tục, cứ làm theo mascot nhé.'); setGold(g => g + 10); setPhase('plan'); setResult(null); return; }
-    if (mode==='campaign') { const sd = stageDef(stageId); const reward = stageReward(stageId); setBanner({ title: win ? 'THẮNG' : 'THUA', sub: win ? 'Gây ' + dealt + ' sát thương' : 'Nhận ' + taken + ' sát thương', tone: win ? 'win' : 'lose' });
+    if (mode==='tutorial') { emitTut('battleEnd'); showAnnouncer(win, false); say(win ? 'Thắng trận luyện tập! Tướng của bạn tự đánh và tung kỹ năng khi đầy mana đó.' : 'Thua trận luyện tập cũng không sao — hướng dẫn vẫn tiếp tục, cứ làm theo mascot nhé.'); setGold(g => g + 10); setPhase('plan'); setResult(null); return; }
+    if (mode==='campaign') { const sd = stageDef(stageId); const reward = stageReward(stageId); setBanner({ title: '', sub: win ? 'Gây ' + dealt + ' sát thương' : 'Nhận ' + taken + ' sát thương', tone: win ? 'win' : 'lose' }); showAnnouncer(win, sd.isBoss || sd.isChapterBoss);
       if (win) { setWinFlash(true); spawnOrbs(arenaSize.w / 2, arenaSize.h * 0.3, [{ kind: 'gem' }, { kind: 'gem', amount: reward }]); const frac = result.survivors / Math.max(1, board.length); const stars = frac>=0.7?3:frac>=0.35?2:1;
         loadMeta().then(async m => { m.campaignStars[String(stageId)] = Math.max(m.campaignStars[String(stageId)] ?? 0, stars); m.unlockedStage = Math.max(m.unlockedStage, Math.min(TOTAL_STAGES, stageId+1)); m.gems += reward; if (stageId===TOTAL_STAGES) m.wins += 1; await saveMeta(m); });
         setFinished(`Thắng ${sd.name}! Nhận ${stars} sao và ${reward} Ngọc.`);
@@ -575,7 +688,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
       else { setFinished('Thua rồi... Hãy nâng cấp đội hình, ghép sao và thử lại nhé.');
         recordRewards({ mode: 'campaign', modeLabel: 'Chiến dịch PvE', resultText: `Thua tại ${sd.name}`, xp: 8 }); }
       return; }
-    if (mode==='waves') { setBanner({ title: win ? 'THẮNG' : 'THUA', sub: win ? 'Gây ' + dealt + ' sát thương' : 'Dừng ở sóng ' + wave, tone: win ? 'win' : 'lose' }); if (win) { setWinFlash(true); spawnOrbs(arenaSize.w / 2, arenaSize.h * 0.3, [{ kind: 'gold' }, { kind: 'gold', amount: 6 + Math.floor(wave / 3) }]); say('Qua sóng '+wave+'! Sóng tiếp theo mạnh hơn.'); setWave(w => w+1); setGold(g => g + 6 + Math.floor(wave/3)); if (wave%3===0) setInventory(inv => [...inv, randomItem()]); setPhase('plan'); setResult(null); }
+    if (mode==='waves') { setBanner({ title: '', sub: win ? 'Gây ' + dealt + ' sát thương' : 'Dừng ở sóng ' + wave, tone: win ? 'win' : 'lose' }); showAnnouncer(win, wave % 5 === 0); if (win) { setWinFlash(true); spawnOrbs(arenaSize.w / 2, arenaSize.h * 0.3, [{ kind: 'gold' }, { kind: 'gold', amount: 6 + Math.floor(wave / 3) }]); say('Qua sóng '+wave+'! Sóng tiếp theo mạnh hơn.'); setWave(w => w+1); setGold(g => g + 6 + Math.floor(wave/3)); if (wave%3===0) { const dropped = randomItem(); setInventory(inv => [...inv, dropped]); showItemPopup(dropped); } setPhase('plan'); setResult(null); }
       else { addGems(wave*5); setFinished(`Dừng lại ở sóng ${wave}. Kỷ lục được lưu, nhận ${wave*5} Ngọc.`);
         recordRewards({ mode: 'waves', modeLabel: 'Sóng quái vô hạn', resultText: `Dừng lại ở sóng ${wave}`, xp: Math.min(60, 6 + wave * 2) }); } return; }
     // Arena theo cau truc stage TFT
@@ -583,7 +696,8 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
     let newHp = hp; const newPlayers = players.map(p => ({ ...p, lvl: p.lvl }));
     if (win) { setStreak(s => s>=0 ? s+1 : 1); } else { setStreak(s => s<=0 ? s-1 : -1); newHp = Math.max(0, hp - dmgTaken); setHp(newHp); say(`Thua round ${roundLabel(round)}, mất ${dmgTaken} máu (theo stage + quân địch còn sống).`); setLegendHurt(true); setRedFlash(true); setTimeout(() => setLegendHurt(false), 1300); if (dmgTaken >= 8) { setShake(true); setTimeout(() => setShake(false), 550); } }
     if (win) say('Thắng round '+roundLabel(round)+'!');
-    setBanner({ title: win ? 'THẮNG' : 'THUA', sub: win ? 'Gây ' + dealt + ' sát thương' : '-' + dmgTaken + ' máu', tone: win ? 'win' : 'lose' });
+    setBanner({ title: '', sub: win ? 'Gây ' + dealt + ' sát thương' : '-' + dmgTaken + ' máu', tone: win ? 'win' : 'lose' });
+    showAnnouncer(win, isPveStageRound(round) && pveEnemiesForRound(round).some(u => u.defId === 'dragonboss' || u.defId === 'frostboss' || u.defId === 'kingboss' || u.defId === 'golem'));
     if (win) setWinFlash(true);
     const aliveBefore = newPlayers.filter(p => p.alive).length;
     for (let i=1;i<newPlayers.length;i++) { if (!newPlayers[i].alive) continue; const loss = Math.floor(Math.random()*9) + Math.floor(round/3); newPlayers[i].hp = Math.max(0, newPlayers[i].hp - (win && i===oppIdx ? lossDamage(round, result.survivors) : loss)); newPlayers[i].alive = newPlayers[i].hp>0; newPlayers[i].lvl = Math.min(9, 1 + Math.floor(round/3)); if (!newPlayers[i].alive && newPlayers[i].rank===0) newPlayers[i].rank = aliveBefore; }
@@ -593,7 +707,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
     const reward = 5 + interestOf(gold) + streakBonus(streak) + (win?1:0) + (augments.includes('vang2') && win ? 4 : 0);
     setGold(g => g + reward); gainXp(2);
     if (win) spawnOrbs(arenaSize.w * 0.5, arenaSize.h * 0.28, [{ kind: 'gold' }, { kind: 'gold' }, { kind: 'gold', amount: reward }]);
-    if (isPveStageRound(round) && win) { setInventory(inv => [...inv, randomItem()]); setGold(g => g+3); spawnOrbs(arenaSize.w / 2, arenaSize.h * 0.3, [{ kind: 'item' }, { kind: 'gold', amount: 3 }, { kind: 'gold' }]); say('Round PvE rơi trang bị và vàng!'); }
+    if (isPveStageRound(round) && win) { const dropped = randomItem(); setInventory(inv => [...inv, dropped]); showItemPopup(dropped); setGold(g => g+3); spawnOrbs(arenaSize.w / 2, arenaSize.h * 0.3, [{ kind: 'item' }, { kind: 'gold', amount: 3 }, { kind: 'gold' }]); say('Round PvE rơi trang bị và vàng!'); }
     if (augments.includes('hoi1')) setHp(h => Math.min(100, (win? h : newHp) + 2));
     const nextRound = round + 1; setRound(nextRound);
     if (!locked) setShop(rollShop(level));
@@ -630,6 +744,16 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
     ? (() => { const m = hexMetrics(arenaSize.w, Math.max(80, arenaSize.h - TOP_SHOP_H), rows); return { ...m, oy: m.oy + TOP_SHOP_H }; })()
     : hexMetrics(arenaSize.w, arenaSize.h, rows);
   const scoutTeam = scout !== null ? (scout === 0 ? board : makeAiTeam(round, scout*3+round)) : [];
+  // San dau theo ngu canh (arenaTheme): boss -> hoang hon; campaign xoay theo chuong;
+  // AI theo stage cua stageSub (boss = vong PvE co quai boss, du phong 5-5); waves
+  // stage = ceil(wave/5), boss moi 5 song. MONSTERS khong co co boss rieng nen nhan
+  // dien qua id boss (dragonboss/frostboss/kingboss + golem cua vong boss 1-10/10).
+  const BOSS_MONSTER_IDS = new Set(['dragonboss', 'frostboss', 'kingboss', 'golem']);
+  const arenaScene = mode === 'campaign'
+    ? arenaForContext({ mode: 'campaign', stage: stageId, chapter: stageDef(stageId).chapter, isBoss: stageDef(stageId).isBoss || stageDef(stageId).isChapterBoss })
+    : mode === 'waves'
+      ? arenaForContext({ mode: 'waves', stage: Math.ceil(wave / 5), isBoss: wave % 5 === 0 })
+      : arenaForContext({ mode: 'ai', stage: curStage, isBoss: (isPveStageRound(round) && pveEnemiesForRound(round).some(u => BOSS_MONSTER_IDS.has(u.defId))) || (curStage === 5 && curSub === 5) });
   // Hang the shop: MOT ban duy nhat cho ca hai vi tri (dai duoi o PC, dai tren o
   // compact) nen highlight tutorial 'shop' bam dung vi tri dang hien.
   const shopCardsRow = (
@@ -654,8 +778,9 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(12,9,26,0.52)' }]}/>
       <View style={[st.frame, { width: frameW, height: frameH }]}>
         {/* ===== SAN KHAU TOAN MAN: tranh arena phu kin khung 16:9, MOI UI la lop noi tren san ===== */}
+        <ShakeWrap born={shakeBorn} style={{ flex: 1 }}>
         <View style={st.stageWrap} onLayout={e => setStageSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
-          <SceneArtImage id="arena" width={stageSize.w} height={stageSize.h}/>
+          <SceneArtImage id={arenaScene} width={stageSize.w} height={stageSize.h}/>
         {/* ===== THANH TREN NOI TREN MEP SAN: o cuong hoa trai, cum stage giua, chip tron phai ===== */}
         <View style={st.topFloat}>
           <FadeBg dir="vTop" peak={0.55} />
@@ -684,7 +809,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
           </View>
         </View>
         {/* ===== MIDDLE: dau truong chiem toan bo; cot trai/phai la LOP NOI tuyet doi tren mep san ===== */}
-        <View style={st.middle}>
+        <View style={st.middle} onLayout={e => { const l = e.nativeEvent.layout; middlePosRef.current = { x: l.x, y: l.y }; }}>
           {/* LEFT: traits + augments + items */}
           <View style={[st.leftPanel, compact && { width: 130, padding: 4 }, shopOnTop && { top: TOP_SHOP_H }]}>
             {compact && (<View style={st.pillRow}>
@@ -718,7 +843,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             </ScrollView>
           </View>
           {/* CENTER: arena (khong khung/vien rieng — tranh nen nam o stageWrap phia sau) */}
-          <View ref={arenaViewRef} style={[st.arena, shake && { transform: [{ translateX: 5 }] }]} onLayout={e => { setArenaSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height }); measureArenaPage(); }}>
+          <View ref={arenaViewRef} style={[st.arena, shake && { transform: [{ translateX: 5 }] }]} onLayout={e => { const l = e.nativeEvent.layout; setArenaSize({ w: l.width, h: l.height }); arenaStageOffRef.current = { x: middlePosRef.current.x + l.x, y: middlePosRef.current.y + l.y }; measureArenaPage(); }}>
             <View pointerEvents="none" style={StyleSheet.absoluteFill}><AmbientParticles width={arenaSize.w} height={arenaSize.h}/></View>
             <View pointerEvents="none" style={StyleSheet.absoluteFill}><EnvOverlay width={arenaSize.w} height={arenaSize.h}/></View>
                         <Svg style={StyleSheet.absoluteFill} width={arenaSize.w} height={arenaSize.h}>
@@ -727,6 +852,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
               ); }))}
               {phase!=='battle' && selUid != null && (<ValidCellGlow hm={hm} rows={rows} board={board}/>)}
             </Svg>
+            <GroundMarksLayer marks={groundMarks}/>
             {(() => { const bx = hm.ox - hm.size * 0.8, by = hm.oy - hm.size * 0.6, bw = 7.5 * hm.hw + hm.size * 1.6, bh = (2 * hm.size + (rows - 1) * 1.5 * hm.size) + hm.size * 1.15; return (<React.Fragment>
               <Torch x={bx + 8} y={by + 12} s={0.95} ph={0} /><Torch x={bx + bw - 8} y={by + 12} s={0.95} ph={1} />
               <Torch x={bx + 8} y={by + bh + 14} s={0.8} ph={2} /><Torch x={bx + bw - 8} y={by + bh + 14} s={0.8} ph={3} />
@@ -759,7 +885,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
                 <View style={[{ width: sz, height: sz, alignItems:'center', shadowColor:'#04170b', shadowOpacity: 0.5, shadowRadius: 5, shadowOffset: { width: 0, height: 3 } }, u.star>=2 && { shadowColor: u.star>=3 ? '#ffb703' : '#d7dee8', shadowOpacity: 0.9, shadowRadius: u.star>=3 ? 12 : 7, shadowOffset: { width: 0, height: 0 }, elevation: 6 }]}>
                   <GroundShadow sz={sz} team={u.team}/>
                   <UnitPedestal sz={sz} team={u.team} star={u.star}/>
-                  <SpriteUnit spec={u.art} size={sz} star={u.star} state={animState} flip={u.team===1}/>
+                  <SpriteUnit spec={u.art} size={sz} star={u.star} state={animState} flip={u.team===1} heavyHurt={heavyUids.has(u.uid)}/>
                   {isTarget && <View style={{ position:'absolute', left: sz*0.16, top: sz*0.08, width: sz*0.68, height: sz*0.8, backgroundColor:'#ffffff', opacity:0.22, borderRadius: sz*0.34 }} pointerEvents="none"/>}
                   {u.star>=3 && <StarSparkles sz={sz}/>}
                   {u.stun > 0 && (<Svg width={sz*0.52} height={16} viewBox="0 0 62 16" style={{ position:'absolute', left: sz*0.24, top: -4, transform: [{ rotate: stunAngle + 'deg' }] } as any} pointerEvents="none"><Polygon points={starPoints(9, 8, 6)} fill="#ffd60a"/><Polygon points={starPoints(31, 8, 6)} fill="#ffd60a"/><Polygon points={starPoints(53, 8, 6)} fill="#ffd60a"/></Svg>)}
@@ -786,6 +912,8 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             <FxLayer items={fxItems}/>
             <OrbFlightLayer orbs={orbs} target={orbTarget} onArrive={(orb) => { if (orbArrivedRef.current.has(orb.id)) return; orbArrivedRef.current.add(orb.id); const meta = orbMetaRef.current.get(orb.id); if (meta && meta.amount !== undefined) { const fid = fxIdRef.current++; setFxItems(prev => [...prev, { id: fid, kind: 'dmg' as const, x: orbTarget.x, y: orbTarget.y - 30, text: '+' + meta.amount + (meta.gem ? ' Ngọc' : ''), color: meta.gem ? '#f3c6ff' : '#ffd60a', born: Date.now() }].slice(-64)); } }}/>
             {banner && <ArenaBanner title={banner.title} sub={banner.sub} tone={banner.tone} onDone={() => setBanner(null)}/>}
+            {announcer && (<View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: '30%', zIndex: 230, alignItems: 'center' }}><AnnouncerFx text={announcer.text} color={announcer.color} born={announcer.born} /></View>)}
+            {itemPopup && (<Pressable onPress={() => setItemPopup(null)} style={{ position: 'absolute', right: '16%', top: '30%', zIndex: 235 }}><ItemRewardPopup key={itemPopup.key} name={itemPopup.name} desc={itemPopup.desc} color={itemPopup.color} born={itemPopup.born} /></Pressable>)}
             {redFlash && <View pointerEvents="none" style={{ position:'absolute', left:0, top:0, right:0, bottom:0, borderWidth:6, borderColor:'#ef476f', backgroundColor:'rgba(239,71,111,0.12)', zIndex:180 }}/>}
             {winFlash && <View pointerEvents="none" style={{ position:'absolute', left:0, top:0, right:0, bottom:0, borderWidth:6, borderColor:'#ffd60a', backgroundColor:'rgba(255,214,10,0.10)', zIndex:180 }}/>}
             {/* ===== VUNG BAN KHI KEO: mac dinh AN, chi hien trong luc dang keo 1 tuong tren san ===== */}
@@ -848,8 +976,8 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
              duoi dai nay (top: TOP_SHOP_H) nen khong phan tu nao chong lap. ===== */}
         {shopOnTop && (<View style={st.shopTopStrip}>{shopCardsRow}</View>)}
         {/* ===== BENCH: hang o HEX nam ngay mep duoi TRONG san (cung chat lieu mat dat) ===== */}
-        {phase!=='battle' && (<View style={[st.benchRow, hi('bench') && st.tutHi]}><Text style={st.benchLbl}>Bench</Text>{Array.from({length:9}).map((_,i) => { const u = bench[i]; const isSel = !!u && selUid===u.uid; return (
-          <Pressable key={u ? 'b-' + u.uid : 'e-' + i} onPress={() => u && tapBench(u)} style={st.benchHex}>
+        {phase!=='battle' && (<View style={[st.benchRow, hi('bench') && st.tutHi]} onLayout={e => { const l = e.nativeEvent.layout; benchRowPosRef.current = { x: l.x, y: l.y }; }}><Text style={st.benchLbl}>Bench</Text>{Array.from({length:9}).map((_,i) => { const u = bench[i]; const isSel = !!u && selUid===u.uid; return (
+          <Pressable key={u ? 'b-' + u.uid : 'e-' + i} onPress={() => u && tapBench(u)} onLayout={e => { const l = e.nativeEvent.layout; benchCellPosRef.current.set(i, { x: l.x + l.width / 2, y: l.y + l.height / 2 }); }} style={st.benchHex}>
             <Svg width={54} height={50} style={{ position:'absolute', left:0, top:0 } as any} pointerEvents="none">
               <Polygon points={hexPoints(27, 25, 23)} fill={u ? 'rgba(88,104,78,0.94)' : 'rgba(58,70,56,0.72)'} stroke={isSel ? '#ffb703' : '#93a487'} strokeWidth={isSel ? 3 : 1.6}/>
               <Polygon points={hexPoints(27, 22.5, 19.5)} fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth={1}/>
@@ -864,7 +992,9 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
           </Pressable> ); })}
           <View style={st.logMini}>{log.slice(0,2).map((l,i) => <Text key={i} style={st.logTxt} numberOfLines={1}>{l}</Text>)}</View>
         </View>)}
+        {mergeFx && <MergeSwirlFx key={mergeFx.key} x={mergeFx.x} y={mergeFx.y} born={mergeFx.born} froms={mergeFx.froms} />}
         </View>
+        </ShakeWrap>
         {/* ===== DAI SHOP: noi tren gradient toi mo dan len san, khong hop cung ===== */}
         {phase!=='battle' && (<View style={st.shopRow}>
           <FadeBg dir="v" peak={0.92} color="9,13,28" />

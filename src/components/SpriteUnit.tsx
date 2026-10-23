@@ -9,8 +9,8 @@ import type { ClipName } from '../game/rig';
 // hurt rung + flash trang, death xoay nga + mo dan, victory nhay an mung.
 // Component tu chay dong ho rieng (50ms) va chi re-render chinh no.
 interface SpecLike { id: string }
-interface Props { spec?: SpecLike; artId?: string; size?: number; state?: ClipName; star?: number; flip?: boolean; speed?: number }
-export default function SpriteUnit({ spec, artId, size = 84, state = 'idle', flip = false, speed = 1 }: Props) {
+interface Props { spec?: SpecLike; artId?: string; size?: number; state?: ClipName; star?: number; flip?: boolean; speed?: number; heavyHurt?: boolean }
+export default function SpriteUnit({ spec, artId, size = 84, state = 'idle', star = 1, flip = false, speed = 1, heavyHurt = false }: Props) {
   const id = artId ?? spec?.id ?? 'slime';
   const src = UNIT_ART[id] ?? UNIT_ART['slime'];
   const [tick, setTick] = useState(0);
@@ -48,12 +48,43 @@ export default function SpriteUnit({ spec, artId, size = 84, state = 'idle', fli
     if (q < 0.4) { const u = q / 0.4; const e = Math.sin(u * Math.PI / 2); ty = s * 0.03 * e; sy = 1 - 0.05 * e; sc = 1 + 0.01 * e; glow = 0.35 * e; glowScale = 0.6 + 0.25 * e; }
     else { const u = (q - 0.4) / 0.6; const e = 1 - (1 - u) * (1 - u); ty = s * 0.03 * (1 - e) - s * 0.055 * e; sy = 0.95 + 0.13 * e; sc = 1.01 + 0.07 * e; glow = 0.35 + 0.95 * e; glowScale = 0.85 + 0.95 * e; }
   }
-  else if (state === 'hurt') { const decay = Math.max(0, 1 - t / 380); tx = Math.sin(t / 26) * s * 0.045 * decay - dir * s * 0.06 * decay; rot = Math.sin(t / 26) * 4 * decay; flash = 0.75 * decay; }
+  else if (state === 'hurt') {
+    const decay = Math.max(0, 1 - t / 380);
+    if (heavyHurt) {
+      // Don MANH kieu truyen tranh: giat lui xa (-0.16*s), than xoay lon dinh
+      // ~52 do o giua nhip (decay * sin envelope, max cua (1-p)*sin(pi*p) ~0.58
+      // nen he so 90 cho dinh ~52), kem nay ty nhe theo cung envelope do.
+      const pH = Math.min(1, t / 380);
+      const env = decay * Math.sin(pH * Math.PI);
+      tx = Math.sin(t / 26) * s * 0.03 * decay - dir * s * 0.16 * decay;
+      rot = dir * 90 * env;
+      ty = -s * 0.05 * env;
+      flash = 0.85 * decay;
+    } else {
+      tx = Math.sin(t / 26) * s * 0.045 * decay - dir * s * 0.06 * decay; rot = Math.sin(t / 26) * 4 * decay; flash = 0.75 * decay;
+    }
+  }
   else if (state === 'death') { const p = Math.min(1, t / 650); const hop = p >= 0.2 && p <= 0.4 ? -s * 0.055 * Math.sin((p - 0.2) / 0.2 * Math.PI) : 0; rot = dir * 84 * p; opacity = 1 - p; ty = s * 0.1 * p + hop; }
   else if (state === 'victory') { const p = Math.abs(Math.sin(t / 170 + phase)); ty = -p * s * 0.085; sy = 1 + 0.03 * p; }
   void tick;
+  // Hao quang chan theo sao (moi state tru death): sao 3 vang chay lien tuc +
+  // cham sao bay len, sao 2 vong bac manh tinh. Dung thoi gian tuyet doi de
+  // nhap nhay lien tuc, khong bi reset khi doi state nhu bien t o tren.
+  const auraT = Date.now();
+  const showAura = state !== 'death' && star >= 2;
+  const auraFlicker = 0.72 + 0.28 * Math.sin(auraT / 130 + phase);
+  const auraScale = 1 + 0.07 * Math.sin(auraT / 160 + phase);
   return (
     <View style={{ width: s, height: s, alignItems: 'center', justifyContent: 'flex-end' }} pointerEvents="none">
+      {showAura && star >= 3 && (<View style={{ position: 'absolute', bottom: s * 0.02, width: s * 0.86, height: s * 0.24, borderRadius: 999, borderWidth: 3, borderColor: '#ffd60a', backgroundColor: 'rgba(255,214,10,0.16)', opacity: auraFlicker, transform: [{ scaleX: auraScale }, { scaleY: 1 + 0.05 * Math.sin(auraT / 160 + phase) }] }} />)}
+      {showAura && star >= 3 && (<View style={{ position: 'absolute', bottom: s * 0.045, width: s * 0.58, height: s * 0.15, borderRadius: 999, backgroundColor: 'rgba(255,214,10,0.28)', opacity: 0.55 + 0.35 * Math.sin(auraT / 110 + phase + 1.3) }} />)}
+      {showAura && star === 2 && (<View style={{ position: 'absolute', bottom: s * 0.02, width: s * 0.78, height: s * 0.2, borderRadius: 999, borderWidth: 1.5, borderColor: '#d7dde8', opacity: 0.5 }} />)}
+      {showAura && star >= 3 && Array.from({ length: 4 }).map((_, i) => {
+        const dotP = ((auraT / 1100) + i * 0.25 + (phase % 1) * 0.17) % 1;
+        const frac = ((seed * (i + 3) * 37) % 100) / 100;
+        const dotSize = 3 + (i % 2);
+        return (<View key={i} style={{ position: 'absolute', left: s * (0.2 + 0.6 * frac) - dotSize / 2 + Math.sin(dotP * Math.PI * 2 + phase + i) * s * 0.03, bottom: s * 0.05 + dotP * s * 0.46, width: dotSize, height: dotSize, borderRadius: dotSize / 2, backgroundColor: i % 2 === 0 ? '#ffd60a' : '#fff3b0', opacity: Math.sin(dotP * Math.PI) * 0.95 }} />);
+      })}
       {glow > 0 && (<View style={{ position: 'absolute', bottom: s * 0.02, width: s * 0.8, height: s * 0.22, borderRadius: 999, borderWidth: 3, borderColor: '#ffd60a', opacity: Math.min(1, glow * 0.95), transform: [{ scaleX: glowScale }] }} />)}
       <View style={{ width: s, height: s, opacity, transform: [{ translateX: tx }, { translateY: ty }, { rotate: rot + 'deg' }, { scaleX: (flip ? -1 : 1) * sc }, { scaleY: sy }] }}>
         <Image source={src} style={{ width: s, height: s }} resizeMode="contain" />

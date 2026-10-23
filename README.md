@@ -29,6 +29,12 @@ Game auto-battler kiểu Teamfight Tactics (TFT) với đồ họa chibi vẽ ta
 - 12 màn đầu dùng nguyên thiết kế tay (CAMPAIGN). Từ màn 13, đội hình địch được **sinh xác định theo số màn** (seed từ stage id): quái theo chủ đề của chương (10 chủ đề xoay vòng qua 52 chương), số lượng 3→9, hệ số scale máu/tấn công tăng theo đường cong mũ nhẹ `1 + ((id-12)/140)^1.25`, quái 2-3 sao xuất hiện dần ở màn cao, Boss mỗi 10 màn và Boss lớn (xoay vòng 3 boss) mỗi 100 màn. Phần thưởng Ngọc tăng dần, boss x1.5, boss chương x3.
 - Bản đồ chiến dịch hiển thị theo từng chương (FlatList ảo hóa, chỉ render cửa sổ đang xem), tự cuộn tới màn đang mở, hiển thị tiến độ x/5.200.
 
+## Sân đấu theo ngữ cảnh (`src/game/arenaTheme.ts`)
+Tranh nền sân trong trận không còn cố định một hình: hàm thuần `arenaForContext({ mode, stage, chapter, isBoss })` chọn 1 trong 4 tranh sân (`arena` rừng, `arena-sunset` hoàng hôn, `arena-desert` sa mạc, `arena-ice` băng) theo quy tắc chốt:
+- **Gặp Boss (mọi chế độ) → `arena-sunset`** (hoàng hôn) — ưu tiên cao nhất.
+- **Chiến Dịch PvE**: xoay vòng theo chương — `(chapter - 1) % 3`: `0` → `arena` (rừng), `1` → `arena-desert`, `2` → `arena-ice`. Cờ boss lấy từ `stageDef` (`isBoss` mỗi 10 màn hoặc `isChapterBoss` mỗi 100 màn).
+- **Đấu với AI / Sóng Quái**: theo stage của trận — stage `1` → `arena`, `2` → `arena-sunset`, `3` → `arena-desert`, `≥ 4` → `arena-ice`. Với Đấu AI, stage là stage của `stageSub(round)` và boss là vòng PvE mà đội địch có quái boss (nhận diện qua id quái boss; dự phòng stage 5-5); với Sóng Quái, stage = `ceil(wave / 5)` và cứ mỗi 5 sóng là boss.
+
 ## PvP Online — kiến trúc (`src/game/online.ts`, `onlineClient.ts`, `supabase.ts`)
 - Transport: **Supabase Realtime** (Broadcast + Presence theo channel phòng `dtc-room-<MÃ>`), không cần server riêng và không bắt buộc bảng dữ liệu (`supabase/schema.sql` chỉ là tùy chọn cho lịch sử trận/phòng công khai).
 - **Host-authoritative**: chủ phòng gán ghế, lấp bot vào ghế trống, phát vòng chuẩn bị, ghép cặp vòng tròn (tránh lặp cặp gần đây, số lẻ có trận "bóng ma" không gây sát thương cho phía bị mượn đội hình), phát seed cho từng cặp.
