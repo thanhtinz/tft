@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import ChibiRig from '../components/ChibiRig';
+import SpriteUnit from '../components/SpriteUnit';
 import RankBadge from '../components/RankBadge';
 import { AuthButton, AuthError } from '../components/AuthUi';
 import { AUTH_ERROR_VI, avgPlacement, lpProgress, rankLabel, xpToNextLevel } from '../game/auth';
@@ -107,7 +107,7 @@ export default function Account() {
       <View style={[s.panel, s.headerPanel]}>
         <Pressable style={s.avatarWrap} onPress={() => setAvatarOpen(true)}>
           <View style={{ position: 'absolute', left: -8, top: -10 }}>
-            <ChibiRig spec={champById(profile.avatarId) ?? CHAMPIONS[0]} size={112} state="idle" />
+            <SpriteUnit spec={champById(profile.avatarId) ?? CHAMPIONS[0]} size={112} state="idle" />
           </View>
           <View style={s.avatarEdit}><Text style={s.avatarEditTxt}>Đổi</Text></View>
         </Pressable>
@@ -185,7 +185,7 @@ export default function Account() {
                   <View style={{ flexDirection: 'row', gap: 3, flexWrap: 'wrap' }}>
                     {h.team.map((u, i) => (
                       <View key={i} style={s.teamCell}>
-                        <ChibiRig spec={champById(u.defId) ?? CHAMPIONS[0]} size={30} star={u.star} state="idle" />
+                        <SpriteUnit spec={champById(u.defId) ?? CHAMPIONS[0]} size={30} star={u.star} state="idle" />
                       </View>
                     ))}
                   </View>
@@ -210,7 +210,7 @@ export default function Account() {
           </View>
           {friends.map(f => (
             <View key={f.key} style={s.friendRow}>
-              <View style={s.friendAvatar}><View style={{ position: 'absolute', left: -5, top: -6 }}><ChibiRig spec={champById(f.avatarId) ?? CHAMPIONS[0]} size={50} state="idle" /></View></View>
+              <View style={s.friendAvatar}><View style={{ position: 'absolute', left: -5, top: -6 }}><SpriteUnit spec={champById(f.avatarId) ?? CHAMPIONS[0]} size={50} state="idle" /></View></View>
               <View style={{ flex: 1 }}>
                 <Text style={s.friendName}>{formatRiotId(f.name, f.tag)}</Text>
                 <Text style={s.hint}>{f.rankText} • {f.source === 'supabase' ? 'Online' : 'Trên thiết bị'}</Text>
@@ -266,7 +266,7 @@ export default function Account() {
             <ScrollView style={{ maxHeight: 300 }} contentContainerStyle={s.avatarGrid}>
               {CHAMPIONS.map(d => (
                 <Pressable key={d.id} style={[s.avatarCell, profile.avatarId === d.id && s.avatarCellOn]} onPress={() => doChangeAvatar(d.id)}>
-                  <ChibiRig spec={d} size={52} state="idle" />
+                  <SpriteUnit spec={d} size={52} state="idle" />
                   <Text style={s.avatarName} numberOfLines={1}>{d.name}</Text>
                 </Pressable>
               ))}

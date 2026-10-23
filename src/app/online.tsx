@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { HomeScene, welcomeSpecs } from '../components/SceneArt';
-import ChibiRig from '../components/ChibiRig';
+import { CHAMPIONS } from '../game/data';
+const welcomeSpecs = CHAMPIONS.slice(0, 4);
+import SpriteUnit, { SceneArtImage } from '../components/SpriteUnit';
 import { isOnlineConfigured } from '../game/supabase';
 import { loadPlayer, savePlayerName } from '../game/storage';
 import { audio } from '../game/audio';
@@ -21,8 +22,8 @@ export default function OnlineMenu() {
   return (
     <ScrollView style={s.screen} contentContainerStyle={{ padding: 16, gap: 13, alignItems: 'center' }}>
       <View style={{ position: 'relative', alignItems: 'center' }}>
-        <HomeScene width={340}/>
-        <View style={{ position: 'absolute', bottom: 6, flexDirection: 'row', gap: 2 }}>{welcomeSpecs.map((d, i) => <ChibiRig key={d.id} spec={d} size={i===1||i===2?92:74} state='idle'/>)}</View>
+        <SceneArtImage id="lobby" width={340} height={177} />
+        <View style={{ position: 'absolute', bottom: 6, flexDirection: 'row', gap: 2 }}>{welcomeSpecs.map((d, i) => <SpriteUnit key={d.id} spec={d} size={i===1||i===2?92:74} state='idle'/>)}</View>
       </View>
       <Text style={s.title}>PvP Online — Người đấu người</Text>
       <Text style={s.sub}>Vào phòng với bạn bè bằng mã phòng 6 ký tự, hoặc ghép nhanh với người chơi đang chờ. Phòng có tối đa 8 người; ghế trống và người mất kết nối sẽ được AI lấp vào để trận luôn đủ 8 như TFT.</Text>

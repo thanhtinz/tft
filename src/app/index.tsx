@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Svg, { Circle, Path, Polygon, Rect } from 'react-native-svg';
 import { router, useFocusEffect } from 'expo-router';
-import { LobbyScene, ChapterScene } from '../components/SceneArt';
-import ChibiRig from '../components/ChibiRig';
+import SpriteUnit, { SceneArtImage } from '../components/SpriteUnit';
 import { loadMeta, loadPlayer, loadProfile, loadSettings, saveSettings, MetaState, ProfileState, defaultMeta } from '../game/storage';
 import RankBadge from '../components/RankBadge';
 import { Identity, formatRiotId, restoreSession } from '../game/accounts';
@@ -91,13 +90,13 @@ export default function Home() {
   ];
   return (
     <View style={s.screen}>
-      <LobbyScene width={winW} height={winH} />
+      <SceneArtImage id="lobby" width={winW} height={winH} />
       {/* ===== TOP BAR ===== */}
       <View style={s.topBar}>
         <Pressable style={s.playerBox} onPress={() => go(identity && identity.kind !== 'guest' ? '/account' : '/login')}>
           <View style={s.avatar}>
             <View style={{ position: 'absolute', left: -9, top: -5 }}>
-              <ChibiRig spec={champById(profile?.avatarId ?? identity?.avatarId ?? 'gogo')} size={62} state="idle" />
+              <SpriteUnit spec={champById(profile?.avatarId ?? identity?.avatarId ?? 'gogo')} size={62} state="idle" />
             </View>
           </View>
           <View>
@@ -125,7 +124,7 @@ export default function Home() {
       </View>
       {/* ===== LINH VAT KHONG LO ===== */}
       <View style={[s.mascotWrap, { right: Math.max(8, winW * 0.13), bottom: winH * 0.055 }]} pointerEvents="none">
-        <ChibiRig spec={champById(mascot.id)} size={mascotSize} state="idle" />
+        <SpriteUnit spec={champById(mascot.id)} size={mascotSize} state="idle" />
       </View>
       {/* ===== MENU DOC BEN TRAI ===== */}
       <View style={[s.menu, { top: Math.max(86, winH * 0.21), left: Math.max(14, winW * 0.035) }]}>
@@ -150,7 +149,7 @@ export default function Home() {
       </View>
       {/* ===== THE NOI BAT DUOI TRAI: TIEN DO CHUONG PVE ===== */}
       <Pressable style={[s.featureCard, { left: Math.max(14, winW * 0.035), bottom: Math.max(14, winH * 0.045) }]} onPress={() => go('/campaign')}>
-        <ChapterScene chapter={sd.chapter} width={196} />
+        <View style={{ width: 196, height: 67, borderRadius: 10, overflow: 'hidden' }}><SceneArtImage id={['banner-forest', 'banner-desert', 'banner-ice'][(sd.chapter - 1) % 3]} width={196} height={67} /></View>
         <View style={s.featureBadge}><Text style={s.featureBadgeTxt}>CHƯƠNG {sd.chapter}</Text></View>
         <View style={s.featureStrip}>
           <Text style={s.featureTitle} numberOfLines={1}>{sd.name}</Text>
@@ -183,7 +182,7 @@ export default function Home() {
             <Text style={s.modeTitle}>CHỌN CHẾ ĐỘ CHƠI</Text>
             {MODES.map(m => (
               <Pressable key={m.title} style={[s.modeRow, m.featured && s.modeRowFeatured]} onPress={() => go(m.route)}>
-                <View style={s.modeDisc}><ChibiRig spec={m.spec} size={52} state="idle" /></View>
+                <View style={s.modeDisc}><SpriteUnit spec={m.spec} size={52} state="idle" /></View>
                 <View style={{ flex: 1, gap: 2 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Text style={s.modeName}>{m.title}</Text>

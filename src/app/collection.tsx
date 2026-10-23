@@ -1,13 +1,13 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CHAMPIONS, ITEMS, MONSTERS, TRAITS, traitName } from '../game/data';
-import ChibiRig from '../components/ChibiRig';
+import SpriteUnit from '../components/SpriteUnit';
 import { ItemArt } from '../components/ChibiArt';
 export default function Collection() {
   return (<ScrollView style={s.screen} contentContainerStyle={{ padding: 16, gap: 12 }}>
     <Text style={s.h}>Bộ Sưu Tập - {CHAMPIONS.length} tướng chibi (đều đang chuyển động idle bằng rig xương)</Text>
     <View style={s.grid}>{CHAMPIONS.map(d => (<View key={d.id} style={s.card}>
-      <ChibiRig spec={d} size={96} state='idle'/>
+      <SpriteUnit spec={d} size={96} state='idle'/>
       <Text style={s.name}>{d.name} - {d.cost} vàng</Text>
       <Text style={s.trait}>{d.traits.map(traitName).join(' / ')}</Text>
       <Text style={s.stats}>Máu {d.hp} - ST {d.ad} - Giáp {d.armor} - KP {d.mr}</Text>
@@ -15,7 +15,7 @@ export default function Collection() {
       <Text style={s.skill}>Kỹ năng: {d.skill.name}</Text><Text style={s.desc}>{d.skill.desc}</Text>
     </View>))}</View>
     <Text style={s.h}>Quái PvE và Boss</Text>
-    <View style={s.grid}>{MONSTERS.map(m => (<View key={m.id} style={s.card}><ChibiRig spec={m} size={m.id.includes('boss')?118:88} state={m.id.includes('boss')?'cast':'walk'}/><Text style={s.name}>{m.name}</Text><Text style={s.stats}>Máu {m.hp} - ST {m.ad}</Text><Text style={s.skill}>{m.skill.name}: {m.skill.desc}</Text></View>))}</View>
+    <View style={s.grid}>{MONSTERS.map(m => (<View key={m.id} style={s.card}><SpriteUnit spec={m} size={m.id.includes('boss')?118:88} state={m.id.includes('boss')?'cast':'walk'}/><Text style={s.name}>{m.name}</Text><Text style={s.stats}>Máu {m.hp} - ST {m.ad}</Text><Text style={s.skill}>{m.skill.name}: {m.skill.desc}</Text></View>))}</View>
     <Text style={s.h}>Tộc / Hệ</Text>
     {TRAITS.map(t => <Text key={t.id} style={s.line}><Text style={s.name}>{t.name}</Text> (mốc {t.thresholds.join(' / ')}): {t.desc}</Text>)}
     <Text style={s.h}>Trang bị ({ITEMS.length})</Text>

@@ -35,7 +35,9 @@
     "test": "tsc --ignoreConfig --ignoreDeprecations 6.0 src/game/data.ts src/game/engine.ts src/game/rig.ts --outDir scripts/.build --module commonjs --target es2020 --moduleResolution node10 --skipLibCheck --esModuleInterop && node scripts/test-headless.mjs && node scripts/test-online.mjs && node scripts/test-stages.mjs && node scripts/test-audio.mjs && node scripts/test-tutorial.mjs && node scripts/test-fx.mjs && tsc --ignoreConfig --ignoreDeprecations 6.0 src/game/auth.ts --outDir scripts/.build-auth --module commonjs --target es2020 --moduleResolution node10 --skipLibCheck && node scripts/test-auth.mjs",
     "typecheck": "tsc --noEmit",
     "web": "expo start --web",
-    "audio": "node scripts/generate-audio.mjs"
+    "audio": "node scripts/generate-audio.mjs",
+    "postinstall": "node scripts/decode-art.mjs",
+    "process-art": "node scripts/process-art.mjs"
   },
   "version": "1.0.0"
 }

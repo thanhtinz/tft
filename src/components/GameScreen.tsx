@@ -4,8 +4,8 @@ import Svg, { Ellipse, G, Polygon, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { ItemArt } from './ChibiArt';
-import ChibiRig from './ChibiRig';
-import { AmbientParticles, ArenaScene } from './SceneArt';
+import SpriteUnit, { SceneArtImage } from './SpriteUnit';
+import { AmbientParticles } from './SceneArt';
 import { rowDepth, stateForUnit } from '../game/rig';
 import { AUGMENTS, BOT_NAMES, CHAMPIONS, SHOP_ODDS, TRAITS, champById, itemById, monsterById, traitName } from '../game/data';
 import { AUG_ROUNDS_TFT as AUG_ROUNDS, BattleResult, PlacedUnit, computeSynergies, interestOf, isCarouselRound, isPveStageRound, lossDamage, makeAiTeam, makeMonsterTeam, newUid, pveEnemiesForRound, randomItem, rollShop, roundLabel, sellValue, simulateBattle, stageSub, streakBonus, xpToNext } from '../game/engine';
@@ -430,7 +430,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
           </View>
           {/* CENTER: arena */}
           <View style={[st.arena, shake && { transform: [{ translateX: 5 }] }]} onLayout={e => setArenaSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
-            <ArenaScene width={arenaSize.w} height={arenaSize.h}/>
+            <SceneArtImage id="arena" width={arenaSize.w} height={arenaSize.h}/>
             <AmbientParticles width={arenaSize.w} height={arenaSize.h}/>
                         <Svg style={StyleSheet.absoluteFill} width={arenaSize.w} height={arenaSize.h}>
               {(() => { const bx = hm.ox - hm.size * 0.8, by = hm.oy - hm.size * 0.6, bw = 7.5 * hm.hw + hm.size * 1.6, bh = (2 * hm.size + (rows - 1) * 1.5 * hm.size) + hm.size * 1.15; return (<React.Fragment>
@@ -453,7 +453,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
                         {phase!=='battle' && board.map(u => { const { cx, cy } = hexCenter(hm, u.x, u.y); const sz = hm.size * 2.05 * rowDepth(u.y, 4).scale * STAR_SCALE(u.star); const isSel = selUid===u.uid; const rig = (
                 <View style={[{ width: sz, height: sz, alignItems:'center' }, u.star>=2 && { shadowColor: u.star>=3 ? '#ffb703' : '#d7dee8', shadowOpacity: 0.9, shadowRadius: u.star>=3 ? 12 : 7, shadowOffset: { width: 0, height: 0 }, elevation: 6 }]}>
                   <UnitPedestal sz={sz} team={0} star={u.star}/>
-                  <ChibiRig spec={champById(u.defId)} size={sz} star={u.star} state='idle'/>
+                  <SpriteUnit spec={champById(u.defId)} size={sz} star={u.star} state='idle'/>
                   {u.star>=3 && <StarSparkles sz={sz}/>}
                 </View>); return (
               <View key={u.uid} style={{ position:'absolute', left: cx - sz/2, top: cy + hm.size*0.28 - sz*0.88, width: sz, height: sz, alignItems:'center', zIndex: rowDepth(u.y, 4).zIndex }} pointerEvents="none">
@@ -465,7 +465,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
               <View key={u.uid} style={{ position:'absolute', left: cx - sz/2 + lx + (isTarget ? (frameIdx % 2 === 0 ? 3 : -3) : 0), top: cy + hm.size*0.28 - sz*0.88 + ly, width: sz, zIndex: dep.zIndex, alignItems:'center' }}>
                 <View style={[{ width: sz, height: sz, alignItems:'center' }, u.star>=2 && { shadowColor: u.star>=3 ? '#ffb703' : '#d7dee8', shadowOpacity: 0.9, shadowRadius: u.star>=3 ? 12 : 7, shadowOffset: { width: 0, height: 0 }, elevation: 6 }]}>
                   <UnitPedestal sz={sz} team={u.team} star={u.star}/>
-                  <ChibiRig spec={u.art} size={sz} star={u.star} state={animState} flip={u.team===1}/>
+                  <SpriteUnit spec={u.art} size={sz} star={u.star} state={animState} flip={u.team===1}/>
                   {isTarget && <View style={{ position:'absolute', left:0, top:0, width: sz, height: sz, backgroundColor:'#ffffff', opacity:0.55, borderRadius:12 }} pointerEvents="none"/>}
                   {u.star>=3 && <StarSparkles sz={sz}/>}
                   {u.stun > 0 && (<Svg width={sz*0.52} height={16} viewBox="0 0 62 16" style={{ position:'absolute', left: sz*0.24, top: -4, transform: [{ rotate: stunAngle + 'deg' }] } as any} pointerEvents="none"><Polygon points={starPoints(9, 8, 6)} fill="#ffd60a"/><Polygon points={starPoints(31, 8, 6)} fill="#ffd60a"/><Polygon points={starPoints(53, 8, 6)} fill="#ffd60a"/></Svg>)}
@@ -474,7 +474,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
               </View> ); })}
 <View style={st.legend}>
               <FloatWrap amp={4}>
-                <ChibiRig spec={champById('toto')} size={56} state={legendHurt ? 'hurt' : 'idle'}/>
+                <SpriteUnit spec={champById('toto')} size={56} state={legendHurt ? 'hurt' : 'idle'}/>
               </FloatWrap>
               <Text style={st.legendName}>Toto</Text>
               <View style={st.legendBadge}><Text style={st.legendBadgeTxt}>{isArena ? 'Cấp ' + level : mode==='campaign' ? 'PvE' : mode==='waves' ? 'Sóng ' + wave : 'Tập'}</Text></View>
@@ -506,7 +506,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
                   </View>
                   <View style={[st.pAvatar, isOpp && p.alive && st.pAvatarOpp, !p.alive && { borderColor:'#3a4568' }]}>
                     <View style={{ position:'absolute', left:-4, top:-5 }}>
-                      <ChibiRig spec={CHAMPIONS[(i*3) % CHAMPIONS.length]} size={46} state={p.alive ? 'idle' : 'death'}/>
+                      <SpriteUnit spec={CHAMPIONS[(i*3) % CHAMPIONS.length]} size={46} state={p.alive ? 'idle' : 'death'}/>
                     </View>
                   </View>
                 </Pressable> ); })}</ScrollView>)
@@ -523,7 +523,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
         </View>
         {/* ===== BENCH (o da long vao mep duoi san) ===== */}
         {phase!=='battle' && (<View style={[st.benchRow, hi('bench') && st.tutHi]}><Text style={st.benchLbl}>Bench</Text>{Array.from({length:9}).map((_,i) => { const u = bench[i]; return (
-          <Pressable key={i} onPress={() => u && tapBench(u)} style={[st.benchCell, u && selUid===u.uid && st.cellSel]}>{u ? <ChibiRig spec={champById(u.defId)} size={44} star={u.star} state='idle'/> : <Text style={st.cellDot}>·</Text>}</Pressable> ); })}
+          <Pressable key={i} onPress={() => u && tapBench(u)} style={[st.benchCell, u && selUid===u.uid && st.cellSel]}>{u ? <SpriteUnit spec={champById(u.defId)} size={44} star={u.star} state='idle'/> : <Text style={st.cellDot}>·</Text>}</Pressable> ); })}
           <View style={st.logMini}>{log.slice(0,2).map((l,i) => <Text key={i} style={st.logTxt} numberOfLines={1}>{l}</Text>)}</View>
         </View>)}
         {/* ===== SHOP ===== */}
@@ -543,7 +543,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
                             {shop.map((id, i) => { const d = champById(id); const copies = copiesOf(id); const glow = copies >= 2; return (
                 <Pressable key={i} onPress={() => buy(i)} style={[st.shopCard, { borderColor: COST_COLORS[d.cost] }, glow && st.cardGlow]}>
                   <View style={[st.cardArt, { backgroundColor: COST_COLORS[d.cost] + '33' }]}>
-                    <ChibiRig spec={d} size={84} state='idle'/>
+                    <SpriteUnit spec={d} size={84} state='idle'/>
                     <View style={st.costBadge}><Text style={st.costBadgeTxt}>{d.cost}</Text></View>
                     {glow && <Text style={st.glowTag}>Sắp lên sao</Text>}
                   </View>
@@ -577,7 +577,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
         {/* ===== OVERLAYS ===== */}
         {isTut && tutStep && (
           <View style={st.coach}>
-            <ChibiRig spec={champById('nana')} size={70} state={tutStep.advanceOn==='ack' ? 'victory' : 'idle'}/>
+            <SpriteUnit spec={champById('nana')} size={70} state={tutStep.advanceOn==='ack' ? 'victory' : 'idle'}/>
             <View style={{ flex: 1, gap: 3 }}>
               <Text style={st.coachTitle}>Mascot Nana — Bước {tut.idx+1}: {tutStep.title}</Text>
               <Text style={st.coachTxt}>{tutStep.text}</Text>
@@ -598,10 +598,10 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             <View style={st.carRing}/>
             {carousel.map((opt, i) => { const ang = (carAngle + i * 45) * Math.PI / 180; const cx = 190 + Math.cos(ang) * 130; const cy = 130 + Math.sin(ang) * 88; const d = champById(opt.defId); return (
               <Pressable key={i} onPress={() => chooseCarousel(opt)} style={[st.carCell, { left: cx - 50, top: cy - 56, borderColor: COST_COLORS[d.cost] }]}>
-                <ChibiRig spec={d} size={72} state='idle'/><Text style={st.carName}>{d.name}</Text>
+                <SpriteUnit spec={d} size={72} state='idle'/><Text style={st.carName}>{d.name}</Text>
                 <View style={{ flexDirection:'row', alignItems:'center', gap:2 }}><ItemArt color={(itemById(opt.item)?.color) ?? '#ccc'} size={16}/><Text style={st.carItem}>{itemById(opt.item)?.name ?? ''}</Text></View>
               </Pressable> ); })}
-            <View style={st.carCenter}><ChibiRig spec={champById('toto')} size={64} state='victory'/></View>
+            <View style={st.carCenter}><SpriteUnit spec={champById('toto')} size={64} state='victory'/></View>
           </View>
         </View>)}
 {augView && (<View style={st.overlay}><View style={st.modal}>
@@ -615,7 +615,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
           <Text style={st.modalTitle}>Bàn cờ của {players[scout]?.name ?? 'Đối thủ'} (chỉ xem)</Text>
           <Text style={st.modalDesc}>Cấp {scout === 0 ? level : players[scout]?.lvl} — {scoutTeam.length} tướng trên bàn. Xem đội hình đối thủ để sắp xếp lại đội của bạn.</Text>
           <View style={st.scoutBoard}>
-            {scoutTeam.map(u => (<View key={u.uid} style={[st.scoutCell, { left: 12 + u.x * 52 + (u.y % 2 ? 24 : 0), top: 10 + u.y * 44 }]}><ChibiRig spec={champById(u.defId)} size={46} star={u.star} state='idle'/></View>))}
+            {scoutTeam.map(u => (<View key={u.uid} style={[st.scoutCell, { left: 12 + u.x * 52 + (u.y % 2 ? 24 : 0), top: 10 + u.y * 44 }]}><SpriteUnit spec={champById(u.defId)} size={46} star={u.star} state='idle'/></View>))}
             {!scoutTeam.length && <Text style={st.dim}>Chưa có tướng trên bàn.</Text>}
           </View>
           <View style={st.synRow}>{computeSynergies(scoutTeam).map(s => (<Text key={s.traitId} style={[st.synChip, s.active && st.synActive]}>{traitName(s.traitId)}: {s.count}{s.active ? ' (bậc '+s.tier+')' : ''}</Text>))}</View>
@@ -631,7 +631,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
               </View>)}
               {reward.lpDelta === undefined && <Text style={st.rewardNote}>Chế độ này chỉ cộng XP, không tính LP hạng.</Text>}
             </View>)}
-            <View style={{ flexDirection:'row', gap:10, justifyContent:'center' }}>{[CHAMPIONS[0], CHAMPIONS[16], CHAMPIONS[23]].map(d => <ChibiRig key={d.id} spec={d} size={70} state={finished.includes('Thắng') || finished.includes('Vô địch') || finished.includes('hạng 1') || finished.includes('Hoàn thành') ? 'victory' : 'hurt'}/>)}</View>
+            <View style={{ flexDirection:'row', gap:10, justifyContent:'center' }}>{[CHAMPIONS[0], CHAMPIONS[16], CHAMPIONS[23]].map(d => <SpriteUnit key={d.id} spec={d} size={70} state={finished.includes('Thắng') || finished.includes('Vô địch') || finished.includes('hạng 1') || finished.includes('Hoàn thành') ? 'victory' : 'hurt'}/>)}</View>
             <Pressable style={st.bigBtn} onPress={() => router.replace('/')}><Text style={st.bigTxt}>Về trang chủ</Text></Pressable></>)
           : (<><Text style={st.modalTitle}>Chọn cường hóa — {roundLabel(round)}</Text><Text style={st.modalDesc}>Mốc cường hóa kiểu TFT (2-1, 3-2, 4-2). Chọn 1 trong 3, hiệu lực cả trận.</Text><View style={st.modalRow}>{(augChoice ?? []).map(id => { const a = AUGMENTS.find(x => x.id===id)!; return (
             <Pressable key={id} style={st.augCard} onPress={() => chooseAugment(id)}><Text style={st.shopName}>{a.name}</Text><Text style={st.shopTrait}>{a.desc}</Text></Pressable> ); })}</View></>)}

@@ -63,9 +63,11 @@ Lưu ý: anon key là khóa công khai phía client, dùng kèm Realtime cho ph�
 - Trên **native**: `npm run audio` (`scripts/generate-audio.mjs`) render sẵn 17 file WAV (15 SFX + 2 BGM, khoảng 1.1MB) vào `assets/audio/` để phát bằng expo-audio. File WAV không push lên Git (đã có trong .gitignore) — bước build Vercel đã tự chạy `npm run audio` qua `vercel.json`. Giới hạn hiện tại: đường phát native dùng require động nên trên Metro có thể im lặng nếu file chưa được bundle tĩnh; bản web (bản chơi thử chính) có nhạc + SFX đầy đủ.
 - Bật/tắt riêng nhạc và hiệu ứng ở trang chủ (mục Cài đặt âm thanh) và nút tắt nhanh ngay trong trận; lựa chọn được lưu bằng AsyncStorage.
 
-## Đồ họa: tranh vẽ + 2.5D + rig xương kiểu Spine (tự xây)
-- Toàn bộ tướng/quái/boss là **tranh chibi vẽ chi tiết bằng SVG vector**; không dùng ảnh ngoài, không dùng emoji.
-- **Hệ thống rig "Spine-like" tự xây bằng code** (`src/game/rig.ts` + `src/components/ChibiRig.tsx`) — không phải runtime Spine thương mại và không có file .spine: 11 xương có pivot/z-order, 7 clip keyframe (idle/walk/attack/cast/hurt/death/victory) nối thật vào trạng thái trận đấu; trong shop/bộ sưu tập tướng chạy idle liên tục. 2.5D: nền nhiều lớp, scale + sắp xếp độ sâu theo hàng, bóng đổ elip co giãn theo nhịp bob.
+## Đồ họa: tranh raster splash art + animation cấp sprite
+- Toàn bộ 25 tướng + 10 quái/boss + cảnh (lobby, đấu trường, 3 banner chương) là **tranh raster vẽ kiểu splash art game** (tô bóng mềm painterly, mắt bóng long lanh, trang phục chi tiết viền vàng kim) — sinh theo khối phong cách chuẩn trong `docs/ASSET_STYLE.md`, nhân vật là sáng tạo gốc của game.
+- **Pipeline asset (giống app Love)**: ảnh gốc nền magenta thuần → script `scripts/process-art.mjs` tách nền bằng color-distance keying + khử viền magenta, trim, chuẩn hoá canvas 512×512 (boss 640), xuất `.webp` có alpha và encode `.webp.b64` để commit (file `.webp` thật bị gitignore). `scripts/decode-art.mjs` giải mã `.b64` → `.webp` khi `postinstall` và trong buildCommand của Vercel (trước expo export). Manifest `src/game/artManifest.ts` được sinh tự động với require tĩnh cho từng file.
+- **Animation cấp sprite** (`src/components/SpriteUnit.tsx`): sprite là ảnh tĩnh được animate theo đúng state machine cũ (`stateForUnit` trong `src/game/rig.ts`): idle thở + bob, walk nhún + nghiêng, attack lao về phía mục tiêu, cast nhún lên + vòng sáng dưới chân, hurt rung + flash trắng, death xoay ngã + mờ dần, victory nhảy ăn mừng. Đây là đánh đổi có chủ đích: bỏ chuyển động xương từng bộ phận để lấy chất lượng tranh thật.
+- File cũ `src/components/ChibiArt.tsx`, `ChibiRig.tsx`, `SceneArt.tsx` (tranh SVG vector) **không còn được import ở bề mặt nhân vật/cảnh** (chỉ còn `AmbientParticles` hạt bay trang trí trong trận được giữ lại từ SceneArt); các file vẫn nằm trong repo vì quy trình đẩy snapshot không hỗ trợ xoá file.
 
 ## Chạy thử
 ```bash

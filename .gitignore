@@ -8,3 +8,6 @@ assets/favicon.png
 scripts/.build/
 assets/audio/
 scripts/.build-*/
+assets/art/**/*.webp
+!assets/art/**/*.webp.b64
+art-raw/

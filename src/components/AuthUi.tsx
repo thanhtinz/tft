@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
-import { LobbyScene } from './SceneArt';
+import { SceneArtImage } from './SpriteUnit';
 // Khung man hinh auth phong cach game: nen tranh lobby, panel toi vien vang
 export function AuthShell({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
   const { width: winW, height: winH } = useWindowDimensions();
   return (
     <View style={s.root}>
-      <LobbyScene width={winW} height={winH} />
+      <SceneArtImage id="lobby" width={winW} height={winH} />
       <View style={s.dim} />
       <View style={[s.panel, { width: Math.min(430, winW - 28) }]}>
         <Text style={s.title}>{title}</Text>

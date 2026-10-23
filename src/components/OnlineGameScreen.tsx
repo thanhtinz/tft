@@ -3,8 +3,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { router } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { ItemArt } from './ChibiArt';
-import ChibiRig from './ChibiRig';
-import { LayeredBoardBg } from './SceneArt';
+import SpriteUnit, { SceneArtImage } from './SpriteUnit';
 import { rowDepth, stateForUnit } from '../game/rig';
 import { AUGMENTS, CHAMPIONS, champById, itemById, monsterById, traitName } from '../game/data';
 import { BattleResult, PlacedUnit, computeSynergies, interestOf, isPveRound, newUid, pveEnemiesForRound, randomItem, rollShop, sellValue, simulateBattle, streakBonus, xpToNext } from '../game/engine';
@@ -222,15 +221,15 @@ export default function OnlineGameScreen({ mode, joinCode, playerName }: Props) 
       <View style={st.players}>{players.map(p => (<View key={p.seat} style={[st.playerChip, !p.alive && st.dead]}><Text style={st.playerTxt}>{p.name}{p.id === myIdRef.current ? ' (bạn)' : ''}: {p.hp} máu{p.alive ? '' : ' (loại)'}{!p.isBot && !p.connected ? ' (AI thay)' : ''}</Text></View>))}</View>
       {!!synergies.length && (<View style={st.synRow}>{synergies.map(s => (<Text key={s.traitId} style={[st.synChip, s.active && st.synActive]}>{traitName(s.traitId)}: {s.count}{s.active ? ' (kích hoạt bậc ' + s.tier + ')' : ''}</Text>))}</View>)}
       <Text style={st.section}>{phase === 'battle' ? ('Đang đấu: ' + battleLabel) : phase === 'plan' ? 'Bàn cờ — hết giờ chuẩn bị, đội hình tự gửi lên phòng' : 'Đang chờ kết quả từ phòng...'}</Text>
-      <View style={{ alignSelf: 'center' }}><LayeredBoardBg width={cell * 7 + 12} /></View>
+      <View style={{ alignSelf: 'center', width: cell * 7 + 12, height: Math.round((cell * 7 + 12) * 0.34), borderRadius: 10, overflow: 'hidden' }}><SceneArtImage id="arena" width={cell * 7 + 12} height={Math.round((cell * 7 + 12) * 0.34)} /></View>
       <View style={[st.board, { width: cell * 7 + 12, height: (phase === 'battle' ? cell * 7 : cell * 4) + 12 }]}>
         {phase !== 'battle' && Array.from({ length: 4 }).map((_, y) => Array.from({ length: 7 }).map((_, x) => { const u = board.find(v => v.x === x && v.y === y); return (
           <Pressable key={x + '-' + y} onPress={() => tapBoardCell(x, y)} style={[st.cell, { left: 6 + x * cell, top: 6 + y * cell, width: cell - 4, height: cell - 4 }, selUid && u?.uid === selUid && st.cellSel]}>
-            {u ? <ChibiRig spec={champById(u.defId)} size={(cell - 4) * rowDepth(y, 4).scale} star={u.star} state='idle' /> : <Text style={st.cellDot}>·</Text>}
+            {u ? <SpriteUnit spec={champById(u.defId)} size={(cell - 4) * rowDepth(y, 4).scale} star={u.star} state='idle' /> : <Text style={st.cellDot}>·</Text>}
           </Pressable>); }))}
         {phase === 'battle' && frame && renderUnitsForFrame(frame).map(u => { const prev = result && frameIdx > 0 ? result.frames[frameIdx - 1].units.find(v => v.uid === u.uid) : undefined; const evs = result ? result.events.filter(e => Math.abs(e.t - frame.t) < 0.3) : []; const animState = stateForUnit({ alive: u.alive, moved: !!prev && (prev.x !== u.x || prev.y !== u.y), castAtFrame: evs.some(e => e.uid === u.uid && e.text.includes('kỹ năng')), attackedAtFrame: evs.some(e => e.text.startsWith(u.name + ' đánh')), hurtAtFrame: evs.some(e => e.uid === u.uid && !!e.amount), battleOver: frameIdx >= (result?.frames.length ?? 1) - 1, won: result?.winner === u.team }); const dep = rowDepth(u.y, 7); return (
           <View key={u.uid} style={[st.battleUnit, { left: 6 + u.x * cell, top: 6 + u.y * cell, width: cell - 2, height: cell - 2, zIndex: dep.zIndex }]}>
-            <ChibiRig spec={u.art} size={(cell - 6) * dep.scale + 8} star={u.star} state={animState} flip={u.team === 1} />
+            <SpriteUnit spec={u.art} size={(cell - 6) * dep.scale + 8} star={u.star} state={animState} flip={u.team === 1} />
             <View style={st.hpBar}><View style={[st.hpFill, { width: Math.max(0, Math.min(100, u.hp / u.maxHp * 100)) + '%' }]} /></View>
             <View style={st.manaBar}><View style={[st.manaFill, { width: Math.min(100, u.mana / u.maxMana * 100) + '%' }]} /></View>
           </View>); })}
@@ -238,10 +237,10 @@ export default function OnlineGameScreen({ mode, joinCode, playerName }: Props) 
       </View>
       <Text style={st.section}>Hàng chờ</Text>
       <View style={st.benchRow}>{Array.from({ length: 9 }).map((_, i) => { const u = bench[i]; return (
-        <Pressable key={i} onPress={() => u && tapBench(u)} style={[st.benchCell, u && selUid === u.uid && st.cellSel]}>{u ? <ChibiRig spec={champById(u.defId)} size={42} star={u.star} state='idle' /> : <Text style={st.cellDot}>·</Text>}</Pressable>); })}
+        <Pressable key={i} onPress={() => u && tapBench(u)} style={[st.benchCell, u && selUid === u.uid && st.cellSel]}>{u ? <SpriteUnit spec={champById(u.defId)} size={42} star={u.star} state='idle' /> : <Text style={st.cellDot}>·</Text>}</Pressable>); })}
       </View>
       {selUid && (() => { const u = allUnits.find(v => v.uid === selUid); if (!u) return null; const d = champById(u.defId); return (
-        <View style={st.selBox}><ChibiRig spec={d} size={64} star={u.star} state='idle' /><View style={{ flex: 1 }}><Text style={st.selName}>{d.name} {STAR_TXT(u.star)} - {d.skill.name}</Text><Text style={st.selDesc}>{d.skill.desc} | Đồ: {u.items.map(i => itemById(i)?.name).filter(Boolean).join(', ') || 'chưa có'}</Text></View>
+        <View style={st.selBox}><SpriteUnit spec={d} size={64} star={u.star} state='idle' /><View style={{ flex: 1 }}><Text style={st.selName}>{d.name} {STAR_TXT(u.star)} - {d.skill.name}</Text><Text style={st.selDesc}>{d.skill.desc} | Đồ: {u.items.map(i => itemById(i)?.name).filter(Boolean).join(', ') || 'chưa có'}</Text></View>
           <Pressable style={st.smallBtn} onPress={sellSelected}><Text style={st.smallTxt}>Bán +{sellValue(u.defId, u.star)} vàng</Text></Pressable>
           {board.some(v => v.uid === selUid) && <Pressable style={st.smallBtn} onPress={moveToBench}><Text style={st.smallTxt}>Về hàng chờ</Text></Pressable>}</View>); })()}
       {!!inventory.length && (<View><Text style={st.section}>Trang bị (chạm chọn đồ, rồi chạm tướng để gắn)</Text><View style={st.invRow}>{inventory.map((iid, i) => { const it = itemById(iid); if (!it) return null; return (
@@ -251,7 +250,7 @@ export default function OnlineGameScreen({ mode, joinCode, playerName }: Props) 
         <Pressable style={st.smallBtn} onPress={() => setLocked(l => !l)}><Text style={st.smallTxt}>{locked ? 'Mở khóa shop' : 'Khóa shop'}</Text></Pressable>
         <Pressable style={st.smallBtn} onPress={buyXp}><Text style={st.smallTxt}>Mua XP (4 vàng)</Text></Pressable></View>
       <View style={st.shopRow}>{shop.map((id, i) => { const d = champById(id); return (
-        <Pressable key={i} onPress={() => buy(i)} style={st.shopCard}><ChibiRig spec={d} size={78} state='idle' /><Text style={st.shopName}>{d.name}</Text><Text style={st.shopCost}>{d.cost} vàng - {STAR_TXT(1)}</Text><Text style={st.shopTrait}>{d.traits.map(traitName).join(' / ')}</Text><Text style={st.shopSkill}>{d.skill.name}</Text></Pressable>); })}
+        <Pressable key={i} onPress={() => buy(i)} style={st.shopCard}><SpriteUnit spec={d} size={78} state='idle' /><Text style={st.shopName}>{d.name}</Text><Text style={st.shopCost}>{d.cost} vàng - {STAR_TXT(1)}</Text><Text style={st.shopTrait}>{d.traits.map(traitName).join(' / ')}</Text><Text style={st.shopSkill}>{d.skill.name}</Text></Pressable>); })}
       </View>
       {phase === 'plan' && <Pressable style={st.bigBtn} onPress={() => { if (submittedRound.current !== round) { submittedRound.current = round; matchRef.current?.submitSnapshot(board, level, augments); setPhase('wait'); say('Đã gửi đội hình sớm.'); } }}><Text style={st.bigTxt}>Gửi đội hình & sẵn sàng</Text></Pressable>}
       <View style={st.logBox}>{log.map((l, i) => <Text key={i} style={st.logTxt}>{l}</Text>)}</View>
@@ -261,7 +260,7 @@ export default function OnlineGameScreen({ mode, joinCode, playerName }: Props) 
           {!!rewardTxt && <Text style={[st.modalDesc, { fontWeight: '800', color: '#4361ee' }]}>{rewardTxt}</Text>}
           <Pressable style={st.bigBtn} onPress={leaveRoom}><Text style={st.bigTxt}>Về menu online</Text></Pressable></>)
           : draft ? (<><Text style={st.modalTitle}>Vòng chọn thưởng</Text><Text style={st.modalDesc}>Chọn 1 tướng miễn phí để bắt đầu trận đấu.</Text><View style={st.modalRow}>{draft.map(id => { const d = champById(id); return (
-            <Pressable key={id} style={st.shopCard} onPress={() => chooseDraft(id)}><ChibiRig spec={d} size={88} state='victory' /><Text style={st.shopName}>{d.name}</Text><Text style={st.shopTrait}>{d.traits.map(traitName).join(' / ')}</Text></Pressable>); })}</View></>)
+            <Pressable key={id} style={st.shopCard} onPress={() => chooseDraft(id)}><SpriteUnit spec={d} size={88} state='victory' /><Text style={st.shopName}>{d.name}</Text><Text style={st.shopTrait}>{d.traits.map(traitName).join(' / ')}</Text></Pressable>); })}</View></>)
             : (<><Text style={st.modalTitle}>Chọn cường hóa</Text><Text style={st.modalDesc}>Chọn 1 trong 3 cường hóa, hiệu lực cả trận.</Text><View style={st.modalRow}>{(augChoice ?? []).map(id => { const a = AUGMENTS.find(x => x.id === id)!; return (
               <Pressable key={id} style={st.augCard} onPress={() => chooseAugment(id)}><Text style={st.shopName}>{a.name}</Text><Text style={st.shopTrait}>{a.desc}</Text></Pressable>); })}</View></>)}
       </View></View>)}
