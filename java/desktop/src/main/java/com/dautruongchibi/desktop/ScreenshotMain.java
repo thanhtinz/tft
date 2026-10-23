@@ -19,11 +19,13 @@ import java.lang.reflect.Method;
 // cho vai giay roi chup framebuffer ra PNG va thoat. Dung de kiem chung GUI khong can nguoi bam.
 // Cach chay: xvfb-run ./gradlew :desktop:screenshot -PscreenshotMode=battle -PscreenshotOut=tools/shot-battle.png
 // Che do: menu | draft (lat the up) | planning (pha chuan bi) | battle (dang giao tranh)
+// | result (announcer THANG!/THUA! dau pha ket qua vong)
 public class ScreenshotMain {
     static class ShotGame extends MainGame {
         final String mode;
         final String outPath;
         int frames = 0;
+        int resultFrames = 0;
         boolean battleStarted = false, captured = false;
         MatchScreen matchScreen;
 
@@ -44,7 +46,7 @@ public class ScreenshotMain {
                     setScreen(matchScreen);
                     break;
                 }
-                case "planning": case "battle": {
+                case "planning": case "battle": case "result": {
                     Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
                     m.autoPlan();
                     matchScreen = new MatchScreen(this, m);
@@ -70,15 +72,27 @@ public class ScreenshotMain {
             super.render();
             frames++;
             try {
-                if (("battle".equals(mode) || "battle4".equals(mode)) && !battleStarted && frames > 30 && matchScreen != null) {
+                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode);
+                if (battleMode && !battleStarted && frames > 30 && matchScreen != null) {
                     Method mb = MatchScreen.class.getDeclaredMethod("startBattle");
                     mb.setAccessible(true);
                     mb.invoke(matchScreen);
                     battleStarted = true;
+                    if ("result".equals(mode)) {
+                        // Tang toc playback x3 de vao pha RESULT nhanh (announcer chi keo 1,5s)
+                        Field fs = MatchScreen.class.getDeclaredField("speed");
+                        fs.setAccessible(true);
+                        fs.setFloat(matchScreen, 3f);
+                    }
                 }
-                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode);
                 boolean due;
-                if (battleMode && battleStarted) {
+                if ("result".equals(mode) && battleStarted) {
+                    Field fp = MatchScreen.class.getDeclaredField("phase");
+                    fp.setAccessible(true);
+                    boolean inResult = "RESULT".equals(String.valueOf(fp.get(matchScreen)));
+                    if (inResult) resultFrames++;
+                    due = resultFrames >= 20 || frames >= 2400; // chup giua cua so announcer (chu da phong to)
+                } else if (battleMode && battleStarted) {
                     // Chup GIUA tran (khong cho theo so frame vi fps Xvfb khong on dinh):
                     // doi phase == BATTLE va playT >= 1.6s (bay/su kien da kich hoat); phong ngu o frame 1500.
                     java.lang.reflect.Field fp = MatchScreen.class.getDeclaredField("phase");
@@ -87,7 +101,11 @@ public class ScreenshotMain {
                     ft.setAccessible(true);
                     boolean inBattle = "BATTLE".equals(String.valueOf(fp.get(matchScreen)));
                     float pt = ft.getFloat(matchScreen);
-                    due = (inBattle && pt >= 1.6f) || frames >= 1500;
+                    // Uu tien chup dung khoanh khac co cum pow dang no (neu co) de kiem chung hieu ung don nang
+                    java.lang.reflect.Field fPows = MatchScreen.class.getDeclaredField("pows");
+                    fPows.setAccessible(true);
+                    boolean powActive = !((java.util.List<?>) fPows.get(matchScreen)).isEmpty();
+                    due = (inBattle && (powActive || pt >= 1.6f)) || frames >= 1500;
                 } else {
                     due = frames >= 100;
                 }

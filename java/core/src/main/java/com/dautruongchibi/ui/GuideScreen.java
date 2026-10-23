@@ -11,7 +11,8 @@ import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 
-// Man hinh Hoc Choi: tom tat luat (port y chinh tu huong dan ban RN + 2 yeu to Yu-Gi-Oh ban nhe).
+// Man hinh Hoc Choi: tom tat luat (port y chinh tu huong dan ban RN;
+// trinh dien hoc tu 2 game mau Kanto Tactics + FighterZ Tactics).
 public class GuideScreen extends ScreenAdapter {
     private final MainGame game;
     private Stage stage;
@@ -19,23 +20,29 @@ public class GuideScreen extends ScreenAdapter {
     private static final String TEXT = String.join("\n",
         "MỤC TIÊU",
         "Đấu Trường Chibi là game auto-battler: bạn mua tướng, xếp đội hình, rồi xem chúng tự đánh.",
-        "Trong trận PvP có 8 người chơi. Ai hết LP trước bị loại; sống sót cuối cùng là vô địch (Top 1).",
+        "Trong trận PvP có 8 người chơi. Ai hết máu trước bị loại; sống sót cuối cùng là vô địch (Top 1).",
         "",
-        "ĐIỂM GỐC LP — 8000 (mượn từ Yu-Gi-Oh)",
-        "Mỗi người bắt đầu với 8000 LP thay cho 100 máu kiểu cũ.",
-        "Thua một vòng sẽ mất LP theo số tướng địch còn sống và stage (stage càng cao trừ càng đau).",
-        "LP về 0 = bị loại ngay.",
+        "MÁU NGƯỜI CHƠI — 100 (kiểu TFT)",
+        "Mỗi người bắt đầu trận với 100 máu. Thua một vòng sẽ mất máu theo số tướng địch",
+        "còn sống và stage (stage càng cao trừ càng đau). Máu về 0 = bị loại ngay.",
+        "Lưu ý: chế độ Hạng còn có điểm rank LP dùng để thăng/xuống hạng — đó là điểm xếp hạng",
+        "kiểu TFT, không phải máu trong trận.",
         "",
         "LẬT THẺ ÚP MỞ TRẬN",
         "Đầu trận PvP (và các vòng x-4) có 8 thẻ úp. Chạm 1 thẻ để lật mở: nhận tướng trong thẻ",
         "về bench kèm 1 trang bị vào kho. Các thẻ còn lại cũng lật mở để bạn thấy mình đã bỏ lỡ gì.",
         "",
-        "BÀI BẪY ÚP (mượn từ Yu-Gi-Oh)",
-        "Mỗi vòng ở pha chuẩn bị, bạn được xem 3 lá bẫy ngẫu nhiên và đặt úp tối đa 2 lá.",
-        "Đối thủ không thấy nội dung bẫy. Khi đúng điều kiện trong giao tranh, lá bẫy tự lật mở",
-        "kèm banner BẪY KÍCH HOẠT và chạy hiệu ứng (choáng mở trận, đóng băng khi địch tung chiêu,",
-        "khiên đội khi máu dưới 50%, sét ở giây 10, hồi sinh đồng minh, gương phản đòn chí tử).",
-        "Mỗi lá chỉ kích hoạt 1 lần trong vòng đó. Đối thủ bot cũng đặt bẫy úp như bạn!",
+        "SÂN ĐẤU & HIỆU ỨNG (học từ Kanto Tactics + FighterZ Tactics)",
+        "Sân đấu đổi tranh theo chặng: Chiến Dịch theo chương — (chương-1)%3 lần lượt là rừng,",
+        "sa mạc, băng; vòng Boss luôn là sân hoàng hôn. PvP và Sóng Quái theo stage: 1 rừng,",
+        "2 hoàng hôn, 3 sa mạc, từ stage 4 là băng (vòng Boss cũng hoàng hôn).",
+        "Đòn chí mạng hoặc đòn nặng (từ 15% máu tối đa của mục tiêu) sẽ nổ cụm khói truyện tranh",
+        "kèm vệt tốc độ, và mục tiêu bị lộn nghiêng. Cuối mỗi vòng, chữ hô lớn THẮNG! / THUA!",
+        "(hạ boss: HẠ GỤC BOSS!) phồng lên giữa sân. Nút 'Bảng sát thương' ở panel phải mở",
+        "bảng tổng sát thương của từng tướng hai bên trong trận vừa đấu.",
+        "Thắng vòng quái PvE sẽ rơi 1 trang bị (Sóng Quái: mỗi 3 sóng; Chiến Dịch: thắng màn Boss)",
+        "— thẻ trang bị nảy lên giữa-phải sân rồi tự vào kho. Gộp sao có vòng xoáy hợp nhất;",
+        "tướng 2 sao có vòng bạc ở chân, 3 sao có hào quang vàng cháy kèm chấm sao bay.",
         "",
         "KINH TẾ & ĐỘI HÌNH",
         "Shop có 5 thẻ tướng theo tỉ lệ odds từng cấp. Làm mới shop tốn 2 vàng, mua XP tốn 4 vàng.",
@@ -47,7 +54,7 @@ public class GuideScreen extends ScreenAdapter {
         "",
         "CHẾ ĐỘ CHƠI",
         "PvE Chiến Dịch: 5.200 màn trong 52 chương, boss mỗi 10 màn, boss lớn cuối chương.",
-        "PvE Sóng Quái: quái đến theo từng sóng ngày càng mạnh, 8000 LP, xem trụ được bao lâu.",
+        "PvE Sóng Quái: quái đến theo từng sóng ngày càng mạnh, 100 máu, xem trụ được bao lâu.",
         "PvP Thường: đấu 7 bot giả lập, không tính hạng. PvP Hạng: tính điểm rank LP vào hồ sơ.",
         "PvP Đấu Tập: bot yếu hơn, thuần luyện tập. (PvP online người thật: mở khi có Supabase.)",
         "",

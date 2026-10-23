@@ -17,16 +17,15 @@ public final class Match {
     public static final class PlayerState {
         public String name;
         public boolean human;
-        public int lp = Engine.LP_MAX;
+        public int hp = Engine.HP_MAX;
         public int gold = 5, level = 1, xp = 0, streak = 0;
         public List<Engine.PlacedUnit> bench = new ArrayList<>();
         public List<Engine.PlacedUnit> board = new ArrayList<>();
         public List<String> inventory = new ArrayList<>();
         public List<String> augments = new ArrayList<>();
-        public List<String> setTraps = new ArrayList<>();
         public boolean alive = true;
         public int placement = 0;
-        public int lastLpDelta = 0;
+        public int lastHpDelta = 0;
         public String lastOpponent = "";
     }
 
@@ -47,7 +46,6 @@ public final class Match {
     public boolean draftPending;
     public List<String> augmentOptions;
     public boolean augmentPending;
-    public List<String> trapOffer = new ArrayList<>();
     public int campaignStageId = 0;
     public boolean campaignWon = false;
     private int uidSeq = 1;
@@ -103,7 +101,6 @@ public final class Match {
     private void beginRound(boolean withDraft) {
         PlayerState h = human();
         rollShop();
-        offerTraps();
         if (withDraft && mode != Mode.WAVES && (round == 1 || (isPvp() && Engine.isCarouselRound(round)))) {
             draftOptions = Engine.genCarouselOptions(rng);
             draftPending = true;
@@ -122,14 +119,6 @@ public final class Match {
 
     private void rollShop() {
         shop = Engine.rollShop(human().level, rng);
-    }
-
-    private void offerTraps() {
-        List<String> pool = new ArrayList<>();
-        for (Traps.TrapDef t : Traps.ALL) pool.add(t.id);
-        trapOffer = new ArrayList<>();
-        for (int i = 0; i < 3 && !pool.isEmpty(); i++) trapOffer.add(pool.remove(rng.nextInt(pool.size())));
-        human().setTraps.clear();
     }
 
     // ---------- Lat the up (draft) ----------
@@ -155,7 +144,7 @@ public final class Match {
         GameData.AugmentDef a = GameData.augmentById(id);
         if ("gold".equals(a.kind)) h.gold += a.value;
         else if ("xp".equals(a.kind)) addXp(h, a.value);
-        else if ("healPlayer".equals(a.kind)) h.lp = Math.min(Engine.LP_MAX, h.lp + a.value * Engine.LP_SCALE);
+        else if ("healPlayer".equals(a.kind)) h.hp = Math.min(Engine.HP_MAX, h.hp + a.value);
         String msg = "Cường hóa: " + a.name + " — " + a.desc;
         log.add(msg);
         return msg;
@@ -338,15 +327,6 @@ public final class Match {
         return "Đã đeo " + GameData.itemById(itemId).name + " cho " + GameData.champById(u.defId).name + ".";
     }
 
-    public String setTraps(List<String> trapIds) {
-        PlayerState h = human();
-        List<String> valid = new ArrayList<>();
-        for (String id : trapIds) if (trapOffer.contains(id) && Traps.byId(id) != null && !valid.contains(id)) valid.add(id);
-        if (valid.size() > 2) return "Chỉ đặt tối đa 2 lá bẫy.";
-        h.setTraps = valid;
-        return valid.isEmpty() ? "Không đặt bẫy vòng này." : "Đã đặt úp " + valid.size() + " lá bẫy.";
-    }
-
     private Engine.PlacedUnit find(List<Engine.PlacedUnit> list, String uid) {
         for (Engine.PlacedUnit u : list) if (u.uid.equals(uid)) return u;
         return null;
@@ -359,7 +339,6 @@ public final class Match {
     // ---------- Do tham doi thu (PvP) ----------
     // Doi thu vong toi duoc chon round-robin tat dinh (opponentCursor) va doi hinh sinh
     // tat dinh tu seed bang Engine.makeAiTeam — nen xem truoc duoc DUNG doi hinh se gap.
-    // Bay cua doi thu van an (sinh bang rng trang thai, khong peek duoc).
     public PlayerState peekNextOpponent() {
         if (!isPvp() || Engine.isPveStageRound(round)) return null;
         List<PlayerState> aliveBots = new ArrayList<>();
@@ -381,19 +360,11 @@ public final class Match {
         public Engine.BattleResult result;
         public boolean humanWon;
         public boolean pveBattle;
+        public boolean bossBattle = false; // tran co boss (announcer "HA GUC BOSS!" + san hoang hon)
         public String opponentName = "";
-        public int humanLpDelta = 0;
-        public int oppTrapCount = 0;
+        public int humanHpDelta = 0;
+        public String droppedItem = null; // trang bi roi tu tran PvE thang (popup mo qua)
         public String summary = "";
-    }
-
-    private List<String> randomTraps(int maxCount) {
-        List<String> pool = new ArrayList<>();
-        for (Traps.TrapDef t : Traps.ALL) pool.add(t.id);
-        int n = rng.nextInt(maxCount + 1);
-        List<String> out = new ArrayList<>();
-        for (int i = 0; i < n && !pool.isEmpty(); i++) out.add(pool.remove(rng.nextInt(pool.size())));
-        return out;
     }
 
     public FightOutcome fight() {
@@ -406,7 +377,6 @@ public final class Match {
         boolean pve = Engine.isPveStageRound(round);
         out.pveBattle = pve;
         List<Engine.PlacedUnit> oppTeam;
-        List<String> oppTraps = new ArrayList<>();
         PlayerState oppBot = null;
         long battleSeed = seed * 1000003L + round * 1009L;
         if (pve) {
@@ -421,40 +391,41 @@ public final class Match {
             int botIdx = players.indexOf(oppBot);
             int effRound = mode == Mode.PVP_PRACTICE ? Math.max(1, round - 4) : round;
             oppTeam = Engine.makeAiTeam(effRound, seed + botIdx * 131L);
-            oppTraps = randomTraps(mode == Mode.PVP_PRACTICE ? 1 : 2);
             battleSeed += botIdx * 77L;
             out.opponentName = oppBot.name;
             h.lastOpponent = oppBot.name;
         }
-        out.oppTrapCount = oppTraps.size();
-        Engine.BattleResult res = Engine.simulateBattle(h.board, oppTeam, h.augments, battleSeed, h.setTraps, oppTraps);
+        Engine.BattleResult res = Engine.simulateBattle(h.board, oppTeam, h.augments, battleSeed);
         out.result = res;
         out.humanWon = res.winner == 0;
+        for (Engine.PlacedUnit u : oppTeam) if (u.isMonster && u.monster != null && u.monster.id.contains("boss")) out.bossBattle = true;
+        // Thang vong quai PvE: roi 1 trang bi vao kho (popup mo qua o lop giao dien)
+        if (pve && out.humanWon) grantDrop(out);
 
         int aliveBefore = 0;
         for (PlayerState p : players) if (p.alive) aliveBefore++;
-        Map<PlayerState, Integer> lpBefore = new HashMap<>();
-        for (PlayerState p : players) lpBefore.put(p, p.lp);
+        Map<PlayerState, Integer> hpBefore = new HashMap<>();
+        for (PlayerState p : players) hpBefore.put(p, p.hp);
 
         if (out.humanWon) {
             h.streak = h.streak >= 0 ? h.streak + 1 : 1;
-            if (oppBot != null) applyLpDamage(oppBot, Engine.lossDamageLp(round, res.survivors));
+            if (oppBot != null) applyHpDamage(oppBot, Engine.lossDamage(round, res.survivors));
         } else {
             h.streak = h.streak <= 0 ? h.streak - 1 : -1;
-            int dmgLp = Engine.lossDamageLp(round, res.enemySurvivors);
-            applyLpDamage(h, dmgLp);
-            out.humanLpDelta = -dmgLp;
+            int dmgHp = Engine.lossDamage(round, res.enemySurvivors);
+            applyHpDamage(h, dmgHp);
+            out.humanHpDelta = -dmgHp;
         }
         // Bot vs bot: hao hut mo phong nhu ban RN
         for (PlayerState b : players) {
             if (b.human || !b.alive || b == oppBot) continue;
             if (rng.next() < 0.45) {
-                int dmgLp = (int) (Engine.lossDamageLp(round, 1 + rng.nextInt(5)) * (0.5 + rng.next() * 0.6));
-                if (mode == Mode.PVP_PRACTICE) dmgLp = (int) (dmgLp * 1.4);
-                applyLpDamage(b, dmgLp);
+                int dmgHp = (int) (Engine.lossDamage(round, 1 + rng.nextInt(5)) * (0.5 + rng.next() * 0.6));
+                if (mode == Mode.PVP_PRACTICE) dmgHp = (int) (dmgHp * 1.4);
+                applyHpDamage(b, dmgHp);
             }
         }
-        resolveEliminations(aliveBefore, lpBefore);
+        resolveEliminations(aliveBefore, hpBefore);
 
         if (h.alive && aliveCount() <= 1) {
             over = true; humanPlacement = 1; h.placement = 1;
@@ -464,7 +435,7 @@ public final class Match {
             endMessage = "Bạn bị loại ở hạng " + h.placement + ".";
         }
         out.summary = (out.humanWon ? "THẮNG " : "THUA ") + Engine.roundLabel(round)
-            + (out.humanLpDelta != 0 ? " (" + out.humanLpDelta + " LP)" : "")
+            + (out.humanHpDelta != 0 ? " (" + out.humanHpDelta + " máu)" : "")
             + (oppBot != null && !oppBot.alive ? " — " + oppBot.name + " bị loại!" : "");
 
         if (!over) {
@@ -472,16 +443,24 @@ public final class Match {
             if (out.humanWon && h.augments.contains("vang2")) income += 4;
             h.gold += income;
             addXp(h, 2);
-            if (h.augments.contains("hoi1")) h.lp = Math.min(Engine.LP_MAX, h.lp + 2 * Engine.LP_SCALE);
+            if (h.augments.contains("hoi1")) h.hp = Math.min(Engine.HP_MAX, h.hp + 2);
             round++;
             beginRound(true);
         }
         return out;
     }
 
-    private void applyLpDamage(PlayerState p, int dmgLp) {
-        p.lp -= dmgLp;
-        p.lastLpDelta = -dmgLp;
+    // Roi trang bi vao kho nguoi choi khi thang tran PvE (hoc tu popup mo qua cua Kanto Tactics)
+    private void grantDrop(FightOutcome out) {
+        String it = Engine.randomItem(rng);
+        human().inventory.add(it);
+        out.droppedItem = it;
+        log.add("Rơi trang bị: " + GameData.itemById(it).name + "!");
+    }
+
+    private void applyHpDamage(PlayerState p, int dmgHp) {
+        p.hp -= dmgHp;
+        p.lastHpDelta = -dmgHp;
     }
 
     private int aliveCount() {
@@ -490,13 +469,13 @@ public final class Match {
         return n;
     }
 
-    private void resolveEliminations(int aliveBefore, Map<PlayerState, Integer> lpBefore) {
+    private void resolveEliminations(int aliveBefore, Map<PlayerState, Integer> hpBefore) {
         List<PlayerState> dead = new ArrayList<>();
-        for (PlayerState p : players) if (p.alive && p.lp <= 0) dead.add(p);
-        dead.sort((a, b) -> Integer.compare(lpBefore.getOrDefault(a, 0), lpBefore.getOrDefault(b, 0)));
+        for (PlayerState p : players) if (p.alive && p.hp <= 0) dead.add(p);
+        dead.sort((a, b) -> Integer.compare(hpBefore.getOrDefault(a, 0), hpBefore.getOrDefault(b, 0)));
         int place = aliveBefore;
         for (PlayerState p : dead) {
-            p.alive = false; p.lp = 0; p.placement = place--;
+            p.alive = false; p.hp = 0; p.placement = place--;
             log.add(p.name + " bị loại ở hạng " + p.placement + ".");
         }
     }
@@ -504,29 +483,31 @@ public final class Match {
     private FightOutcome fightWaves(FightOutcome out) {
         PlayerState h = human();
         out.pveBattle = true;
+        out.bossBattle = wave % 10 == 0;
         out.opponentName = "Sóng quái " + wave;
         List<Engine.PlacedUnit> enemy = waveTeam(wave);
-        Engine.BattleResult res = Engine.simulateBattle(h.board, enemy, h.augments, seed * 31L + wave * 977L, h.setTraps, List.of());
+        Engine.BattleResult res = Engine.simulateBattle(h.board, enemy, h.augments, seed * 31L + wave * 977L);
         out.result = res;
         out.humanWon = res.winner == 0;
         if (out.humanWon) {
             h.gold += 6 + Engine.interestOf(h.gold);
             addXp(h, 2);
             out.summary = "Dọn sạch sóng " + wave + "!";
+            if (wave % 3 == 0) grantDrop(out); // moi 3 song roi 1 trang bi
             wave++;
             beginRound(true);
         } else {
-            int dmgLp = 150 + wave * 15 + res.enemySurvivors * 100;
-            applyLpDamage(h, dmgLp);
-            out.humanLpDelta = -dmgLp;
-            if (h.lp <= 0) {
-                h.alive = false; h.lp = 0;
+            // Cong thuc cu tren thang 8000 (150 + song*15 + quai con song*100) quy ve thang 100 mau
+            int dmgHp = Math.max(1, (150 + wave * 15 + res.enemySurvivors * 100) / 80);
+            applyHpDamage(h, dmgHp);
+            out.humanHpDelta = -dmgHp;
+            if (h.hp <= 0) {
+                h.alive = false; h.hp = 0;
                 over = true;
                 endMessage = "Bạn trụ được tới sóng " + (wave - 1) + ".";
-                out.summary = "THUA sóng " + wave + " — hết LP!";
+                out.summary = "THUA sóng " + wave + " — hết máu!";
             } else {
-                out.summary = "THUA sóng " + wave + " (-" + dmgLp + " LP). Sắp xếp lại đội hình rồi đánh lại!";
-                offerTraps();
+                out.summary = "THUA sóng " + wave + " (-" + dmgHp + " máu). Sắp xếp lại đội hình rồi đánh lại!";
             }
         }
         return out;
@@ -556,11 +537,13 @@ public final class Match {
         PlayerState h = human();
         out.pveBattle = true;
         Stages.StageDef def = Stages.stageDef(campaignStageId);
+        out.bossBattle = def.isBoss;
         out.opponentName = def.name;
         List<Engine.PlacedUnit> enemy = Stages.buildStageTeam(campaignStageId);
-        Engine.BattleResult res = Engine.simulateBattle(h.board, enemy, h.augments, seed * 17L + campaignStageId * 331L, h.setTraps, List.of());
+        Engine.BattleResult res = Engine.simulateBattle(h.board, enemy, h.augments, seed * 17L + campaignStageId * 331L);
         out.result = res;
         out.humanWon = res.winner == 0;
+        if (out.humanWon && def.isBoss) grantDrop(out); // thang man Boss: roi 1 trang bi
         campaignWon = out.humanWon;
         over = true;
         endMessage = campaignWon ? "Chiến thắng màn " + campaignStageId + ": " + def.name + " (+" + def.reward + " điểm thưởng)" : "Thất bại ở màn " + campaignStageId + ". Hãy thử đội hình khác!";
@@ -573,7 +556,6 @@ public final class Match {
         PlayerState h = human();
         if (draftPending) pickDraft(0);
         if (augmentPending) pickAugment(0);
-        if (!trapOffer.isEmpty()) setTraps(trapOffer.subList(0, Math.min(2, trapOffer.size())));
         boolean bought = true;
         while (bought) {
             bought = false;

@@ -78,13 +78,13 @@ public class MenuScreen extends ScreenAdapter {
         modes.defaults().align(com.badlogic.gdx.utils.Align.left).padBottom(8);
         modes.add(Ui.labelBig(a, "PvE — ĐẤU VỚI MÁY", Ui.GOLD)).row();
         modes.add(modeBtn(a, "flag", "Chiến Dịch (5.200 màn)", "Chinh phục 52 chương, boss mỗi 10 màn", () -> game.setScreen(new CampaignScreen(game)))).row();
-        modes.add(modeBtn(a, "waves", "Sóng Quái Vô Tận", "8000 LP, trụ càng lâu càng tốt", () -> startMatch(Match.Mode.WAVES))).row();
+        modes.add(modeBtn(a, "waves", "Sóng Quái Vô Tận", "100 máu, trụ càng lâu càng tốt", () -> startMatch(Match.Mode.WAVES))).row();
         modes.add(Ui.labelBig(a, "PvP — ĐẤU 8 NGƯỜI (BOT GIẢ LẬP)", Ui.GOLD)).padTop(8).row();
         modes.add(modeBtn(a, "sword", "PvP Thường", "Đấu 7 đối thủ, không tính hạng", () -> startMatch(Match.Mode.PVP_NORMAL))).row();
         modes.add(modeBtn(a, "trophy", "PvP Hạng", "Có tính điểm rank LP vào hồ sơ", () -> startMatch(Match.Mode.PVP_RANKED))).row();
         modes.add(modeBtn(a, "shield", "PvP Đấu Tập", "Bot yếu hơn, luyện tập tự do", () -> startMatch(Match.Mode.PVP_PRACTICE))).row();
         modes.add(Ui.labelSmall(a, "PvP online người thật sẽ mở khi có Supabase (ngoài phạm vi bản này).", Ui.TEXT_DIM)).padTop(2).row();
-        modes.add(modeBtn(a, "book", "Học Chơi", "Luật chơi, LP 8000, bẫy úp, lật thẻ", () -> game.setScreen(new GuideScreen(game)))).padTop(10).row();
+        modes.add(modeBtn(a, "book", "Học Chơi", "Luật chơi, máu 100, lật thẻ, hiệu ứng trận", () -> game.setScreen(new GuideScreen(game)))).padTop(10).row();
         modes.add(modeBtn(a, "star", "Hồ Sơ & Thống Kê", "Hạng, LP, lịch sử phong độ", () -> game.setScreen(new ProfileScreen(game)))).row();
         root.add(modes).align(com.badlogic.gdx.utils.Align.topLeft).expandX();
         game.sound().playBgm("home");

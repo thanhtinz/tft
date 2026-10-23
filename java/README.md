@@ -4,6 +4,10 @@ Bản chuyển đổi của game "Đấu Trường Chibi" từ React Native sang
 theo quyết định của chủ dự án (đợt 1, 2026-10-23). **Đợt hoàn thiện (cùng ngày):** nâng LibGDX 1.14.0 +
 bản web TeaVM dựng thành công, trau chuốt giao diện desktop, nối âm thanh đầy đủ, do thám đội hình đối thủ,
 nội suy vị trí mượt (smoothstep), module Android đã nối sẵn (xem mục Android về giới hạn build trong sandbox).
+**Đợt bỏ Yu-Gi-Oh (cùng ngày):** gỡ toàn bộ hệ thống bài bẫy úp và điểm gốc 8000 (về **máu 100 kiểu TFT**),
+đồng thời bổ sung lớp trình diễn học từ 2 game mẫu **Kanto Tactics** + **FighterZ Tactics**: sân đổi theo chặng,
+đòn nặng nổ "pow" truyện tranh, announcer cuối vòng, bảng sát thương theo tướng, xoáy gộp sao + vòng chân theo sao,
+popup nhận trang bị kiểu mở quà (chi tiết ở mục Gameplay).
 
 > **Quan trọng:** Bản React Native ở thư mục gốc của repo **vẫn giữ nguyên** và demo Vercel
 > (https://dau-truong-chibi.vercel.app) vẫn chạy bản RN. Bản Java này nằm trong thư mục `java/`
@@ -32,9 +36,9 @@ java/
 │   └── src/main/java/com/dautruongchibi/
 │       ├── data/GameData.java   # so lieu port nguyen tu ban RN: 25 tuong, 8 toc/he, 12 do, 10 quai, 8 cuong hoa
 │       ├── game/                # Engine (mo phong tat dinh theo seed), Match (dieu phoi tran),
-│       │                        # Traps (6 la bay up), Rank (10 bac + bang LP), Stages (5.200 man),
+│       │                        # ArenaTheme (quy tac san theo chang), Rank (10 bac + bang LP), Stages (5.200 man),
 │       │                        # Profile (luu JSON local), Rng (mulberry32 giong ban RN)
-│       ├── headless/HeadlessMain.java  # bo kiem tra khong giao dien (19 muc)
+│       ├── headless/HeadlessMain.java  # bo kiem tra khong giao dien (15 muc)
 │       └── ui/                  # MenuScreen, CampaignScreen, MatchScreen, GuideScreen, ProfileScreen, Sound (am thanh)
 ├── desktop/                 # DesktopLauncher (LWJGL3 1280x720) + ScreenshotMain (cong cu kiem chung GUI)
 ├── android/                 # Module Android day du (AGP 8.5.2, SDK 35) — xem muc Android ve gioi han build APK
@@ -46,6 +50,7 @@ java/
     ├── preview-sheet.png    # bang xem truoc toan bo sprite (phong to nearest-neighbor)
     ├── fetch-deps.sh / fetch_deps.py  # tai dependency bang curl vao local-maven (moi truong han che mang)
     └── shot-*.png           # anh chup kiem chung GUI (menu, lat the, chuan bi, giao tranh)
+    └── shot2-*.png          # anh chup dot bo Yu-Gi-Oh (menu, chuan bi khong con panel bay, giao tranh co pow, announcer + popup do)
 ```
 
 ## Gameplay đã port (khớp bản RN)
@@ -57,24 +62,29 @@ java/
   - PvE **Chiến Dịch**: 5.200 màn / 52 chương sinh tất định, boss mỗi 10 màn, boss lớn cuối chương.
   - PvE **Sóng Quái** vô tận, boss mỗi 10 sóng.
   - PvP **Thường / Hạng / Đấu Tập**: đấu 8 người với 7 bot giả lập; **chỉ Hạng mới tính rank LP** vào hồ sơ;
-    Đấu Tập bot yếu hơn (lùi 4 vòng sức mạnh, tối đa 1 bẫy) và không tính gì.
+    Đấu Tập bot yếu hơn (lùi 4 vòng sức mạnh) và không tính gì.
   - **Học Chơi** riêng ở menu. (PvP online người thật vẫn chờ Supabase như bản RN — ngoài phạm vi đợt này.)
-- **LP 8000 (mượn Yu-Gi-Oh):** mọi người chơi bắt đầu 8000 LP. Sát thương thua vòng của bản RN (thang 100 máu)
-  được **nhân hệ số 80** (`Engine.LP_SCALE = 80`) — kiểm chứng bằng mô phỏng headless: trận PvP trọn vẹn kéo dài
-  16–17 vòng ở 3 seed kiểm tra, tương đương độ dài bản 100 máu. LP về 0 = bị loại; hiển thị số LP lớn + cột LP trong danh sách người chơi.
+- **Máu 100 (kiểu TFT):** mọi người chơi bắt đầu trận với **100 máu** (`Engine.HP_MAX = 100`). Sát thương thua vòng
+  dùng thẳng bảng gốc của bản RN trên thang 100 (`Engine.lossDamage`: stage càng cao + số tướng địch còn sống càng
+  nhiều thì trừ càng đau) — kiểm chứng headless: trận PvP trọn vẹn kéo dài **17–20 vòng** ở 3 seed. Máu về 0 = bị loại;
+  thanh trên hiện máu kèm icon tim, danh sách người chơi hiện máu 0–100. (Điểm **rank LP** của chế độ Hạng là điểm
+  xếp hạng kiểu TFT — giữ nguyên, không liên quan máu trong trận. Hồ sơ cũ chỉ lưu rank/thống kê nên tương thích nguyên vẹn.)
 - **Lật thẻ úp mở trận:** đầu trận PvP (và các vòng x-4, sóng 1 ở Sóng Quái) hiện 8 thẻ úp lưng pixel;
   chọn 1 thẻ → lật mở (420ms, các thẻ khác lật nối tiếp) → nhận tướng về bench + 1 trang bị vào kho.
-- **Bài bẫy úp (mượn Yu-Gi-Oh, bản nhẹ):** mỗi vòng ở pha chuẩn bị được xem 3 lá, đặt úp tối đa 2 lá
-  (chỉ hiện mặt lưng; bot cũng đặt bẫy ẩn). Khi đúng điều kiện, lá bẫy tự lật kèm banner
-  **"BẪY KÍCH HOẠT: \<tên\>!"** và chạy hiệu ứng ngay trong engine tất định theo seed:
-  1. *Hố Sập Choáng* — mở trận: tướng địch khỏe nhất choáng 2,5s + 100 sát thương phép.
-  2. *Bẫy Băng Giá* — địch tung kỹ năng lần đầu: đóng băng 2s + 120 sát thương phép.
-  3. *Khiên Đội Hình* — tổng máu đội lần đầu dưới 50%: toàn đội nhận khiên 15% máu tối đa.
-  4. *Sét Trừng Phạt* — giây 10, nếu còn ≥3 địch: sét 180 sát thương phép lên toàn bộ địch.
-  5. *Hồi Sinh Đồng Đội* — đồng minh đầu tiên gục ngã hồi sinh với 40% máu.
-  6. *Gương Phản Đòn* — đòn chí tử đầu tiên lên đồng minh bị hóa giải (sống sót với 1 máu) và phản 150% sát thương.
-  
-  Mỗi lá chỉ kích hoạt 1 lần/vòng. Bộ kiểm tra headless có 1 mục riêng cho **từng lá bẫy**.
+- **Trình diễn theo 2 game mẫu (Kanto Tactics + FighterZ Tactics)** — chỉ học bố cục/kỹ thuật trình diễn, không sao chép asset:
+  1. **Sân đấu đổi theo chặng** (`game/ArenaTheme.java`): Chiến Dịch theo chương — `(chương-1)%3` lần lượt rừng / sa mạc / băng
+     (khớp tông banner chương), vòng Boss → hoàng hôn; PvP + Sóng Quái theo stage: 1 rừng, 2 hoàng hôn, 3 sa mạc, ≥4 băng
+     (Sóng Quái quy stage = ⌈sóng/5⌉), vòng Boss → hoàng hôn. Sân được chốt tại thời điểm bấm ĐẤU cho đúng vòng đang đấu.
+  2. **Đòn nặng truyện tranh:** đòn crit hoặc đòn ≥ 15% máu tối đa của mục tiêu → cụm nổ mây trắng "pow" + 5 vệt tốc độ
+     tỏa ra tại điểm trúng, mục tiêu **lộn nghiêng** ±38° trong 0,35s. (Số sát thương to kiểu Kanto giữ nguyên.)
+  3. **Announcer cuối vòng:** chữ Baloo lớn "THẮNG!" / "THUA!" (thắng trận có boss: **"HẠ GỤC BOSS!"**) phồng lên giữa sân
+     ~1,5s rồi tan, kèm banner nhỏ chứa tóm tắt vòng + máu còn lại; sau đó mới hiện panel kết quả chi tiết.
+  4. **Bảng sát thương theo tướng:** nút "Bảng sát thương" ở panel phải bật/tắt panel nổi đè mép phải sân, liệt kê từng tướng
+     của **cả 2 bên** kèm thanh ngang theo tổng sát thương gây ra trong trận vừa đấu (dữ liệu `Engine.damageChart` cộng từ sự kiện engine).
+  5. **Lên sao kiểu tiến hóa:** khi gộp sao, 3 chấm sao xoáy bay vào tướng kết quả + vòng sáng nở ở chân + chớp sáng;
+     tướng **2 sao có vòng bạc ở chân**, **3 sao có hào quang vàng cháy** nhấp nháy kèm 3 chấm sao bay quanh chân (cả ở pha chuẩn bị lẫn trong trận).
+  6. **Popup nhận trang bị kiểu mở quà:** thắng vòng quái PvE (mọi vòng quái trong PvP; Sóng Quái mỗi 3 sóng; Chiến Dịch khi thắng màn Boss)
+     rơi 1 trang bị ngẫu nhiên vào kho + thẻ popup (viên ngọc màu theo trang bị + tên + dòng chỉ số) nảy vào giữa-phải sân ~2,3s.
 - **Hồ sơ local:** tên người chơi, hạng (10 bậc Sắt → Thách Đấu, bảng LP port từ bản RN: Top 1 +46 ở nhóm thấp...),
   cấp độ/XP, tiến độ chiến dịch, kỷ lục sóng — lưu JSON tại `~/.dau-truong-chibi/profile.json`. Chỉ PvP Hạng mới đổi rank LP.
 - **Animation kiểu sprite như bản RN:** nhún thở (bob), lao đòn, giật đỏ khi trúng đòn, ngã xoay + mờ dần khi chết,
@@ -92,7 +102,7 @@ Máy có mạng bình thường (Gradle tự tải dependency từ Maven Central
 ```bash
 cd java
 ./gradlew :desktop:run            # chay ban desktop
-./gradlew :desktop:verifyHeadless # chay bo kiem tra logic (phai dat 19 PASS / 0 FAIL)
+./gradlew :desktop:verifyHeadless # chay bo kiem tra logic (phai dat 15 PASS / 0 FAIL)
 ./gradlew :web:buildWeb           # dung ban web TeaVM -> web/build/webapp (index.html + game.js + assets)
 ./gradlew :android:assembleDebug  # build APK debug (can Android SDK; module chi kich hoat khi co
                                   # local.properties chua sdk.dir hoac bien ANDROID_HOME)
@@ -103,7 +113,7 @@ Chụp ảnh kiểm chứng GUI (cần Xvfb, không cần người bấm — cô
 
 ```bash
 xvfb-run -a ./gradlew :desktop:screenshot -PscreenshotMode=battle4 -PscreenshotOut=tools/shot-battle4.png
-# che do: menu | draft | planning | battle | battle4 (tran vong 4, nhieu tuong)
+# che do: menu | draft | planning | battle | battle4 (tran vong 4, nhieu tuong) | result (announcer dau pha ket qua)
 ```
 
 ### Môi trường sandbox hạn chế mạng của Java (ghi lại để chạy lại được ở máy Muse)
@@ -148,16 +158,21 @@ riêng mimi/nana/queen hơi nhạt do tranh gốc vốn bán trong suốt (vào 
 ## Kiểm chứng đã làm (đợt này)
 
 - `./gradlew :desktop:compileJava` — **BUILD SUCCESSFUL** (core + desktop).
-- `./gradlew :desktop:verifyHeadless` — **19 PASS / 0 FAIL**, gồm: dữ liệu gốc khớp bản RN; RNG tất định;
-  sinh 5.200 màn; ghép sao; shop/odds; LP 8000 ×80; bảng rank LP; lật thẻ 8 lá; mô phỏng trận tất định;
-  **từng lá bẫy trong 6 lá** kích hoạt đúng điều kiện; **trận PvP 8 người trọn vẹn tới khi có hạng (3 seed: 16–17 vòng)**;
-  PvE chiến dịch; Sóng Quái (tới sóng 10); hồ sơ JSON lưu/đọc vòng lặp.
-- GUI thật dưới Xvfb: chụp 4 màn hình (menu, lật thẻ úp, pha chuẩn bị, giao tranh vòng 4 có banner bẫy kích hoạt,
-  số sát thương, LP đối thủ giảm theo vòng) — xem `tools/shot-*.png`.
-- **Đợt hoàn thiện:** sau khi nâng LibGDX 1.14.0, hồi quy đầy đủ vẫn **19 PASS / 0 FAIL** và `:web:buildWeb` thành công
-  (chi tiết ở mục Bản web). Giao diện desktop được trau chuốt lại (panel kéo dài, hết tràn/chồng chữ ở mục bẫy + nhật ký,
-  lưới bàn cờ mờ hẳn, sprite trong trận to hơn 52→63px, banner bẫy thu vào giữa 2 panel) và chụp lại 4 màn cuối —
-  công cụ chụp (`desktop/ScreenshotMain`) cũng được sửa để bắt đúng khoảnh khắc giữa trận (theo `playT`) thay vì đếm frame.
+- `./gradlew :desktop:verifyHeadless` — **15 PASS / 0 FAIL** (đợt bỏ Yu-Gi-Oh cập nhật lại bộ kiểm tra: bỏ 6 mục bẫy,
+  mục LP 8000 thay bằng mục máu 100 + bảng sát thương gốc; thêm mục bảng sát thương theo tướng và mục quy tắc sân theo chặng), gồm:
+  dữ liệu gốc khớp bản RN; RNG tất định; sinh 5.200 màn; ghép sao; shop/odds; **máu người chơi = 100 + sát thương thua vòng thang 100**;
+  bảng rank LP; lật thẻ 8 lá; mô phỏng trận tất định; **bảng sát thương cộng từ sự kiện, cả 2 bên, sắp giảm dần**;
+  **quy tắc sân theo chặng (chương/stage/Boss)**; **trận PvP 8 người trọn vẹn tới khi có hạng (3 seed: 17–20 vòng)**;
+  PvE chiến dịch; Sóng Quái; hồ sơ JSON lưu/đọc vòng lặp.
+- GUI thật dưới Xvfb (đợt bỏ Yu-Gi-Oh): chụp 5 màn hình `tools/shot2-*.png` — menu (mô tả "100 máu"),
+  pha chuẩn bị (**không còn panel BẪY ÚP**, bố cục gọn, máu 100/100, nút Bảng sát thương),
+  giao tranh vòng 1-4 (**bắt được cụm pow trắng nổ tại tướng trúng crit "-42!"** + vòng bạc ở chân tướng 2 sao, sân rừng đúng stage 1),
+  và pha kết quả (**announcer "THẮNG!" lớn giữa sân + banner tóm tắt + popup "NHẬN TRANG BỊ! Trái Tim Ấm +400 máu"**).
+  Công cụ chụp (`desktop/ScreenshotMain`) bắt khoảnh khắc theo `playT`/trạng thái pha và ưu tiên khung hình có pow đang nổ;
+  thêm chế độ `result` (tăng tốc playback ×3 để vào pha kết quả nhanh).
+- **Đợt hoàn thiện:** sau khi nâng LibGDX 1.14.0, hồi quy đầy đủ PASS và `:web:buildWeb` thành công
+  (chi tiết ở mục Bản web). Giao diện desktop được trau chuốt lại (panel kéo dài, hết tràn/chồng chữ,
+  lưới bàn cờ mờ hẳn, sprite trong trận to hơn 52→63px) và chụp lại các màn cuối.
   Âm thanh: game khởi động và chạy trọn vòng menu → trận → kết quả dưới Xvfb với lớp `Sound` đã nạp 22 file WAV không lỗi
   (sandbox không có card tiếng nên chỉ kiểm chứng được mức nạp/khởi tạo, không nghe được tiếng thật).
 
@@ -165,14 +180,13 @@ riêng mimi/nana/queen hơi nhạt do tranh gốc vốn bán trong suốt (vào 
 
 - **Do thám đối thủ (đã bổ sung đợt hoàn thiện):** pha chuẩn bị hiện tên bot + **toàn bộ đội hình** của đối thủ vòng này
   (tất định theo seed/cursor vòng — `Match.peekNextOpponentTeam()`), và vẽ trước đội hình bot lên nửa trên bàn cờ ở vòng PvP thường.
-  Bẫy của bot vẫn ẩn (sinh từ RNG trạng thái, chỉ biết số lá qua thông báo sau trận).
 - **Phát lại giao tranh:** engine xuất khung hình mỗi 0,5s; GUI nội suy giữa 2 khung — vị trí dùng **smoothstep** (mượt ở đầu/cuối bước di chuyển),
   máu/mana/khiên nội suy tuyến tính. Vẫn là phát lại ở mức sprite, không phải mô phỏng 60fps.
 - **Pha chuẩn bị** có đếm ngược 90 giây, hết giờ tự vào trận (bản RN cũng tự bắt đầu theo đồng hồ vòng).
 - **Âm thanh (đã nối đợt hoàn thiện):** tái sử dụng nguyên dàn WAV tổng hợp của bản RN — 22 file trong `assets/audio/`
   (2 nhạc nền: menu + trong trận, phát lặp; 20 SFX). Đã nối: bấm nút (click), mua tướng (coin), bán (sell), đặt/dời tướng (place),
   làm mới shop (reroll), gắn đồ (equip), lên cấp (levelup), lật thẻ mở trận (sparkle), chọn cường hóa (levelup),
-  bắt đầu trận (start), **bẫy kích hoạt (cast)**, thắng/thua vòng (win/lose). Có **nút "Âm thanh: Bật/Tắt" ở menu**,
+  bắt đầu trận (start), thắng/thua vòng (win/lose). Có **nút "Âm thanh: Bật/Tắt" ở menu**,
   trạng thái lưu bằng Preferences. Mọi lỗi nạp file/thiết bị đều được nuốt im lặng để không bao giờ crash game.
 - `autoPlan()` trong `Match.java` là bot điều khiển phục vụ kiểm tra headless — chơi đơn giản (không reroll/xp chủ động) nên thường xếp hạng thấp khi tự đánh trọn trận; đó là giới hạn của bot kiểm tra, không phải lỗi engine.
 
@@ -206,9 +220,9 @@ bằng một máy chủ tĩnh (ví dụ `python3 -m http.server`) trên máy th�
   bậc giá 1–5, ô bench, avatar vòng tròn, 9 icon pixel 48px. `Assets` nạp thành NinePatch; `Ui` tự chọn texture theo
   màu nút cũ nên mọi màn hình kế thừa diện mạo mới.
 - **Bố cục:** menu = tranh lobby tràn viền + nút plaque có icon; màn trận = plaque chỉ số giữa-trên (icon coin/sao/tim),
-  danh sách người chơi dạng hàng avatar tròn + LP, shop có khung bậc giá + phát sáng "Sắp gộp!", banner bẫy và các
-  popup dùng plaque/panel vẽ. Logic/engine/dữ liệu không đổi — kiểm chứng lại: compile desktop PASS,
-  `verifyHeadless` **19/19 PASS**, `:web:buildWeb` PASS (webapp 107 file, game.js ~900KB), ảnh chụp 4 màn trong `tools/shot-*.png`.
+  danh sách người chơi dạng hàng avatar tròn + máu, shop có khung bậc giá + phát sáng "Sắp gộp!", các
+  popup dùng plaque/panel vẽ. Logic/engine/dữ liệu không đổi — kiểm chứng lại ở đợt đó: compile desktop PASS,
+  `verifyHeadless` PASS, `:web:buildWeb` PASS (webapp 107 file, game.js ~900KB), ảnh chụp 4 màn trong `tools/shot-*.png`.
 - **Mẹo build trong sandbox này:** tiến trình Java bị chặn TCP IPv4 (kể cả loopback client↔daemon của Gradle) nhưng
   IPv6 loopback thông — chạy Gradle với `JDK_JAVA_OPTIONS="-Djava.net.preferIPv4Stack=false -Djava.net.preferIPv6Addresses=true"`
   và binary Gradle cài sẵn (wrapper chưa tải xong distribution). Trên máy thường không cần mẹo này.

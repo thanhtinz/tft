@@ -16,7 +16,6 @@ import java.util.Map;
 import java.util.Set;
 
 // Engine giao tranh + kinh te port tu engine.ts ban RN (thuan Java, tat dinh theo seed).
-// Mo rong: bai bay up (Traps) chay ngay trong vong mo phong voi cac moc kich hoat xac dinh.
 public final class Engine {
     private Engine() {}
 
@@ -164,7 +163,7 @@ public final class Engine {
         public double t; public List<FightUnit> units = new ArrayList<>();
     }
     public static final class BattleEvent {
-        public double t; public String type, text, kind, uid, attackerUid, targetUid, skillKind, skillName, trapId;
+        public double t; public String type, text, kind, uid, attackerUid, targetUid, skillKind, skillName;
         public Double amount; public Boolean crit; public Boolean ranged;
         public Integer ax, ay, tx, ty, radius;
     }
@@ -216,15 +215,9 @@ public final class Engine {
         return s;
     }
 
-    // ---------- Mo phong tran danh (kem bai bay) ----------
+    // ---------- Mo phong tran danh ----------
     public static BattleResult simulateBattle(List<PlacedUnit> player, List<PlacedUnit> enemy, List<String> aug, long seed) {
-        return simulateBattle(player, enemy, aug, seed, List.of(), List.of());
-    }
-
-    public static BattleResult simulateBattle(List<PlacedUnit> player, List<PlacedUnit> enemy, List<String> aug, long seed,
-                                              List<String> playerTraps, List<String> enemyTraps) {
-        BattleSim sim = new BattleSim(player, enemy, aug, seed, playerTraps, enemyTraps);
-        return sim.run();
+        return new BattleSim(player, enemy, aug, seed).run();
     }
 
     private static final class BattleSim {
@@ -232,32 +225,10 @@ public final class Engine {
         final List<SimUnit> units = new ArrayList<>();
         final List<BattleFrame> frames = new ArrayList<>();
         final List<BattleEvent> events = new ArrayList<>();
-        final List<List<Traps.TrapState>> traps = new ArrayList<>(); // [team]
-        boolean lightningChecked = false;
-
-        BattleSim(List<PlacedUnit> player, List<PlacedUnit> enemy, List<String> aug, long seed,
-                  List<String> playerTraps, List<String> enemyTraps) {
+        BattleSim(List<PlacedUnit> player, List<PlacedUnit> enemy, List<String> aug, long seed) {
             this.rnd = new Rng(seed);
             for (PlacedUnit u : player) units.add(makeSim(u, 0, aug, player));
             for (PlacedUnit u : enemy) units.add(makeSim(u, 1, List.of(), enemy));
-            traps.add(toStates(playerTraps));
-            traps.add(toStates(enemyTraps));
-        }
-        static List<Traps.TrapState> toStates(List<String> ids) {
-            List<Traps.TrapState> out = new ArrayList<>();
-            if (ids != null) for (String id : ids) if (Traps.byId(id) != null) out.add(new Traps.TrapState(id));
-            return out;
-        }
-        Traps.TrapState trapOf(int team, String id) {
-            for (Traps.TrapState t : traps.get(team)) if (t.id.equals(id) && !t.used) return t;
-            return null;
-        }
-        void trapEvent(double t, String trapId, int ownerTeam, String detail, SimUnit at) {
-            BattleEvent e = new BattleEvent();
-            e.t = t; e.type = "trap"; e.trapId = trapId;
-            e.text = "BẪY KÍCH HOẠT: " + Traps.nameOf(trapId) + "!" + (detail == null ? "" : " " + detail);
-            if (at != null) { e.uid = at.uid; e.tx = at.x; e.ty = at.y; }
-            events.add(e);
         }
         void snap(double t) {
             BattleFrame f = new BattleFrame();
@@ -265,22 +236,8 @@ public final class Engine {
             for (SimUnit u : units) f.units.add(u.copySim());
             frames.add(f);
         }
-        double sideHpFraction(int team) {
-            double hp = 0, max = 0;
-            for (SimUnit u : units) if (u.team == team) { max += u.maxHp; if (u.alive) hp += Math.max(0, u.hp); }
-            return max <= 0 ? 1 : hp / max;
-        }
-        SimUnit strongestAlive(int team, boolean byHp) {
-            SimUnit best = null;
-            for (SimUnit u : units) {
-                if (u.team != team || !u.alive) continue;
-                if (best == null || (byHp ? u.maxHp > best.maxHp : u.ad > best.ad)) best = u;
-            }
-            return best;
-        }
-
-        // Tra ve sat thuong thuc te len hp (sau khien). fromTrap=true: khong kich them bay nao (chong de quy).
-        double dmg(SimUnit src, SimUnit tgt, double raw, boolean magic, double t, SkillKind skillKind, String skillName, boolean fromTrap) {
+        // Tra ve sat thuong thuc te len hp (sau khien).
+        double dmg(SimUnit src, SimUnit tgt, double raw, boolean magic, double t, SkillKind skillKind, String skillName) {
             if (!tgt.alive) return 0;
             if (rnd.next() * 100 < tgt.dodge) {
                 BattleEvent e = new BattleEvent();
@@ -295,15 +252,6 @@ public final class Engine {
             double mit = magic ? tgt.mr : tgt.armor;
             double dealt = raw * (100.0 / (100 + Math.max(0, mit)));
             double totalDealt = dealt;
-            // GUONG PHAN DON: hoa giai don chi tu dau tien
-            Traps.TrapState reflect = null;
-            if (!fromTrap && tgt.hp + tgt.shield - dealt <= 0) {
-                reflect = trapOf(tgt.team, Traps.GUONG_PHAN_DON);
-                if (reflect != null) {
-                    dealt = Math.max(0, tgt.hp + tgt.shield - 1);
-                    totalDealt = dealt;
-                }
-            }
             if (tgt.shield > 0) { double absorbed = Math.min(tgt.shield, dealt); tgt.shield -= absorbed; dealt -= absorbed; }
             tgt.hp -= dealt;
             tgt.mana = Math.min(tgt.maxMana, tgt.mana + dealt * 0.08);
@@ -316,18 +264,6 @@ public final class Engine {
                 e.ranged = src.range > 1; e.kind = magic ? "magic" : "phys"; e.skillKind = skillKind.name(); e.skillName = skillName;
                 events.add(e);
             }
-            if (reflect != null) {
-                reflect.used = true;
-                trapEvent(t, Traps.GUONG_PHAN_DON, tgt.team, tgt.name + " sống sót với 1 máu!", tgt);
-                if (src != null && src.alive) {
-                    BattleEvent e = new BattleEvent();
-                    e.t = t; e.type = "hit"; e.text = "Gương phản " + Math.round(totalDealt * 1.5) + " sát thương về " + src.name;
-                    e.amount = (double) Math.round(totalDealt * 1.5); e.uid = src.uid; e.targetUid = src.uid;
-                    e.tx = src.x; e.ty = src.y; e.kind = "magic";
-                    events.add(e);
-                    dmg(null, src, totalDealt * 1.5, true, t, null, null, true);
-                }
-            }
             if (tgt.hp <= 0) {
                 tgt.hp = 0; tgt.alive = false;
                 BattleEvent e = new BattleEvent();
@@ -335,76 +271,18 @@ public final class Engine {
                 if (src != null) { e.attackerUid = src.uid; e.ax = src.x; e.ay = src.y; }
                 e.targetUid = tgt.uid; e.tx = tgt.x; e.ty = tgt.y;
                 events.add(e);
-                // HOI SINH: dong minh dau tien guc nga hoi sinh 40% mau
-                if (!fromTrap) {
-                    Traps.TrapState rev = trapOf(tgt.team, Traps.HOI_SINH);
-                    if (rev != null) {
-                        rev.used = true;
-                        tgt.alive = true; tgt.hp = tgt.maxHp * 0.4; tgt.poison = 0; tgt.stun = 0;
-                        trapEvent(t, Traps.HOI_SINH, tgt.team, tgt.name + " hồi sinh với 40% máu!", tgt);
-                    }
-                }
-                return totalDealt;
-            }
-            // KHIEN DOI HINH: tong mau doi lan dau duoi 50%
-            if (!fromTrap) {
-                Traps.TrapState sh = trapOf(tgt.team, Traps.KHIEN_DOI);
-                if (sh != null && sideHpFraction(tgt.team) < 0.5) {
-                    sh.used = true;
-                    for (SimUnit a : units) if (a.team == tgt.team && a.alive) a.shield += a.maxHp * 0.15;
-                    trapEvent(t, Traps.KHIEN_DOI, tgt.team, "Toàn đội nhận khiên!", tgt);
-                }
             }
             return totalDealt;
         }
 
-        void fireStartTraps() {
-            for (int team = 0; team <= 1; team++) {
-                Traps.TrapState tr = trapOf(team, Traps.HO_SAP);
-                if (tr == null) continue;
-                SimUnit victim = strongestAlive(1 - team, true);
-                if (victim == null) continue;
-                tr.used = true;
-                victim.stun = Math.max(victim.stun, 2.5);
-                trapEvent(0, Traps.HO_SAP, team, victim.name + " rơi vào hố sập!", victim);
-                dmg(strongestAlive(team, false), victim, 100, true, 0, null, null, true);
-            }
-        }
-
-        void fireLightning(double t) {
-            for (int team = 0; team <= 1; team++) {
-                Traps.TrapState tr = trapOf(team, Traps.SET_TRUNG_PHAT);
-                if (tr == null) continue;
-                List<SimUnit> foes = new ArrayList<>();
-                for (SimUnit u : units) if (u.alive && u.team != team) foes.add(u);
-                if (foes.size() < 3) continue;
-                tr.used = true;
-                trapEvent(t, Traps.SET_TRUNG_PHAT, team, "Sét đánh toàn bộ địch!", strongestAlive(team, true));
-                SimUnit src = strongestAlive(team, false);
-                for (SimUnit f : foes) dmg(src, f, 180, true, t, null, null, true);
-            }
-        }
-
-        void onEnemyCast(SimUnit caster, double t) {
-            int foeTeam = 1 - caster.team;
-            Traps.TrapState tr = trapOf(foeTeam, Traps.BANG_GIA);
-            if (tr == null || !caster.alive) return;
-            tr.used = true;
-            caster.stun = Math.max(caster.stun, 2.0);
-            trapEvent(t, Traps.BANG_GIA, foeTeam, caster.name + " bị đóng băng!", caster);
-            dmg(strongestAlive(foeTeam, false), caster, 120, true, t, null, null, true);
-        }
-
         BattleResult run() {
             snap(0);
-            fireStartTraps();
             double dt = 0.25, t = 0;
             while (t < 30) {
                 t += dt;
                 boolean alive0 = false, alive1 = false;
                 for (SimUnit u : units) { if (u.alive && u.team == 0) alive0 = true; if (u.alive && u.team == 1) alive1 = true; }
                 if (!alive0 || !alive1) break;
-                if (!lightningChecked && t >= 10) { lightningChecked = true; fireLightning(t); }
                 for (SimUnit u : new ArrayList<>(units)) {
                     if (!units.contains(u)) continue;
                     if (!u.alive) continue;
@@ -415,12 +293,6 @@ public final class Engine {
                             BattleEvent e = new BattleEvent();
                             e.t = t; e.type = "death"; e.text = u.name + " gục vì trúng độc"; e.uid = u.uid; e.targetUid = u.uid; e.tx = u.x; e.ty = u.y; e.kind = "magic";
                             events.add(e);
-                            Traps.TrapState rev = trapOf(u.team, Traps.HOI_SINH);
-                            if (rev != null) {
-                                rev.used = true;
-                                u.alive = true; u.hp = u.maxHp * 0.4; u.poison = 0; u.stun = 0;
-                                trapEvent(t, Traps.HOI_SINH, u.team, u.name + " hồi sinh với 40% máu!", u);
-                            }
                             continue;
                         }
                     }
@@ -447,7 +319,7 @@ public final class Engine {
                         u.atkCd = 1 / Math.max(0.2, u.as);
                         boolean crit = rnd.next() * 100 < u.crit;
                         double raw = u.ad * (crit ? 1.6 : 1) * (0.9 + rnd.next() * 0.2);
-                        double dealt = dmg(u, target, raw, false, t, null, null, false);
+                        double dealt = dmg(u, target, raw, false, t, null, null);
                         if (dealt > 0) {
                             BattleEvent e = new BattleEvent();
                             e.t = t; e.type = "attack"; e.text = u.name + " đánh " + target.name + " -" + Math.round(dealt);
@@ -493,18 +365,18 @@ public final class Engine {
             if (u.skillKind == SkillKind.aoe || u.skillKind == SkillKind.freeze) e.radius = 2;
             events.add(e);
             switch (u.skillKind) {
-                case burst: dmg(u, target, power, true, t, u.skillKind, u.skillName, false); break;
+                case burst: dmg(u, target, power, true, t, u.skillKind, u.skillName); break;
                 case aoe: {
                     List<SimUnit> hit = new ArrayList<>(foes);
                     hit.sort(Comparator.comparingInt(f -> dist(u, f)));
-                    for (int i = 0; i < Math.min(4, hit.size()); i++) dmg(u, hit.get(i), power, true, t, u.skillKind, u.skillName, false);
+                    for (int i = 0; i < Math.min(4, hit.size()); i++) dmg(u, hit.get(i), power, true, t, u.skillKind, u.skillName);
                     break;
                 }
-                case stun: dmg(u, target, power, true, t, u.skillKind, u.skillName, false); if (target.alive) target.stun = 1.5; break;
+                case stun: dmg(u, target, power, true, t, u.skillKind, u.skillName); if (target.alive) target.stun = 1.5; break;
                 case freeze: {
                     List<SimUnit> hit = new ArrayList<>(foes);
                     hit.sort(Comparator.comparingInt(f -> dist(u, f)));
-                    for (int i = 0; i < Math.min(3, hit.size()); i++) { SimUnit f = hit.get(i); dmg(u, f, power, true, t, u.skillKind, u.skillName, false); if (f.alive) f.stun = 2; }
+                    for (int i = 0; i < Math.min(3, hit.size()); i++) { SimUnit f = hit.get(i); dmg(u, f, power, true, t, u.skillKind, u.skillName); if (f.alive) f.stun = 2; }
                     break;
                 }
                 case heal: {
@@ -546,15 +418,14 @@ public final class Engine {
                 }
                 case execute: {
                     SimUnit weak = foes.stream().min(Comparator.comparingDouble(f -> f.hp)).orElse(target);
-                    dmg(u, weak, power * (weak.hp / weak.maxHp < 0.4 ? 1.8 : 1), false, t, u.skillKind, u.skillName, false);
+                    dmg(u, weak, power * (weak.hp / weak.maxHp < 0.4 ? 1.8 : 1), false, t, u.skillKind, u.skillName);
                     break;
                 }
-                case poison: dmg(u, target, power, true, t, u.skillKind, u.skillName, false); if (target.alive) target.poison = 4; break;
-                case lifesteal: { double dealt = dmg(u, target, power, true, t, u.skillKind, u.skillName, false); u.hp = Math.min(u.maxHp, u.hp + dealt * 0.6); break; }
-                case dash: u.x = target.x; u.y = target.y; dmg(u, target, power, false, t, u.skillKind, u.skillName, false); break;
+                case poison: dmg(u, target, power, true, t, u.skillKind, u.skillName); if (target.alive) target.poison = 4; break;
+                case lifesteal: { double dealt = dmg(u, target, power, true, t, u.skillKind, u.skillName); u.hp = Math.min(u.maxHp, u.hp + dealt * 0.6); break; }
+                case dash: u.x = target.x; u.y = target.y; dmg(u, target, power, false, t, u.skillKind, u.skillName); break;
                 default: break;
             }
-            onEnemyCast(u, t);
         }
     }
 
@@ -696,9 +567,39 @@ public final class Engine {
         int base = STAGE_DMG_TFT[Math.min(stage, STAGE_DMG_TFT.length - 1)];
         return base + enemySurvivors * 2;
     }
-    // LP 8000 (muon tu Yu-Gi-Oh): sat thuong thua vong cua ban RN tinh tren thang 100 mau
-    // -> nhan he so 80 de tong mau 8000 cho do dai tran tuong duong (kiem chung bang mo phong headless).
-    public static final int LP_MAX = 8000;
-    public static final int LP_SCALE = 80;
-    public static int lossDamageLp(int round, int enemySurvivors) { return lossDamage(round, enemySurvivors) * LP_SCALE; }
+    // Mau nguoi choi kieu TFT: bat dau tran voi 100 mau, sat thuong thua vong theo bang
+    // STAGE_DMG_TFT (thang 100) nhu ban RN goc — khong quy doi gi them.
+    public static final int HP_MAX = 100;
+
+    // ---------- Bang sat thuong theo tuong (ca 2 ben) ----------
+    // Tong sat thuong moi don vi gay ra trong tran, cong tu su kien attack/hit cua engine.
+    // Dung cho panel "Bang sat thuong" trong man tran va kiem tra headless.
+    public static final class DamageRow {
+        public String uid, name, artId;
+        public int team, star;
+        public double damage;
+    }
+
+    public static List<DamageRow> damageChart(BattleResult r) {
+        List<DamageRow> out = new ArrayList<>();
+        if (r == null) return out;
+        Map<String, FightUnit> units = new HashMap<>();
+        for (BattleFrame f : r.frames) for (FightUnit u : f.units) units.put(u.uid, u);
+        Map<String, Double> sums = new HashMap<>();
+        for (BattleEvent e : r.events) {
+            if (e.attackerUid == null || e.amount == null || e.amount <= 0) continue;
+            if (!"attack".equals(e.type) && !"hit".equals(e.type)) continue;
+            sums.put(e.attackerUid, sums.getOrDefault(e.attackerUid, 0.0) + e.amount);
+        }
+        for (Map.Entry<String, Double> en : sums.entrySet()) {
+            FightUnit u = units.get(en.getKey());
+            if (u == null || en.getValue() <= 0) continue;
+            DamageRow row = new DamageRow();
+            row.uid = u.uid; row.name = u.name; row.artId = u.artId; row.team = u.team; row.star = u.star;
+            row.damage = en.getValue();
+            out.add(row);
+        }
+        out.sort((x, y) -> Double.compare(y.damage, x.damage));
+        return out;
+    }
 }

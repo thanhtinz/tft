@@ -1,13 +1,13 @@
 package com.dautruongchibi.headless;
 
 import com.dautruongchibi.data.GameData;
+import com.dautruongchibi.game.ArenaTheme;
 import com.dautruongchibi.game.Engine;
 import com.dautruongchibi.game.Match;
 import com.dautruongchibi.game.Profile;
 import com.dautruongchibi.game.Rank;
 import com.dautruongchibi.game.Rng;
 import com.dautruongchibi.game.Stages;
-import com.dautruongchibi.game.Traps;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -34,11 +34,6 @@ public class HeadlessMain {
         u.monster = GameData.monsterById(monsterId);
         return u;
     }
-    static boolean hasTrapEvent(Engine.BattleResult r, String trapId) {
-        for (Engine.BattleEvent e : r.events) if ("trap".equals(e.type) && trapId.equals(e.trapId)) return true;
-        return false;
-    }
-
     public static void main(String[] args) {
         System.out.println("=== DAU TRUONG CHIBI (JAVA) — KIEM TRA HEADLESS ===");
 
@@ -91,12 +86,15 @@ public class HeadlessMain {
         }
         check("Shop roll 5 o, id hop le, cap 1 chi ra tuong 1 vang", shopOk, "");
 
-        // 6) LP 8000 + quy doi sat thuong
-        boolean lpOk = Engine.LP_MAX == 8000;
-        for (int[] c : new int[][]{{1, 0}, {5, 3}, {11, 5}, {20, 7}}) {
-            if (Engine.lossDamageLp(c[0], c[1]) != Engine.lossDamage(c[0], c[1]) * 80) lpOk = false;
+        // 6) Mau 100 kieu TFT + bang sat thuong thua vong goc (thang 100, khong quy doi)
+        boolean hpOk = Engine.HP_MAX == 100;
+        for (int[] c : new int[][]{{1, 0, 0}, {5, 3, 8}, {11, 5, 12}, {20, 7, 18}}) {
+            if (Engine.lossDamage(c[0], c[1]) != c[2]) hpOk = false;
         }
-        check("LP toi da 8000, sat thuong thua vong = ban RN x80", lpOk, "vd round 11 thua con 5 dich: " + Engine.lossDamageLp(11, 5) + " LP");
+        Match hm = Match.startPvp(Match.Mode.PVP_NORMAL, 3, "HpTest");
+        for (Match.PlayerState p : hm.players) if (p.hp != 100) hpOk = false;
+        check("Mau nguoi choi = 100 (TFT), sat thuong thua vong dung bang goc thang 100", hpOk,
+            "vd round 11 thua con 5 dich: -" + Engine.lossDamage(11, 5) + " mau; ca 8 nguoi bat dau 100 mau");
 
         // 7) Rank LP
         Rank.LpResult rp1 = Rank.applyLp(Rank.defaultRank(), 1);
@@ -122,26 +120,43 @@ public class HeadlessMain {
         check("Mo phong tran danh tat dinh theo seed", b1.winner == b2.winner && b1.duration == b2.duration && b1.events.size() == b2.events.size(),
             "winner=" + b1.winner + ", duration=" + b1.duration + "s, events=" + b1.events.size());
 
-        // 10) Tung la bay kich hoat dung dieu kien
-        trapTests();
+        // 10) Bang sat thuong theo tuong (du lieu cho panel trong man tran)
+        List<Engine.DamageRow> chart = Engine.damageChart(b1);
+        double chartSum = 0; boolean hasA = false, hasB = false;
+        for (Engine.DamageRow row : chart) { chartSum += row.damage; if (row.team == 0) hasA = true; else hasB = true; }
+        boolean chartOk = !chart.isEmpty() && chartSum > 0 && hasA && hasB;
+        for (int i = 1; i < chart.size(); i++) if (chart.get(i).damage > chart.get(i - 1).damage) chartOk = false;
+        check("Bang sat thuong: cong tu su kien attack/hit, ca 2 ben, sap giam dan", chartOk,
+            chart.isEmpty() ? "rong" : "dong dau: " + chart.get(0).name + " " + (int) chart.get(0).damage + ", tong " + chart.size() + " dong");
 
-        // 11) Tran PvP tron ven (3 seed)
+        // 11) Quy tac san theo chang (Kanto: moi truong doi theo chang; Boss -> hoang hon)
+        boolean arenaOk = ArenaTheme.forCampaign(1, false).equals("grass") && ArenaTheme.forCampaign(2, false).equals("desert")
+            && ArenaTheme.forCampaign(3, false).equals("ice") && ArenaTheme.forCampaign(4, false).equals("grass")
+            && ArenaTheme.forCampaign(2, true).equals("sunset")
+            && ArenaTheme.forStage(1, false).equals("grass") && ArenaTheme.forStage(2, false).equals("sunset")
+            && ArenaTheme.forStage(3, false).equals("desert") && ArenaTheme.forStage(4, false).equals("ice")
+            && ArenaTheme.forStage(7, false).equals("ice") && ArenaTheme.forStage(5, true).equals("sunset")
+            && ArenaTheme.forWaves(1, false).equals("grass") && ArenaTheme.forWaves(23, false).equals("ice")
+            && ArenaTheme.forWaves(10, true).equals("sunset");
+        check("San theo chang: Chien Dich (chuong-1)%3 rung/sa mac/bang, PvP+Song theo stage, Boss -> hoang hon", arenaOk, "");
+
+        // 12) Tran PvP tron ven (3 seed) — do dai tran tren thang 100 mau phai tuong duong thiet ke
         boolean matchOk = true; StringBuilder mDetail = new StringBuilder();
         for (long s : new long[]{1, 7, 123}) {
             Match m = Match.startPvp(Match.Mode.PVP_RANKED, s, "Headless");
-            int startLpTotal = 0; for (Match.PlayerState p : m.players) startLpTotal += p.lp;
+            int startHpTotal = 0; for (Match.PlayerState p : m.players) startHpTotal += p.hp;
             int guard = 0;
             while (!m.over && guard++ < 60) { m.autoPlan(); m.fight(); }
-            int endLpTotal = 0; Set<Integer> placements = new HashSet<>();
-            for (Match.PlayerState p : m.players) { endLpTotal += p.lp; if (p.placement > 0 && !placements.add(p.placement)) matchOk = false; }
+            int endHpTotal = 0; Set<Integer> placements = new HashSet<>();
+            for (Match.PlayerState p : m.players) { endHpTotal += p.hp; if (p.placement > 0 && !placements.add(p.placement)) matchOk = false; }
             if (!m.over || m.humanPlacement < 1 || m.humanPlacement > 8) matchOk = false;
             if (guard > 45) matchOk = false;
-            if (endLpTotal >= startLpTotal) matchOk = false;
+            if (endHpTotal >= startHpTotal) matchOk = false;
             mDetail.append("seed ").append(s).append(": ").append(guard).append(" round, hang ").append(m.humanPlacement).append("; ");
         }
         check("Tran PvP 8 nguoi chay tron ven toi khi co hang (3 seed)", matchOk, mDetail.toString());
 
-        // 12) PvE: danh thu vai man chien dich + tran truc tiep
+        // 13) PvE: danh thu vai man chien dich + tran truc tiep
         boolean pveOk = true; StringBuilder pveDetail = new StringBuilder();
         for (int st : new int[]{1, 2, 3}) {
             Match m = Match.startCampaign(st, 1000 + st, "Headless");
@@ -154,14 +169,14 @@ public class HeadlessMain {
         if (directBattle.duration <= 0) pveOk = false;
         check("PvE chien dich: vao tran duoc, co khung hinh/su kien", pveOk, pveDetail.toString());
 
-        // 13) Song quai
+        // 14) Song quai
         Match w = Match.startWaves(77, "Headless");
         int wGuard = 0;
         while (!w.over && wGuard++ < 40) { w.autoPlan(); w.fight(); }
         boolean waveOk = w.wave >= 2 || w.over;
-        check("Song quai: qua duoc song / chay on dinh", waveOk, "toi song " + w.wave + ", over=" + w.over + ", LP=" + w.human().lp);
+        check("Song quai: qua duoc song / chay on dinh", waveOk, "toi song " + w.wave + ", over=" + w.over + ", mau=" + w.human().hp);
 
-        // 14) Ho so JSON vong lap
+        // 15) Ho so JSON vong lap
         Profile prof = new Profile();
         prof.name = "Bé \"Test\" \\ Đẹp";
         prof.level = 7; prof.xp = 33; prof.campaignCleared = 12; prof.wavesBest = 9;
@@ -174,74 +189,5 @@ public class HeadlessMain {
 
         System.out.println("=== TONG KET: " + pass + " PASS / " + fail + " FAIL ===");
         if (fail > 0) { System.out.println("Muc fail: " + failures); System.exit(1); }
-    }
-
-    static void trapTests() {
-        // HO SAP: dich khoe nhat bi choang ngay mo tran
-        boolean ok = false; String det = "";
-        for (long s = 1; s <= 5 && !ok; s++) {
-            List<Engine.PlacedUnit> me = List.of(pu("toto", 1, 3, 0), pu("bobi", 1, 2, 0));
-            List<Engine.PlacedUnit> foe = List.of(mu("kingboss", 3, 0), mu("slime", 2, 0));
-            Engine.BattleResult r = Engine.simulateBattle(me, foe, List.of(), s, List.of(Traps.HO_SAP), List.of());
-            if (hasTrapEvent(r, Traps.HO_SAP)) {
-                boolean stunSeen = false;
-                for (Engine.BattleFrame f : r.frames) {
-                    if (f.t > 0.6) break;
-                    for (Engine.FightUnit u : f.units) if (u.defId.equals("kingboss") && u.stun > 0) stunSeen = true;
-                }
-                ok = stunSeen; det = "event + choang trong khung hinh dau";
-            }
-        }
-        check("Bay HO SAP: kich hoat mo tran, choang dich khoe nhat", ok, det);
-
-        // BANG GIA: dich tung ky nang lan dau thi bi dong bang
-        ok = false;
-        for (long s = 1; s <= 10 && !ok; s++) {
-            List<Engine.PlacedUnit> me = List.of(pu("king", 1, 3, 0), pu("drago", 1, 2, 0), pu("toto", 1, 4, 0));
-            List<Engine.PlacedUnit> foe = List.of(pu("lulu", 1, 3, 3), pu("susu", 1, 2, 3), pu("bobi", 1, 3, 0));
-            Engine.BattleResult r = Engine.simulateBattle(me, foe, List.of(), s, List.of(Traps.BANG_GIA), List.of());
-            ok = hasTrapEvent(r, Traps.BANG_GIA);
-        }
-        check("Bay BANG GIA: kich hoat khi dich tung ky nang", ok, "");
-
-        // KHIEN DOI: tong mau doi duoi 50% lan dau
-        ok = false;
-        for (long s = 1; s <= 8 && !ok; s++) {
-            List<Engine.PlacedUnit> me = List.of(pu("mimi", 1, 2, 0), pu("pipo", 1, 3, 3), pu("nana", 1, 4, 3));
-            List<Engine.PlacedUnit> foe = List.of(pu("gogo", 2, 3, 0), pu("kiki", 2, 2, 0), pu("rero", 1, 4, 0));
-            Engine.BattleResult r = Engine.simulateBattle(me, foe, List.of(), s, List.of(Traps.KHIEN_DOI), List.of());
-            ok = hasTrapEvent(r, Traps.KHIEN_DOI);
-        }
-        check("Bay KHIEN DOI: kich hoat khi mau doi duoi 50%", ok, "");
-
-        // SET TRUNG PHAT: giay 10, con >= 3 dich
-        ok = false; double trapT = -1;
-        for (long s = 1; s <= 8 && !ok; s++) {
-            List<Engine.PlacedUnit> me = List.of(pu("titan", 1, 3, 0), pu("king", 1, 2, 0), pu("toto", 1, 4, 0));
-            List<Engine.PlacedUnit> foe = List.of(mu("golem", 1, 0), mu("golem", 3, 0), mu("golem", 5, 0), mu("golem", 2, 2));
-            Engine.BattleResult r = Engine.simulateBattle(me, foe, List.of(), s, List.of(Traps.SET_TRUNG_PHAT), List.of());
-            for (Engine.BattleEvent e : r.events) if ("trap".equals(e.type) && Traps.SET_TRUNG_PHAT.equals(e.trapId)) { ok = true; trapT = e.t; }
-        }
-        check("Bay SET TRUNG PHAT: kich hoat o giay 10 khi con >=3 dich", ok, ok ? "t=" + trapT : "");
-
-        // HOI SINH: dong minh dau tien guc nga
-        ok = false;
-        for (long s = 1; s <= 8 && !ok; s++) {
-            List<Engine.PlacedUnit> me = List.of(pu("mimi", 1, 3, 0), pu("toto", 1, 2, 0));
-            List<Engine.PlacedUnit> foe = List.of(pu("shadow", 2, 3, 0), pu("luna", 1, 4, 3));
-            Engine.BattleResult r = Engine.simulateBattle(me, foe, List.of(), s, List.of(Traps.HOI_SINH), List.of());
-            ok = hasTrapEvent(r, Traps.HOI_SINH);
-        }
-        check("Bay HOI SINH: kich hoat khi dong minh guc nga", ok, "");
-
-        // GUONG PHAN DON: hoa giai don chi tu
-        ok = false;
-        for (long s = 1; s <= 8 && !ok; s++) {
-            List<Engine.PlacedUnit> me = List.of(pu("pipo", 1, 3, 3), pu("toto", 1, 3, 0));
-            List<Engine.PlacedUnit> foe = List.of(pu("titan", 3, 3, 0), pu("bobi", 1, 2, 0));
-            Engine.BattleResult r = Engine.simulateBattle(me, foe, List.of(), s, List.of(Traps.GUONG_PHAN_DON), List.of());
-            ok = hasTrapEvent(r, Traps.GUONG_PHAN_DON);
-        }
-        check("Bay GUONG PHAN DON: hoa giai don chi tu + phan don", ok, "");
     }
 }

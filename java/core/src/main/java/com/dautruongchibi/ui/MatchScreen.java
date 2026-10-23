@@ -6,6 +6,8 @@ import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.ScreenAdapter;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
@@ -18,18 +20,22 @@ import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.dautruongchibi.data.GameData;
 import com.dautruongchibi.data.GameData.ChampDef;
+import com.dautruongchibi.game.ArenaTheme;
 import com.dautruongchibi.game.Engine;
 import com.dautruongchibi.game.Match;
 import com.dautruongchibi.game.Rank;
 import com.dautruongchibi.game.Stages;
-import com.dautruongchibi.game.Traps;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
-// Man hinh tran dau: ban co pixel 7x7, bench, shop, bay up, lat the, xem lai tran danh (playback tu engine).
+// Man hinh tran dau: ban co pixel 7x7, bench, shop, lat the, playback tran danh tu engine.
+// Trinh dien hoc tu 2 game mau: Kanto Tactics (san doi theo chang, so sat thuong to, xoay gop sao,
+// popup trang bi) + FighterZ Tactics (pow truyen tranh, announcer, bang sat thuong theo tuong).
 public class MatchScreen extends ScreenAdapter {
     enum Phase { PLANNING, DRAFT, AUGMENT, BATTLE, RESULT, OVER }
 
@@ -46,15 +52,14 @@ public class MatchScreen extends ScreenAdapter {
     static final float SHOP_Y = 14, SHOP_X = 250, CARD_W = 148, CARD_H = 78;
 
     // HUD labels
-    private Label roundLabel, goldVal, lvlVal, lpVal, msgLabel, timerLabel, synergyLabel, logLabel, oppInfo, trapInfoLabel;
-    private Table trapButtonsBox, invBox, playersBox;
-    private TextButton fightBtn, speedBtn;
+    private Label roundLabel, goldVal, lvlVal, hpVal, msgLabel, timerLabel, synergyLabel, logLabel, oppInfo;
+    private Table invBox, playersBox;
+    private TextButton fightBtn, speedBtn, dmgBtn;
 
     // Selection / planning
     private String selUid;
     private boolean selFromBench;
     private String armedItem;
-    private final List<String> chosenTraps = new ArrayList<>();
     private float planTimeLeft = 90;
     private String toast = "";
     private float toastT = 0;
@@ -73,10 +78,44 @@ public class MatchScreen extends ScreenAdapter {
     private final Map<String, Float> lastAttackAt = new HashMap<>();
     private final Map<String, float[]> lastAttackTarget = new HashMap<>();
     private final Map<String, Float> lastHitAt = new HashMap<>();
-    private String trapBanner = "";
-    private float trapBannerT = 0;
     private boolean rewardsApplied = false;
     private String overDetail = "";
+
+    // Hieu ung theo 2 game mau: pow truyen tranh + lon nghieng (FighterZ), announcer,
+    // bang sat thuong, popup trang bi mo qua (Kanto), xoay gop sao + vong chan theo sao.
+    private final List<Pow> pows = new ArrayList<>();
+    private final Map<String, Float> lastHeavyHitAt = new HashMap<>();
+    private final Map<String, Engine.FightUnit> unitIndex = new HashMap<>();
+    private float announceT = 0; // >0: dang hien chu ho lon giua san o pha RESULT
+    private String battleArenaKey = null; // khoa san chot tai startBattle (match.round da tang sau fight())
+    private boolean showDmgChart = false;
+    private String popupItemId = null;
+    private float popupT = 0;
+    private final List<MergeFx> mergeFx = new ArrayList<>();
+    private final Map<String, Integer> starSnapshot = new HashMap<>();
+    private boolean snapshotReady = false;
+
+    static final class Pow { float x, y, ttl, seed; Pow(float x, float y, float seed) { this.x = x; this.y = y; this.seed = seed; } }
+    static final class MergeFx { float x, y, ttl; int star; MergeFx(float x, float y, int star) { this.x = x; this.y = y; this.star = star; } }
+
+    // Texture tron mem + vong tron (alpha radial, sinh bang Pixmap giong whiteTex cua Assets):
+    // dung cho cum may pow, vong chan theo sao va xoay gop sao (tint mau truc tiep len nen trang).
+    private Texture circleTex, ringTex;
+
+    private static Texture radialTex(boolean ring) {
+        Pixmap pm = new Pixmap(64, 64, Pixmap.Format.RGBA8888);
+        for (int y = 0; y < 64; y++) for (int x = 0; x < 64; x++) {
+            double d = Math.hypot(x - 31.5, y - 31.5) / 31.5;
+            float a;
+            if (!ring) a = d >= 1 ? 0 : d > 0.7 ? (float) (1 - (d - 0.7) / 0.3) : 1f;
+            else a = (float) Math.max(0, 1 - Math.abs(d - 0.86) / 0.14);
+            pm.setColor(1, 1, 1, a);
+            pm.drawPixel(x, y);
+        }
+        Texture t = new Texture(pm);
+        pm.dispose();
+        return t;
+    }
 
     static final class FloatText {
         float x, y, ttl, maxTtl, scale; String text; Color color;
@@ -95,10 +134,12 @@ public class MatchScreen extends ScreenAdapter {
     public void show() {
         batch = new SpriteBatch();
         shapes = new ShapeRenderer();
+        circleTex = radialTex(false);
+        ringTex = radialTex(true);
         stage = new Stage(new FitViewport(1280, 720), batch);
         Assets a = game.assets;
 
-        // Thanh tren: plaque noi o giua-tren (vong | vang | cap | LP | thoi gian)
+        // Thanh tren: plaque noi o giua-tren (vong | vang | cap | mau | thoi gian)
         Table top = new Table();
         top.setPosition(150, 666);
         top.setSize(880, 54);
@@ -108,7 +149,7 @@ public class MatchScreen extends ScreenAdapter {
         roundLabel = Ui.labelBig(a, "", Color.WHITE);
         goldVal = Ui.labelBig(a, "", Ui.GOLD);
         lvlVal = Ui.labelBig(a, "", Color.WHITE);
-        lpVal = Ui.labelBig(a, "", new Color(1, 0.55f, 0.65f, 1));
+        hpVal = Ui.labelBig(a, "", new Color(1, 0.55f, 0.65f, 1));
         timerLabel = Ui.label(a, "", Ui.TEXT_DIM);
         top.add(roundLabel).padRight(20);
         top.add(iconImg(a, "coin", 22)).padRight(5);
@@ -116,7 +157,7 @@ public class MatchScreen extends ScreenAdapter {
         top.add(iconImg(a, "star", 22)).padRight(5);
         top.add(lvlVal).padRight(20);
         top.add(iconImg(a, "heart", 22)).padRight(5);
-        top.add(lpVal).padRight(20);
+        top.add(hpVal).padRight(20);
         top.add(timerLabel);
         stage.addActor(top);
         // Dong thong bao nam ngay duoi plaque, can giua
@@ -126,7 +167,7 @@ public class MatchScreen extends ScreenAdapter {
         msgLabel.setSize(800, 22);
         stage.addActor(msgLabel);
 
-        // Left panel: synergy + inventory + traps + log (keo dai gan het chieu cao de khong tran)
+        // Left panel: synergy + inventory + log (keo dai gan het chieu cao de khong tran)
         Table left = new Table();
         left.setPosition(6, 8);
         left.setSize(238, 652);
@@ -141,13 +182,6 @@ public class MatchScreen extends ScreenAdapter {
         invBox = new Table();
         invBox.top().align(com.badlogic.gdx.utils.Align.left);
         left.add(invBox).width(222).align(com.badlogic.gdx.utils.Align.left).row();
-        left.add(Ui.labelBig(a, "BẪY ÚP (tối đa 2)", Ui.GOLD)).align(com.badlogic.gdx.utils.Align.left).padTop(8).row();
-        trapInfoLabel = Ui.labelSmall(a, "", Ui.TEXT_DIM);
-        trapInfoLabel.setWrap(true);
-        left.add(trapInfoLabel).width(222).align(com.badlogic.gdx.utils.Align.left).row();
-        trapButtonsBox = new Table();
-        trapButtonsBox.top().align(com.badlogic.gdx.utils.Align.left);
-        left.add(trapButtonsBox).width(222).align(com.badlogic.gdx.utils.Align.left).row();
         left.add(Ui.labelBig(a, "NHẬT KÝ", Ui.GOLD)).align(com.badlogic.gdx.utils.Align.left).padTop(8).row();
         logLabel = Ui.labelSmall(a, "", Ui.TEXT_DIM);
         logLabel.setWrap(true);
@@ -161,7 +195,7 @@ public class MatchScreen extends ScreenAdapter {
         right.top().align(com.badlogic.gdx.utils.Align.left);
         right.background(Ui.bg(a, Ui.PANEL));
         right.pad(8);
-        right.add(Ui.labelBig(a, match.isPvp() ? "NGƯỜI CHƠI — LP" : "THÔNG TIN", Ui.GOLD)).align(com.badlogic.gdx.utils.Align.left).row();
+        right.add(Ui.labelBig(a, match.isPvp() ? "NGƯỜI CHƠI — MÁU" : "THÔNG TIN", Ui.GOLD)).align(com.badlogic.gdx.utils.Align.left).row();
         playersBox = new Table();
         playersBox.top().align(com.badlogic.gdx.utils.Align.left);
         right.add(playersBox).width(222).align(com.badlogic.gdx.utils.Align.left).row();
@@ -186,6 +220,9 @@ public class MatchScreen extends ScreenAdapter {
         speedBtn = Ui.button(a, "Tốc độ: x1");
         speedBtn.addListener(changed(() -> { speed = speed == 1 ? 2 : 1; speedBtn.setText("Tốc độ: x" + (int) speed); }));
         right.add(speedBtn).width(222).padTop(6).row();
+        dmgBtn = Ui.button(a, "Bảng sát thương: Tắt");
+        dmgBtn.addListener(changed(() -> { showDmgChart = !showDmgChart; dmgBtn.setText(showDmgChart ? "Bảng sát thương: Bật" : "Bảng sát thương: Tắt"); }));
+        right.add(dmgBtn).width(222).padTop(6).row();
         TextButton exitBtn = Ui.button(a, "Thoát về menu", Ui.RED);
         exitBtn.addListener(changed(() -> game.setScreen(new MenuScreen(game))));
         right.add(exitBtn).width(222).padTop(10).row();
@@ -238,7 +275,7 @@ public class MatchScreen extends ScreenAdapter {
         roundLabel.setText(modeName + (match.isPvp() ? " — Vòng " + Engine.roundLabel(match.round) : ""));
         goldVal.setText(String.valueOf(h.gold));
         lvlVal.setText("Cấp " + h.level + " (" + h.xp + "/" + Engine.xpToNext(h.level) + ")");
-        lpVal.setText(String.valueOf(h.lp));
+        hpVal.setText(h.hp + " / " + Engine.HP_MAX);
         // Synergy (ghep 1 dong, label tu xuong dong — tranh tran panel khi nhieu he)
         List<Engine.SynergyInfo> syns = Engine.computeSynergies(h.board);
         StringBuilder sb = new StringBuilder();
@@ -267,33 +304,65 @@ public class MatchScreen extends ScreenAdapter {
                 row.add(av).width(24).height(24).padRight(6);
                 Label nm = Ui.labelSmall(game.assets, p.name + (p.placement > 0 ? " (hạng " + p.placement + ")" : ""), p.alive ? (p.human ? Ui.GOLD : Color.WHITE) : new Color(0.55f, 0.55f, 0.6f, 1));
                 row.add(nm).expandX().align(com.badlogic.gdx.utils.Align.left);
-                Label lp = Ui.labelSmall(game.assets, p.alive ? p.lp + " LP" : "LOẠI", p.alive ? Color.WHITE : new Color(0.9f, 0.4f, 0.4f, 1));
-                row.add(lp).align(com.badlogic.gdx.utils.Align.right);
+                Label hp = Ui.labelSmall(game.assets, p.alive ? p.hp + " máu" : "LOẠI", p.alive ? Color.WHITE : new Color(0.9f, 0.4f, 0.4f, 1));
+                row.add(hp).align(com.badlogic.gdx.utils.Align.right);
                 playersBox.add(row).width(222).padBottom(2).row();
                 idx++;
             }
             ob.append("Đối thủ vòng này: ").append(nextOpponentText());
         } else if (match.mode == Match.Mode.WAVES) {
-            ob.append("Sóng hiện tại: ").append(match.wave).append("\nLP còn: ").append(h.lp).append("\nQuái sóng này: ").append(match.waveTeam(match.wave).size()).append(" con");
+            ob.append("Sóng hiện tại: ").append(match.wave).append("\nMáu còn: ").append(h.hp).append("\nQuái sóng này: ").append(match.waveTeam(match.wave).size()).append(" con");
         } else {
             Stages.StageDef def = Stages.stageDef(match.campaignStageId);
             ob.append("Màn ").append(def.id).append(": ").append(def.name).append("\nChương ").append(def.chapter).append(" — ").append(Stages.chapterName(def.chapter))
               .append("\nSức mạnh địch: ").append(def.power).append("\nThưởng: ").append(def.reward).append(" điểm");
         }
         oppInfo.setText(ob.toString());
-        // Log
+        // Log (6 dong cuoi — panel trai khong con muc bay nen co them cho)
         List<String> lg = match.log;
         StringBuilder lb = new StringBuilder();
-        for (int i = Math.max(0, lg.size() - 4); i < lg.size(); i++) lb.append(lg.get(i)).append("\n");
+        for (int i = Math.max(0, lg.size() - 6); i < lg.size(); i++) lb.append(lg.get(i)).append("\n");
         logLabel.setText(lb.toString());
         rebuildInvBox();
-        rebuildTrapButtons();
+        detectMerges();
         fightBtn.setText(match.mode == Match.Mode.WAVES ? "ĐÁNH SÓNG " + match.wave + "!" : match.mode == Match.Mode.CAMPAIGN ? "VÀO TRẬN!" : "ĐẤU!");
+    }
+
+    // Phat hien gop sao de chay hieu ung xoay hop nhat: tuong moi xuat hien voi sao > 1
+    // (uid moi do runCombines tao) hoac tuong cu tang sao ngay tai vi tri cua no.
+    private void detectMerges() {
+        Match.PlayerState h = match.human();
+        List<Engine.PlacedUnit> all = new ArrayList<>(h.board);
+        all.addAll(h.bench);
+        if (!snapshotReady) {
+            for (Engine.PlacedUnit u : all) starSnapshot.put(u.uid, u.star);
+            snapshotReady = true;
+            return;
+        }
+        Set<String> seen = new HashSet<>();
+        for (Engine.PlacedUnit u : all) {
+            seen.add(u.uid);
+            Integer prev = starSnapshot.get(u.uid);
+            boolean merged = prev == null ? u.star > 1 : u.star > prev;
+            if (merged) {
+                float[] p = unitScreenPos(u, h);
+                if (p != null) mergeFx.add(new MergeFx(p[0], p[1], u.star));
+            }
+            starSnapshot.put(u.uid, u.star);
+        }
+        starSnapshot.keySet().retainAll(seen);
+    }
+
+    private float[] unitScreenPos(Engine.PlacedUnit u, Match.PlayerState h) {
+        if (h.board.contains(u)) return cellCenter(u.x, u.y);
+        int bi = h.bench.indexOf(u);
+        if (bi >= 0) return new float[]{BENCH_X + bi * SLOT + (SLOT - 4) / 2f, BENCH_Y + 27};
+        return null;
     }
 
     private String nextOpponentText() {
         if (Engine.isPveStageRound(match.round)) return "Quái PvE (" + Engine.pveEnemiesForRound(match.round).size() + " con)";
-        // Do tham: hien ten + toan bo doi hinh bot se gap (bay cua bot van an)
+        // Do tham: hien ten + toan bo doi hinh bot se gap
         Match.PlayerState bot = match.peekNextOpponent();
         List<Engine.PlacedUnit> team = match.peekNextOpponentTeam();
         if (bot == null || team == null) return "một đối thủ bot (đội hình ẩn)";
@@ -324,29 +393,6 @@ public class MatchScreen extends ScreenAdapter {
         invBox.add(hint).width(222).align(com.badlogic.gdx.utils.Align.left).row();
     }
 
-    private void rebuildTrapButtons() {
-        trapButtonsBox.clear();
-        if (phase != Phase.PLANNING && phase != Phase.DRAFT && phase != Phase.AUGMENT) return;
-        trapInfoLabel.setText("Được xem 3 lá, đặt úp tối đa 2. Đã đặt: " + match.human().setTraps.size() + "/2");
-        for (String tid : match.trapOffer) {
-            Traps.TrapDef t = Traps.byId(tid);
-            boolean chosen = chosenTraps.contains(tid) || match.human().setTraps.contains(tid);
-            TextButton b = Ui.button(game.assets, (chosen ? "ĐÃ ĐẶT ÚP: " : "") + t.name, chosen ? Ui.GREEN : Ui.BTN);
-            b.getLabel().setWrap(true);
-            b.addListener(changed(() -> {
-                if (phase != Phase.PLANNING) return;
-                if (chosenTraps.contains(tid)) chosenTraps.remove(tid);
-                else { if (chosenTraps.size() >= 2) chosenTraps.remove(0); chosenTraps.add(tid); }
-                toast(match.setTraps(new ArrayList<>(chosenTraps)));
-                rebuildTrapButtons();
-            }));
-            trapButtonsBox.add(b).width(222).padBottom(3).row();
-            Label desc = Ui.labelSmall(game.assets, t.desc, Ui.TEXT_DIM);
-            desc.setWrap(true); // bat buoc: khong wrap la chu chay dai tran khoi panel
-            trapButtonsBox.add(desc).width(210).align(com.badlogic.gdx.utils.Align.left).padBottom(4).row();
-        }
-    }
-
     // ================= RENDER =================
     private final com.badlogic.gdx.graphics.g2d.GlyphLayout layout = new com.badlogic.gdx.graphics.g2d.GlyphLayout();
     private final List<float[]> projectiles = new ArrayList<>(); // {t0, ax, ay, tx, ty} toa do man hinh
@@ -356,13 +402,22 @@ public class MatchScreen extends ScreenAdapter {
         return new float[]{BX + (float) gx * CELL + CELL / 2f, BY + (float) gy * CELL + CELL / 2f};
     }
 
+    // San doi theo chang (ArenaTheme): Chien Dich theo chuong, PvP/Song Quai theo stage, Boss -> hoang hon
     private String arenaKey() {
-        if (match.mode == Match.Mode.CAMPAIGN) {
-            int theme = Stages.stageDef(match.campaignStageId).theme % 12;
-            return theme < 3 ? "grass" : theme < 6 ? "sunset" : theme < 9 ? "desert" : "ice";
+        if ((phase == Phase.BATTLE || phase == Phase.RESULT) && battleArenaKey != null) return battleArenaKey;
+        switch (match.mode) {
+            case CAMPAIGN: {
+                Stages.StageDef def = Stages.stageDef(match.campaignStageId);
+                return ArenaTheme.forCampaign(def.chapter, def.isBoss);
+            }
+            case WAVES:
+                return ArenaTheme.forWaves(match.wave, match.wave % 10 == 0);
+            default: {
+                boolean boss = outcome != null && outcome.bossBattle && (phase == Phase.BATTLE || phase == Phase.RESULT);
+                if (!boss) boss = Engine.isPveStageRound(match.round) && (match.round == 18 || match.round == 26);
+                return ArenaTheme.forStage(Engine.stageSub(match.round)[0], boss);
+            }
         }
-        int stage = Engine.stageSub(match.round)[0];
-        return stage <= 2 ? "grass" : stage <= 4 ? "sunset" : stage <= 6 ? "desert" : "ice";
     }
 
     @Override
@@ -373,7 +428,9 @@ public class MatchScreen extends ScreenAdapter {
         if (toastT > 0) { toastT -= delta; msgLabel.setText(toast); }
         else if (phase == Phase.PLANNING) msgLabel.setText("Chạm tướng bench rồi chạm ô để đặt.");
         else if (phase == Phase.BATTLE) msgLabel.setText("Đang giao tranh với " + (outcome != null ? outcome.opponentName : "") + "...");
-        if (trapBannerT > 0) trapBannerT -= delta;
+        if (announceT > 0) announceT -= delta;
+        if (popupT > 0) { popupT -= delta; if (popupT <= 0) popupItemId = null; }
+        for (int i = mergeFx.size() - 1; i >= 0; i--) { MergeFx fx = mergeFx.get(i); fx.ttl += delta; if (fx.ttl > 0.9f) mergeFx.remove(i); }
         if (phase == Phase.PLANNING) {
             planTimeLeft -= delta;
             timerLabel.setText("Chuẩn bị: " + Math.max(0, (int) Math.ceil(planTimeLeft)) + "s");
@@ -385,7 +442,7 @@ public class MatchScreen extends ScreenAdapter {
                 draftApplied = true;
                 toast(match.pickDraft(draftChosen));
                 if (match.augmentPending) { phase = Phase.AUGMENT; }
-                else { phase = Phase.PLANNING; planTimeLeft = 90; chosenTraps.clear(); refreshPlanning(); }
+                else { phase = Phase.PLANNING; planTimeLeft = 90; refreshPlanning(); }
             }
         }
         if (phase == Phase.BATTLE && outcome != null && outcome.result != null) {
@@ -393,8 +450,11 @@ public class MatchScreen extends ScreenAdapter {
             fireEvents();
             for (int i = floatTexts.size() - 1; i >= 0; i--) { FloatText ft = floatTexts.get(i); ft.ttl += delta; ft.y += 30 * delta; if (ft.ttl > ft.maxTtl) floatTexts.remove(i); }
             for (int i = glows.size() - 1; i >= 0; i--) { Glow g = glows.get(i); g.ttl += delta; if (g.ttl > 0.45f) glows.remove(i); }
+            for (int i = pows.size() - 1; i >= 0; i--) { Pow pw = pows.get(i); pw.ttl += delta; if (pw.ttl > 0.38f) pows.remove(i); }
             if (playT >= outcome.result.duration + 1.0f) {
                 phase = Phase.RESULT;
+                announceT = 1.5f; // announcer phong to giua san roi moi hien panel ket qua
+                if (outcome.droppedItem != null) { popupItemId = outcome.droppedItem; popupT = 2.3f; }
                 game.sound().sfx(outcome.humanWon ? "win" : "lose");
             }
         }
@@ -414,7 +474,7 @@ public class MatchScreen extends ScreenAdapter {
         batch.begin();
         if (phase == Phase.BATTLE || phase == Phase.RESULT) drawBattleUnits(now);
         else { drawPlanningUnits(now); drawBench(now); drawShop(); }
-        drawTrapBacks();
+        drawMergeFx(now);
         // So sat thuong noi (phong Kanto: cam vang, chi mang to + "!")
         for (FloatText ft : floatTexts) {
             BitmapFont f = ft.scale > 1.3f ? a.fontBig : a.font;
@@ -428,16 +488,18 @@ public class MatchScreen extends ScreenAdapter {
             batch.setColor(Color.WHITE);
         }
         drawProjectiles();
+        drawPows();
         batch.end();
         // --- Panel Scene2D ---
         stage.act(delta);
         stage.draw();
-        // --- Banner bay + overlay tren cung ---
-        if (trapBannerT > 0) drawTrapBanner();
+        // --- Overlay tren cung: bang sat thuong, announcer/ket qua, popup trang bi ---
+        if (showDmgChart && outcome != null && outcome.result != null && (phase == Phase.BATTLE || phase == Phase.RESULT)) drawDamageChart();
         if (phase == Phase.DRAFT) drawDraftOverlay(now);
         else if (phase == Phase.AUGMENT) drawAugmentOverlay();
         else if (phase == Phase.RESULT) drawResultOverlay();
         else if (phase == Phase.OVER) drawOverOverlay();
+        if (popupT > 0 && popupItemId != null) drawItemPopup();
     }
 
     private void drawCentered(BitmapFont f, String text, float cx, float y, Color color) {
@@ -526,6 +588,7 @@ public class MatchScreen extends ScreenAdapter {
         if (preview != null) for (Engine.PlacedUnit u : preview) {
             float[] p = cellCenter(u.x, 6 - u.y);
             String art = u.isMonster && u.monster != null ? u.monster.id : u.defId;
+            drawGroundRing(p[0], p[1], u.star, now, u.uid.hashCode());
             drawUnitSprite(art, p[0], p[1], 58, u.star, true, 0.8f, 0, null);
             drawBars(p[0], p[1], 1, 0, 0, 1, u.star, false);
         }
@@ -533,8 +596,35 @@ public class MatchScreen extends ScreenAdapter {
         for (Engine.PlacedUnit u : h.board) {
             float[] p = cellCenter(u.x, u.y);
             float bob = (float) Math.sin(now * 3 + (i++) * 1.7) * 2;
+            drawGroundRing(p[0], p[1], u.star, now, u.uid.hashCode());
             drawUnitSprite(u.defId, p[0], p[1] + bob, 63, u.star, false, 1, 0, null);
             drawBars(p[0], p[1], 1, 0, 0, 0, u.star, false);
+        }
+    }
+
+    // Vong o chan theo cap sao (phong tien hoa Kanto): 2 sao vong bac, 3 sao hao quang vang
+    // chay + cham sao bay quanh chan. Vong tron ep det nam sat dat duoi chan tuong.
+    private void drawGroundRing(float cx, float cy, int star, float now, int seed) {
+        if (star < 2) return;
+        Assets a = game.assets;
+        float w = star >= 3 ? 58 : 48, h = w * 0.42f;
+        float gy = cy - 27;
+        if (star >= 3) {
+            float pulse = 0.55f + 0.3f * (float) Math.sin(now * 5 + seed);
+            batch.setColor(1f, 0.72f, 0.15f, pulse);
+        } else {
+            batch.setColor(0.85f, 0.9f, 0.97f, 0.8f);
+        }
+        batch.draw(ringTex, cx - w / 2, gy - h / 2, w, h);
+        batch.setColor(Color.WHITE);
+        if (star >= 3) {
+            for (int i = 0; i < 3; i++) {
+                double ang = now * 2.2 + seed + i * (Math.PI * 2 / 3);
+                float sx = cx + (float) Math.cos(ang) * 27, sy = gy + (float) Math.sin(ang) * 8;
+                batch.setColor(1f, 0.85f, 0.3f, 0.9f);
+                batch.draw(a.icon("star"), sx - 5, sy - 5, 10, 10);
+            }
+            batch.setColor(Color.WHITE);
         }
     }
 
@@ -608,21 +698,6 @@ public class MatchScreen extends ScreenAdapter {
         drawCentered(a.fontSmall, "SHOP — chạm thẻ để mua", 636, 12, Ui.TEXT_DIM);
     }
 
-    private void drawTrapBacks() {
-        // Lung the bay xep doc o ria phai ban co (tranh de len hang tuong xem truoc o hang tren cung)
-        Assets a = game.assets;
-        float rx = BX + 7 * CELL + 16;
-        int mine = match.human().setTraps.size();
-        if (mine > 0) {
-            drawCentered(a.fontSmall, "Bẫy bạn:", rx + 12, BY + 7 * CELL - 2, Ui.TEXT_DIM);
-            for (int i = 0; i < mine; i++) batch.draw(a.cardBack, rx, BY + 7 * CELL - 42 - i * 36, 22, 30);
-        }
-        if ((phase == Phase.BATTLE || phase == Phase.RESULT) && outcome != null && outcome.oppTrapCount > 0) {
-            drawCentered(a.fontSmall, "Bẫy địch:", rx + 12, BY + 128, Ui.TEXT_DIM);
-            for (int i = 0; i < outcome.oppTrapCount; i++) batch.draw(a.cardBack, rx, BY + 84 - i * 36, 22, 30);
-        }
-    }
-
     // ---------- Playback tran danh tu frames/events cua engine ----------
     private void fireEvents() {
         if (outcome == null || outcome.result == null) return;
@@ -631,12 +706,24 @@ public class MatchScreen extends ScreenAdapter {
             Engine.BattleEvent e = evs.get(firedIdx++);
             switch (e.type) {
                 case "attack": case "hit": {
+                    boolean crit = Boolean.TRUE.equals(e.crit);
                     if (e.amount != null && e.amount > 0 && e.tx != null) {
                         float[] p = cellCenter(e.tx, e.ty);
-                        boolean crit = Boolean.TRUE.equals(e.crit);
                         String txt = "-" + e.amount.intValue() + (crit ? "!" : "");
                         Color c = "magic".equals(e.kind) ? new Color(0.78f, 0.62f, 1, 1) : crit ? new Color(1, 0.8f, 0.1f, 1) : new Color(1, 0.62f, 0.05f, 1);
                         floatTexts.add(new FloatText(p[0], p[1] + 30, txt, c, crit ? 1.6f : 1f));
+                    }
+                    // Don nang kieu truyen tranh (FighterZ): crit hoac >= 15% mau toi da cua muc tieu
+                    // -> cum no "pow" + muc tieu lon nghieng (lastHeavyHitAt duoc drawBattleUnits doc)
+                    if (e.amount != null && e.amount > 0 && e.targetUid != null) {
+                        Engine.FightUnit tgt = unitIndex.get(e.targetUid);
+                        boolean heavy = crit || (tgt != null && e.amount >= 0.15 * tgt.maxHp);
+                        if (heavy) {
+                            float[] tp = lastScreenPos.get(e.targetUid);
+                            if (tp == null && e.tx != null) tp = cellCenter(e.tx, e.ty);
+                            if (tp != null) pows.add(new Pow(tp[0], tp[1], (float) e.t));
+                            lastHeavyHitAt.put(e.targetUid, (float) e.t);
+                        }
                     }
                     if (e.attackerUid != null) {
                         lastAttackAt.put(e.attackerUid, (float) e.t);
@@ -661,7 +748,6 @@ public class MatchScreen extends ScreenAdapter {
                     glows.add(new Glow(p[0], p[1], new Color(1, 0.85f, 0.3f, 1)));
                     break;
                 }
-                case "trap": trapBanner = e.text; trapBannerT = 2.2f; break;
                 default: break;
             }
         }
@@ -675,6 +761,57 @@ public class MatchScreen extends ScreenAdapter {
             float x = pr[1] + (pr[3] - pr[1]) * k, y = pr[2] + (pr[4] - pr[2]) * k;
             batch.setColor(1, 0.75f, 0.25f, 0.95f);
             batch.draw(game.assets.whiteTex(), x - 4, y - 4, 8, 8);
+            batch.setColor(Color.WHITE);
+        }
+    }
+
+    // Cum no "pow" truyen tranh (FighterZ): dam may trang no ra + 5 vet toc do toa xung quanh
+    private void drawPows() {
+        Assets a = game.assets;
+        for (Pow pw : pows) {
+            float prog = pw.ttl / 0.38f;
+            float alpha = Math.max(0, 1 - prog);
+            // Cum may: 5 bong tron trang chong nhau, no dan theo prog
+            float[][] puffs = {{0, 0, 26}, {-16, 6, 18}, {16, 8, 19}, {-8, -12, 16}, {12, -10, 15}};
+            for (float[] pf : puffs) {
+                float r = pf[2] * (0.5f + prog * 0.9f);
+                batch.setColor(1, 1, 1, alpha * 0.92f);
+                batch.draw(circleTex, pw.x + pf[0] * (0.6f + prog * 0.7f) - r, pw.y + pf[1] * (0.6f + prog * 0.7f) - r, r * 2, r * 2);
+            }
+            // Vet toc do: doan thang mong toa ra tu tam, dai nhat o giua doi hieu ung
+            float len = 40 * (float) Math.sin(Math.min(1, prog) * Math.PI);
+            for (int i = 0; i < 5; i++) {
+                double ang = pw.seed * 3.7 + i * (Math.PI * 2 / 5) + 0.4;
+                float dx = (float) Math.cos(ang), dy = (float) Math.sin(ang);
+                float sx = pw.x + dx * 14, sy = pw.y + dy * 14;
+                batch.setColor(1, 0.95f, 0.75f, alpha);
+                batch.draw(a.whiteTex(), sx, sy - 1.5f, 0, 1.5f, len, 3, 1, 1, (float) Math.toDegrees(ang), 0, 0, 1, 1, false, false);
+            }
+            batch.setColor(Color.WHITE);
+        }
+    }
+
+    // Xoay hop nhat khi gop sao (Kanto): 3 cham sao xoay bay vao tam + vong sang mo dan o chan tuong ket qua
+    private void drawMergeFx(float now) {
+        Assets a = game.assets;
+        for (MergeFx fx : mergeFx) {
+            float prog = fx.ttl / 0.9f;
+            for (int i = 0; i < 3; i++) {
+                double ang = i * (Math.PI * 2 / 3) + fx.ttl * 7;
+                float r = 48 * (1 - prog);
+                float sx = fx.x + (float) Math.cos(ang) * r, sy = fx.y + (float) Math.sin(ang) * r * 0.7f;
+                batch.setColor(1, 0.9f, 0.45f, 1 - prog * 0.4f);
+                batch.draw(a.icon("star"), sx - 7, sy - 7, 14, 14);
+            }
+            float rr = 14 + prog * 42;
+            Color ring = fx.star >= 3 ? Ui.GOLD : new Color(0.9f, 0.94f, 1, 1);
+            batch.setColor(ring.r, ring.g, ring.b, (1 - prog) * 0.85f);
+            batch.draw(ringTex, fx.x - rr, fx.y - 24 - rr * 0.5f, rr * 2, rr);
+            if (prog < 0.35f) {
+                batch.setColor(1, 1, 1, (0.35f - prog) / 0.35f * 0.7f);
+                float fr = 20 * (1 - prog / 0.35f) + 8;
+                batch.draw(circleTex, fx.x - fr, fx.y - fr, fr * 2, fr * 2);
+            }
             batch.setColor(Color.WHITE);
         }
     }
@@ -729,10 +866,17 @@ public class MatchScreen extends ScreenAdapter {
                     float len = (float) Math.max(1, Math.hypot(dx, dy));
                     cx += dx / len * k; cy += dy / len * k;
                 }
+                // Don nang (pow) vua trung: muc tieu lon nghieng manh roi ve thang (0,35s)
+                Float hh = lastHeavyHitAt.get(uid);
+                if (hh != null && playT - hh < 0.35f) {
+                    float k = (playT - hh) / 0.35f;
+                    rotation += (float) Math.sin(k * Math.PI) * 38f * (base.team == 0 ? -1 : 1);
+                }
             }
             Color tint = null;
             Float lh = lastHitAt.get(uid);
             if (lh != null && playT - lh < 0.15f) tint = new Color(1, 0.5f, 0.5f, 1);
+            if (!dying) drawGroundRing(p[0], p[1], base.star, now, uid.hashCode());
             drawUnitSprite(base.artId, cx, cy, 63, base.star, base.team == 1, alpha, rotation, tint);
             lastScreenPos.put(uid, new float[]{cx, cy});
             if (!dying) drawBars(cx, cy, hp / Math.max(1, base.maxHp), mana / Math.max(1, base.maxMana), shield / Math.max(1, base.maxHp), base.team, base.star, base.stun > 0);
@@ -740,18 +884,78 @@ public class MatchScreen extends ScreenAdapter {
     }
 
     // ================= OVERLAYS =================
-    private void drawTrapBanner() {
+    // Announcer kieu FighterZ: chu ho lon font Baloo phong len giua san roi tan dan,
+    // kem banner nho chua thong tin sat thuong/mau cua vong vua dau.
+    private void drawAnnouncer() {
         Assets a = game.assets;
+        float prog = 1 - announceT / 1.5f; // 0 -> 1
+        float scale = prog < 0.22f ? 0.45f + 2.9f * prog * (1.12f - prog) : 1.05f - 0.05f * Math.min(1, prog); // phong qua 1.0 roi ve ~1 (overshoot nhe)
+        float alpha = announceT < 0.35f ? Math.max(0, announceT / 0.35f) : 1f;
+        String text = outcome.bossBattle && outcome.humanWon ? "HẠ GỤC BOSS!" : outcome.humanWon ? "THẮNG!" : "THUA!";
+        Color c = outcome.humanWon ? new Color(0.35f, 0.95f, 0.5f, alpha) : new Color(1, 0.4f, 0.4f, alpha);
+        a.fontTitle.getData().setScale(scale);
+        drawCentered(a.fontTitle, text, 640, 486, c);
+        a.fontTitle.getData().setScale(1f);
+        // Banner nho di kem: tom tat vong + thay doi mau
+        a.patchPlaque.draw(batch, 390, 268, 500, 58);
+        String sub = outcome.summary + (outcome.humanHpDelta != 0 ? "  •  Máu còn: " + match.human().hp : "");
+        drawCentered(a.font, sub, 640, 306, Color.WHITE);
+    }
+
+    // Bang sat thuong theo tuong cua tran vua dau (ca 2 ben) — panel noi de mep phai san,
+    // bat/tat bang nut "Bang sat thuong" o panel phai. Du lieu tu Engine.damageChart.
+    private void drawDamageChart() {
+        Assets a = game.assets;
+        List<Engine.DamageRow> rows = Engine.damageChart(outcome.result);
+        if (rows.isEmpty()) return;
         batch.begin();
-        // Banner plaque ve, nam gon giua 2 panel (trai ket thuc x=244, phai bat dau x=1036)
-        a.patchPlaque.draw(batch, 252, 598, 776, 62);
-        // La bay lat mo: lung the thu hep theo duong cong lat, sau do nhap nhay vien vang
-        float prog = Math.min(1, (2.2f - trapBannerT) / 0.45f);
-        float sx = Math.abs((float) Math.cos(prog * Math.PI));
-        float cw = 30 * Math.max(0.1f, sx);
-        batch.draw(a.cardBack, 282 - cw / 2, 606, cw, 44);
-        if (prog >= 0.5f) drawBorder(267, 606, 30, 44, Ui.GOLD, 2);
-        drawCentered(a.fontBig, trapBanner, 640, 640, Ui.GOLD);
+        int n = Math.min(rows.size(), 14);
+        float pw = 302, ph = 52 + n * 26;
+        float px = 722, py = 654 - ph;
+        a.patchPanel.draw(batch, px, py, pw, ph);
+        drawCentered(a.fontBig, "SÁT THƯƠNG CỦA TRẬN", px + pw / 2, py + ph - 16, Ui.GOLD);
+        double max = Math.max(1, rows.get(0).damage);
+        for (int i = 0; i < n; i++) {
+            Engine.DamageRow r = rows.get(i);
+            float ry = py + ph - 48 - i * 26;
+            batch.draw(a.unit(r.artId), px + 10, ry - 15, 20, 20);
+            String nm = r.name + (r.star > 1 ? " (" + r.star + " sao)" : "");
+            a.fontSmall.setColor(r.team == 0 ? new Color(0.45f, 0.95f, 0.6f, 1) : new Color(1, 0.55f, 0.55f, 1));
+            layout.setText(a.fontSmall, nm, a.fontSmall.getColor(), 118, com.badlogic.gdx.utils.Align.left, true);
+            a.fontSmall.draw(batch, layout, px + 36, ry + 4);
+            batch.setColor(0, 0, 0, 0.55f);
+            batch.draw(a.whiteTex(), px + 160, ry - 10, 92, 10);
+            batch.setColor(r.team == 0 ? new Color(0.3f, 0.85f, 0.45f, 1) : new Color(0.95f, 0.35f, 0.35f, 1));
+            batch.draw(a.whiteTex(), px + 160, ry - 10, 92 * (float) (r.damage / max), 10);
+            batch.setColor(Color.WHITE);
+            a.fontSmall.setColor(Color.WHITE);
+            a.fontSmall.draw(batch, String.valueOf((int) r.damage), px + 258, ry + 4);
+        }
+        a.fontSmall.setColor(Color.WHITE);
+        batch.end();
+    }
+
+    // Popup nhan trang bi kieu mo qua (Kanto): the nay vao giua-phai san ~2,3s khi PvE roi do
+    private void drawItemPopup() {
+        GameData.ItemDef it = GameData.itemById(popupItemId);
+        if (it == null) return;
+        Assets a = game.assets;
+        float elapsed = 2.3f - popupT;
+        float pop = elapsed < 0.18f ? 0.55f + 0.45f * (elapsed / 0.18f) : 1f;
+        float pw = 252 * pop, ph = 96 * pop;
+        float cxp = 838, cyp = 384;
+        batch.begin();
+        a.patchPanel.draw(batch, cxp - pw / 2, cyp - ph / 2, pw, ph);
+        if (pop > 0.8f) {
+            drawCentered(a.fontSmall, "NHẬN TRANG BỊ!", cxp, cyp + 40, Ui.GOLD);
+            batch.setColor(Color.valueOf(it.color));
+            batch.draw(circleTex, cxp - 86, cyp - 26, 30, 30);
+            batch.setColor(Color.WHITE);
+            a.fontBig.setColor(Color.WHITE);
+            layout.setText(a.fontBig, it.name, Color.WHITE, 160, com.badlogic.gdx.utils.Align.left, true);
+            a.fontBig.draw(batch, layout, cxp - 48, cyp + 12);
+            drawCentered(a.fontSmall, it.desc, cxp + 8, cyp - 22, Ui.TEXT_DIM);
+        }
         batch.end();
     }
 
@@ -822,16 +1026,22 @@ public class MatchScreen extends ScreenAdapter {
     private void drawResultOverlay() {
         Assets a = game.assets;
         batch.begin();
+        if (announceT > 0 && outcome != null) {
+            // Announcer dang chay: chi hien chu ho + banner nho tren nen san (khong che panel)
+            drawAnnouncer();
+            batch.end();
+            return;
+        }
         batch.setColor(0.02f, 0.02f, 0.07f, 0.72f);
         batch.draw(a.whiteTex(), 0, 0, 1280, 720);
         batch.setColor(Color.WHITE);
         a.patchPanel.draw(batch, 320, 200, 640, 330);
         if (outcome != null) {
-            drawCentered(a.fontTitle, outcome.humanWon ? "THẮNG!" : "THUA!", 640, 500, outcome.humanWon ? new Color(0.35f, 0.95f, 0.5f, 1) : new Color(1, 0.4f, 0.4f, 1));
+            drawCentered(a.fontTitle, outcome.bossBattle && outcome.humanWon ? "HẠ GỤC BOSS!" : outcome.humanWon ? "THẮNG!" : "THUA!", 640, 500, outcome.humanWon ? new Color(0.35f, 0.95f, 0.5f, 1) : new Color(1, 0.4f, 0.4f, 1));
             drawCentered(a.fontBig, outcome.summary, 640, 448, Color.WHITE);
             drawCentered(a.font, "Đối thủ: " + outcome.opponentName, 640, 414, Ui.TEXT_DIM);
-            if (outcome.humanLpDelta != 0) drawCentered(a.font, "LP thay đổi: " + outcome.humanLpDelta + "  •  LP còn: " + match.human().lp, 640, 382, Color.WHITE);
-            if (outcome.oppTrapCount > 0) drawCentered(a.font, "Đối thủ đã đặt úp " + outcome.oppTrapCount + " lá bẫy (nội dung ẩn).", 640, 350, Ui.TEXT_DIM);
+            if (outcome.humanHpDelta != 0) drawCentered(a.font, "Máu thay đổi: " + outcome.humanHpDelta + "  •  Máu còn: " + match.human().hp, 640, 382, Color.WHITE);
+            if (outcome.droppedItem != null) drawCentered(a.font, "Trang bị rơi: " + GameData.itemById(outcome.droppedItem).name + " (đã vào kho)", 640, 350, Ui.GOLD);
             if (match.mode == Match.Mode.CAMPAIGN || match.mode == Match.Mode.WAVES) drawCentered(a.fontSmall, match.endMessage, 640, 322, Ui.TEXT_DIM);
         }
         a.patchBtnPrimary[0].draw(batch, resultBtn.x, resultBtn.y, resultBtn.width, resultBtn.height);
@@ -867,10 +1077,14 @@ public class MatchScreen extends ScreenAdapter {
     private void startBattle() {
         if (phase != Phase.PLANNING) return;
         if (match.human().board.isEmpty()) toast("Đội hình trống — vẫn vào trận (sẽ thua chắc).");
+        battleArenaKey = arenaKey(); // chot san cua VONG SAP DAU truoc khi fight() tang round
         outcome = match.fight();
         playT = 0; firedIdx = 0; speed = 1; speedBtn.setText("Tốc độ: x1");
-        floatTexts.clear(); glows.clear(); projectiles.clear();
-        lastAttackAt.clear(); lastAttackTarget.clear(); lastHitAt.clear(); lastScreenPos.clear();
+        floatTexts.clear(); glows.clear(); projectiles.clear(); pows.clear();
+        lastAttackAt.clear(); lastAttackTarget.clear(); lastHitAt.clear(); lastScreenPos.clear(); lastHeavyHitAt.clear();
+        // Chi muc don vi toan tran (gom ca golem trieu hoi xuat hien giua tran) cho nguong don nang 15%
+        unitIndex.clear();
+        if (outcome != null && outcome.result != null) for (Engine.BattleFrame f : outcome.result.frames) for (Engine.FightUnit u : f.units) unitIndex.put(u.uid, u);
         selUid = null; armedItem = null;
         if (outcome == null || outcome.result == null) { phase = Phase.RESULT; return; }
         game.sound().sfx("start");
@@ -882,7 +1096,7 @@ public class MatchScreen extends ScreenAdapter {
         if (match.draftPending) { enterDraft(); return; }
         if (match.augmentPending) { phase = Phase.AUGMENT; return; }
         phase = Phase.PLANNING;
-        planTimeLeft = 90; chosenTraps.clear(); selUid = null; armedItem = null;
+        planTimeLeft = 90; selUid = null; armedItem = null;
         refreshPlanning();
     }
 
@@ -944,7 +1158,7 @@ public class MatchScreen extends ScreenAdapter {
                         if (augmentRect(i).contains(x, y)) {
                             toast(match.pickAugment(i));
                             game.sound().sfx("levelup");
-                            phase = Phase.PLANNING; planTimeLeft = 90; chosenTraps.clear(); refreshPlanning();
+                            phase = Phase.PLANNING; planTimeLeft = 90; refreshPlanning();
                             return true;
                         }
                     }
@@ -1020,5 +1234,7 @@ public class MatchScreen extends ScreenAdapter {
         if (stage != null) stage.dispose();
         if (batch != null) batch.dispose();
         if (shapes != null) shapes.dispose();
+        if (circleTex != null) circleTex.dispose();
+        if (ringTex != null) ringTex.dispose();
     }
 }
