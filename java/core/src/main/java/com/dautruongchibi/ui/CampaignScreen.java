@@ -34,7 +34,6 @@ public class CampaignScreen extends ScreenAdapter {
         Assets a = game.assets;
         Table root = new Table();
         root.setFillParent(true);
-        root.background(Ui.bg(a, new Color(0.08f, 0.06f, 0.16f, 1)));
         root.pad(20);
         stage.addActor(root);
         root.add(Ui.title(a, "CHIẾN DỊCH PvE", Ui.GOLD)).align(com.badlogic.gdx.utils.Align.left).padBottom(6).row();
@@ -104,6 +103,14 @@ public class CampaignScreen extends ScreenAdapter {
     public void render(float delta) {
         Gdx.gl.glClearColor(0.07f, 0.05f, 0.14f, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        // Nen: tranh banner chuong (rung / sa mac / bang) phu kin + lop toi nhe
+        com.badlogic.gdx.graphics.g2d.SpriteBatch sb = (com.badlogic.gdx.graphics.g2d.SpriteBatch) stage.getBatch();
+        sb.begin();
+        sb.draw(game.assets.bannerFor(chapter - 1), 0, 0, 1280, 720);
+        sb.setColor(0, 0, 0, 0.52f);
+        sb.draw(game.assets.whiteTex(), 0, 0, 1280, 720);
+        sb.setColor(Color.WHITE);
+        sb.end();
         stage.act(delta);
         stage.draw();
     }

@@ -66,7 +66,6 @@ public class GuideScreen extends ScreenAdapter {
         Assets a = game.assets;
         Table root = new Table();
         root.setFillParent(true);
-        root.background(Ui.bg(a, new Color(0.08f, 0.06f, 0.16f, 1)));
         root.pad(24);
         stage.addActor(root);
         root.add(Ui.title(a, "HỌC CHƠI", Ui.GOLD)).align(com.badlogic.gdx.utils.Align.left).padBottom(10).row();
@@ -88,6 +87,13 @@ public class GuideScreen extends ScreenAdapter {
     public void render(float delta) {
         Gdx.gl.glClearColor(0.07f, 0.05f, 0.14f, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        com.badlogic.gdx.graphics.g2d.SpriteBatch sb = (com.badlogic.gdx.graphics.g2d.SpriteBatch) stage.getBatch();
+        sb.begin();
+        sb.draw(game.assets.lobbyTex, 0, 0, 1280, 720);
+        sb.setColor(0, 0, 0, 0.68f);
+        sb.draw(game.assets.whiteTex(), 0, 0, 1280, 720);
+        sb.setColor(Color.WHITE);
+        sb.end();
         stage.act(delta);
         stage.draw();
     }

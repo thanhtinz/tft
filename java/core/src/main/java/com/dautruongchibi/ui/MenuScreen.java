@@ -77,15 +77,15 @@ public class MenuScreen extends ScreenAdapter {
         Table modes = new Table();
         modes.defaults().align(com.badlogic.gdx.utils.Align.left).padBottom(8);
         modes.add(Ui.labelBig(a, "PvE — ĐẤU VỚI MÁY", Ui.GOLD)).row();
-        modes.add(modeBtn(a, "Chiến Dịch (5.200 màn)", "Chinh phục 52 chương, boss mỗi 10 màn", () -> game.setScreen(new CampaignScreen(game)))).row();
-        modes.add(modeBtn(a, "Sóng Quái Vô Tận", "8000 LP, trụ càng lâu càng tốt", () -> startMatch(Match.Mode.WAVES))).row();
+        modes.add(modeBtn(a, "flag", "Chiến Dịch (5.200 màn)", "Chinh phục 52 chương, boss mỗi 10 màn", () -> game.setScreen(new CampaignScreen(game)))).row();
+        modes.add(modeBtn(a, "waves", "Sóng Quái Vô Tận", "8000 LP, trụ càng lâu càng tốt", () -> startMatch(Match.Mode.WAVES))).row();
         modes.add(Ui.labelBig(a, "PvP — ĐẤU 8 NGƯỜI (BOT GIẢ LẬP)", Ui.GOLD)).padTop(8).row();
-        modes.add(modeBtn(a, "PvP Thường", "Đấu 7 đối thủ, không tính hạng", () -> startMatch(Match.Mode.PVP_NORMAL))).row();
-        modes.add(modeBtn(a, "PvP Hạng", "Có tính điểm rank LP vào hồ sơ", () -> startMatch(Match.Mode.PVP_RANKED))).row();
-        modes.add(modeBtn(a, "PvP Đấu Tập", "Bot yếu hơn, luyện tập tự do", () -> startMatch(Match.Mode.PVP_PRACTICE))).row();
+        modes.add(modeBtn(a, "sword", "PvP Thường", "Đấu 7 đối thủ, không tính hạng", () -> startMatch(Match.Mode.PVP_NORMAL))).row();
+        modes.add(modeBtn(a, "trophy", "PvP Hạng", "Có tính điểm rank LP vào hồ sơ", () -> startMatch(Match.Mode.PVP_RANKED))).row();
+        modes.add(modeBtn(a, "shield", "PvP Đấu Tập", "Bot yếu hơn, luyện tập tự do", () -> startMatch(Match.Mode.PVP_PRACTICE))).row();
         modes.add(Ui.labelSmall(a, "PvP online người thật sẽ mở khi có Supabase (ngoài phạm vi bản này).", Ui.TEXT_DIM)).padTop(2).row();
-        modes.add(modeBtn(a, "Học Chơi", "Luật chơi, LP 8000, bẫy úp, lật thẻ", () -> game.setScreen(new GuideScreen(game)))).padTop(10).row();
-        modes.add(modeBtn(a, "Hồ Sơ & Thống Kê", "Hạng, LP, lịch sử phong độ", () -> game.setScreen(new ProfileScreen(game)))).row();
+        modes.add(modeBtn(a, "book", "Học Chơi", "Luật chơi, LP 8000, bẫy úp, lật thẻ", () -> game.setScreen(new GuideScreen(game)))).padTop(10).row();
+        modes.add(modeBtn(a, "star", "Hồ Sơ & Thống Kê", "Hạng, LP, lịch sử phong độ", () -> game.setScreen(new ProfileScreen(game)))).row();
         root.add(modes).align(com.badlogic.gdx.utils.Align.topLeft).expandX();
         game.sound().playBgm("home");
     }
@@ -98,9 +98,12 @@ public class MenuScreen extends ScreenAdapter {
             + "Số trận PvP: " + game.profile.matches;
     }
 
-    private Table modeBtn(Assets a, String title, String desc, Runnable action) {
+    private Table modeBtn(Assets a, String icon, String title, String desc, Runnable action) {
         Table t = new Table();
-        TextButton b = Ui.button(a, title);
+        com.badlogic.gdx.scenes.scene2d.ui.Image ic = new com.badlogic.gdx.scenes.scene2d.ui.Image(
+            new com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable(new com.badlogic.gdx.graphics.g2d.TextureRegion(a.icon(icon))));
+        t.add(ic).width(36).height(36).padRight(10);
+        TextButton b = Ui.buttonBig(a, title, Ui.BTN);
         b.addListener(new com.badlogic.gdx.scenes.scene2d.utils.ChangeListener() {
             @Override public void changed(ChangeEvent e, com.badlogic.gdx.scenes.scene2d.Actor actor) { game.sound().sfx("click"); action.run(); }
         });
@@ -121,7 +124,7 @@ public class MenuScreen extends ScreenAdapter {
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
         batch.begin();
         batch.draw(game.assets.lobbyTex, 0, 0, 1280, 720);
-        batch.setColor(0, 0, 0, 0.45f);
+        batch.setColor(0, 0, 0, 0.22f);
         batch.draw(game.assets.whiteTex(), 0, 0, 1280, 720);
         batch.setColor(Color.WHITE);
         batch.end();

@@ -19,7 +19,8 @@ nội suy vị trí mượt (smoothstep), module Android đã nối sẵn (xem m
 | Backend desktop | LWJGL3 (LWJGL 3.3.3) |
 | Backend web | **backend-teavm 1.4.0** (TeaVM 0.13) — build ra HTML/JS hoàn chỉnh |
 | Backend Android | AGP **8.5.2**, compileSdk/targetSdk **35**, minSdk 24 |
-| Font tiếng Việt | DejaVu Sans qua FreeType (gdx-freetype) — đủ dấu tiếng Việt |
+| Font tiếng Việt | **Baloo 2** ExtraBold (tiêu đề) + **Nunito** ExtraBold/Bold (thân chữ) qua FreeType (gdx-freetype) — font game tròn đậm, đủ dấu tiếng Việt; DejaVu giữ làm dự phòng |
+| Texture giao diện | Bộ 9-patch vẽ bằng PIL trong `assets/ui/` (panel, plaque, 4 họ nút × 3 trạng thái, thẻ shop theo bậc giá 1–5, mặt thẻ, ô bench, avatar) + 9 icon pixel (coin, tim, sao, kiếm, khiên, cúp, sách, cờ, sóng) |
 
 ## Cấu trúc project
 
@@ -38,9 +39,10 @@ java/
 ├── desktop/                 # DesktopLauncher (LWJGL3 1280x720) + ScreenshotMain (cong cu kiem chung GUI)
 ├── android/                 # Module Android day du (AGP 8.5.2, SDK 35) — xem muc Android ve gioi han build APK
 ├── web/                     # Backend TeaVM 1.4.0 — build thanh cong ra web/build/webapp (index.html + game.js + assets)
-├── assets/                  # units/ (35 sprite pixel), scenes/ (arena, lobby, card-back...), fonts/, audio/ (22 file WAV)
+├── assets/                  # units/ (35 sprite pixel), scenes/ (arena, lobby, card-back...), fonts/ (Baloo 2 + Nunito), ui/ (33 texture giao diện + icon pixel), audio/ (22 file WAV)
 └── tools/
     ├── pixelize.py          # pipeline chuyen tranh goc -> sprite pixel (chay lai duoc)
+    ├── make_ui.py           # sinh lai toan bo texture assets/ui/ bang PIL (panel/plaque/nut/the shop/icon pixel) — chay: python3 tools/make_ui.py
     ├── preview-sheet.png    # bang xem truoc toan bo sprite (phong to nearest-neighbor)
     ├── fetch-deps.sh / fetch_deps.py  # tai dependency bang curl vao local-maven (moi truong han che mang)
     └── shot-*.png           # anh chup kiem chung GUI (menu, lat the, chuan bi, giao tranh)
@@ -192,3 +194,21 @@ Kết quả: `./gradlew :web:buildWeb` — **BUILD SUCCESSFUL**. Output tại `w
 vì Chromium của sandbox bị treo ngay cả với trang trống (không phải lỗi của game). Cần mở `web/build/webapp/index.html`
 bằng một máy chủ tĩnh (ví dụ `python3 -m http.server`) trên máy thường để chơi thử trước khi cân nhắc thay demo RN trên Vercel
 (quyết định thay demo thuộc về chủ dự án; đợt này **không** đụng vào cấu hình Vercel).
+
+## Đợt làm đẹp giao diện (sau góp ý "giao diện nhìn vẫn thô")
+
+- **Font game:** Baloo 2 (tiêu đề, viền nâu đậm + bóng) và Nunito (thân chữ) thay DejaVu. Lấy bản variable từ
+  google/fonts (GitHub raw) rồi dùng `fonttools varLib.instancer` cố định trọng lượng (Baloo 800, Nunito 700/800/900)
+  thành TTF tĩnh trong `assets/fonts/`. Lưu ý: hai font này **không có glyph** ★ ♥ ✦ → — sao tướng/choáng vẽ bằng
+  icon pixel `assets/ui/icon_star.png`, các chuỗi UI tránh các ký tự đó.
+- **Texture vẽ:** `tools/make_ui.py` (PIL) sinh 33 PNG vào `assets/ui/`: panel/plaque 9-patch tông tím sẫm + viền vàng +
+  kim cương góc, 4 họ nút × 3 trạng thái (thường/hồng ngọc/xanh lá/đỏ), mặt thẻ parchment, khung thẻ shop theo màu
+  bậc giá 1–5, ô bench, avatar vòng tròn, 9 icon pixel 48px. `Assets` nạp thành NinePatch; `Ui` tự chọn texture theo
+  màu nút cũ nên mọi màn hình kế thừa diện mạo mới.
+- **Bố cục:** menu = tranh lobby tràn viền + nút plaque có icon; màn trận = plaque chỉ số giữa-trên (icon coin/sao/tim),
+  danh sách người chơi dạng hàng avatar tròn + LP, shop có khung bậc giá + phát sáng "Sắp gộp!", banner bẫy và các
+  popup dùng plaque/panel vẽ. Logic/engine/dữ liệu không đổi — kiểm chứng lại: compile desktop PASS,
+  `verifyHeadless` **19/19 PASS**, `:web:buildWeb` PASS (webapp 107 file, game.js ~900KB), ảnh chụp 4 màn trong `tools/shot-*.png`.
+- **Mẹo build trong sandbox này:** tiến trình Java bị chặn TCP IPv4 (kể cả loopback client↔daemon của Gradle) nhưng
+  IPv6 loopback thông — chạy Gradle với `JDK_JAVA_OPTIONS="-Djava.net.preferIPv4Stack=false -Djava.net.preferIPv6Addresses=true"`
+  và binary Gradle cài sẵn (wrapper chưa tải xong distribution). Trên máy thường không cần mẹo này.
