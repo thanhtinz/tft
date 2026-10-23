@@ -5,7 +5,8 @@ import { router } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { ItemArt } from './ChibiArt';
 import SpriteUnit, { SceneArtImage } from './SpriteUnit';
-import { AmbientParticles } from './SceneArt';
+import { AmbientParticles, EnvOverlay } from './SceneArt';
+import { LevelPillarFx, OrbFlight, OrbFlightLayer, StarBurstFx } from './StageFx';
 import { rowDepth, stateForUnit } from '../game/rig';
 import { AUGMENTS, BOT_NAMES, CHAMPIONS, SHOP_ODDS, TRAITS, champById, itemById, monsterById, traitName } from '../game/data';
 import { AUG_ROUNDS_TFT as AUG_ROUNDS, BattleResult, PlacedUnit, computeSynergies, interestOf, isCarouselRound, isPveStageRound, lossDamage, makeAiTeam, makeMonsterTeam, newUid, pveEnemiesForRound, randomItem, rollShop, roundLabel, sellValue, simulateBattle, stageSub, streakBonus, xpToNext } from '../game/engine';
@@ -13,7 +14,7 @@ import { MONSTERS } from '../game/data';
 import { loadMeta, loadSettings, saveMeta, saveSettings } from '../game/storage';
 import { TOTAL_STAGES, buildStageTeam, stageDef, stageReward } from '../game/stages';
 import { TUT_REWARD, TutEvent, createTutorial, currentStep, onTutEvent, skipTutorial } from '../game/tutorial';
-import { audio } from '../game/audio';
+import { audio, skillSfxName } from '../game/audio';
 import { eventsInWindow, renderUnitsForFrame } from '../game/fx';
 import { applyMatchRewards } from '../game/accounts';
 import { rankLabel, xpForPlacement } from '../game/auth';
@@ -69,10 +70,10 @@ export function SwordBadge({ size = 22 }: { size?: number }) {
   </View>);
 }
 // ===== Lop trinh bay phu: banner / hieu ung giao tranh / o phat sang (chi hien thi, khong chua logic game) =====
-type FxKind = 'dmg' | 'heal' | 'proj' | 'burst' | 'soul' | 'stun';
-interface FxItem { id: number; kind: FxKind; x: number; y: number; x2?: number; y2?: number; text?: string; crit?: boolean; color?: string; radius?: number; born: number; }
-const FX_LIFE: Record<FxKind, number> = { dmg: 750, heal: 750, proj: 380, burst: 500, soul: 900, stun: 750 };
-const BURST_COLORS: Record<string, string> = { aoe: '#fb8500', freeze: '#48cae4', stun: '#9d4edd', heal: '#38b000' };
+type FxKind = 'dmg' | 'heal' | 'proj' | 'burst' | 'soul' | 'stun' | 'tele' | 'sparks';
+interface FxItem { id: number; kind: FxKind; x: number; y: number; x2?: number; y2?: number; text?: string; crit?: boolean; color?: string; radius?: number; born: number; ox?: number; oy?: number; rp?: number; seed?: number; }
+const FX_LIFE: Record<FxKind, number> = { dmg: 750, heal: 750, proj: 380, burst: 500, soul: 900, stun: 750, tele: 260, sparks: 480 };
+const BURST_COLORS: Record<string, string> = { aoe: '#fb8500', freeze: '#48cae4', stun: '#9d4edd', heal: '#38b000', shield: '#7ee0ff' };
 const STAR_SCALE = (s: number) => s === 1 ? 1 : s === 2 ? 1.15 : 1.3;
 function starPoints(cx: number, cy: number, r: number) { return cx + ',' + (cy - r) + ' ' + (cx + r * 0.28) + ',' + (cy - r * 0.28) + ' ' + (cx + r) + ',' + cy + ' ' + (cx + r * 0.28) + ',' + (cy + r * 0.28) + ' ' + cx + ',' + (cy + r) + ' ' + (cx - r * 0.28) + ',' + (cy + r * 0.28) + ' ' + (cx - r) + ',' + cy + ' ' + (cx - r * 0.28) + ',' + (cy - r * 0.28); }
 function ValidCellGlow({ hm, rows, board }: { hm: ReturnType<typeof hexMetrics>; rows: number; board: PlacedUnit[] }) {
@@ -115,29 +116,65 @@ function StarSparkles({ sz }: { sz: number }) {
   </Svg>);
 }
 // ===== Cum thanh tren dau tuong kieu TFT: sao pips + mau CHIA VACH + mana mong + o do mini =====
-function SegmentBar({ frac, color, h }: { frac: number; color: string; h: number }) {
+function SegmentBar({ frac, color, h, ghostFrac }: { frac: number; color: string; h: number; ghostFrac?: number }) {
   const f = Math.max(0, Math.min(1, frac));
-  return (<View style={{ height: h, backgroundColor: 'rgba(4,6,14,0.88)', borderWidth: 1, borderColor: '#04060e', borderRadius: 2, overflow: 'hidden' }}>
+  const gf = ghostFrac !== undefined ? Math.max(0, Math.min(1, ghostFrac)) : undefined;
+  return (<View style={{ height: h, backgroundColor: 'rgba(4,6,14,0.88)', borderWidth: 1, borderColor: '#04060e', borderRadius: 2, overflow: 'hidden', position: 'relative' }}>
+    {gf !== undefined && <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: (gf * 100) + '%', backgroundColor: 'rgba(255,214,214,0.55)' }} />}
     <View style={{ height: '100%', width: (f * 100) + '%', backgroundColor: color }} />
     {Array.from({ length: 9 }).map((_, i) => (<View key={i} style={{ position: 'absolute', top: 0, bottom: 0, left: ((i + 1) * 10) + '%', width: 1, backgroundColor: 'rgba(4,6,14,0.6)' }} />))}
   </View>);
 }
-function UnitBars({ sz, star, hpFrac, manaFrac, items }: { sz: number; star: number; hpFrac: number; manaFrac: number; items: string[] }) {
+function UnitBars({ sz, star, hpFrac, manaFrac, items, ghostFrac }: { sz: number; star: number; hpFrac: number; manaFrac: number; items: string[]; ghostFrac?: number }) {
   const bw = Math.max(30, sz * 0.92);
+  const manaFull = manaFrac >= 1; const hpLow = hpFrac < 0.25; const needPulse = manaFull || hpLow;
+  const [tick, setTick] = useState(0);
+  useEffect(() => { const iv = setInterval(() => setTick(t => needPulse ? t + 1 : t), 260); return () => clearInterval(iv); }, [needPulse]);
+  const pulseOn = tick % 2 === 0;
   return (<View pointerEvents="none" style={{ position: 'absolute', top: -sz * 0.17, left: (sz - bw) / 2, width: bw, zIndex: 60 }}>
     <Text style={{ fontSize: Math.max(8, sz * 0.13), fontWeight: '900', color: '#ffd60a', lineHeight: Math.max(10, sz * 0.15), textShadowColor: 'rgba(0,0,0,0.85)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>{'★'.repeat(star)}</Text>
-    <SegmentBar frac={hpFrac} color="#43c62f" h={Math.max(5, sz * 0.062)} />
-    <View style={{ height: Math.max(2.5, sz * 0.032), marginTop: 1, backgroundColor: 'rgba(4,6,14,0.88)', borderWidth: 1, borderColor: '#04060e', borderRadius: 2, overflow: 'hidden' }}>
-      <View style={{ height: '100%', width: Math.max(0, Math.min(100, manaFrac * 100)) + '%', backgroundColor: '#3aa0ff' }} />
+    <View style={{ position: 'relative' }}>
+      <SegmentBar frac={hpFrac} color="#43c62f" h={Math.max(5, sz * 0.062)} ghostFrac={ghostFrac} />
+      {hpLow && <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, borderRadius: 2, backgroundColor: 'rgba(239,71,111,' + (pulseOn ? 0.4 : 0) + ')' }} />}
+    </View>
+    <View style={{ position: 'relative', height: Math.max(2.5, sz * 0.032), marginTop: 1, backgroundColor: 'rgba(4,6,14,0.88)', borderWidth: 1, borderColor: '#04060e', borderRadius: 2, overflow: 'hidden' }}>
+      <View style={{ height: '100%', width: Math.max(0, Math.min(100, manaFrac * 100)) + '%', backgroundColor: manaFull ? '#8fd0ff' : '#3aa0ff' }} />
+      {manaFull && <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: '#3aa0ff', opacity: pulseOn ? 0.42 : 0.18 }} />}
     </View>
     {!!items.length && (<View style={{ flexDirection: 'row', gap: 2, marginTop: 2 }}>
       {items.slice(0, 3).map((iid, i) => { const it = itemById(iid); return (<View key={i} style={{ width: Math.max(11, sz * 0.15), height: Math.max(11, sz * 0.15), backgroundColor: 'rgba(6,9,20,0.9)', borderWidth: 1, borderColor: '#c9a227', borderRadius: 2, alignItems: 'center', justifyContent: 'center' }}>{it ? <ItemArt color={it.color} size={Math.max(9, sz * 0.12)} /> : null}</View>); })}
     </View>)}
   </View>);
 }
+// GhostBars: boc UnitBars voi "mau bong ma" — khi hpFrac tut, lop ghost giu lai 400ms
+// roi truot xuong theo hpFrac that voi toc do 0.55/giay; hoi mau thi ghost nhay len ngay.
+function GhostBars({ uid, sz, star, hpFrac, manaFrac, items }: { uid: string; sz: number; star: number; hpFrac: number; manaFrac: number; items: string[] }) {
+  const [ghost, setGhost] = useState(hpFrac);
+  const ghostRef = useRef(hpFrac); const hpFracRef = useRef(hpFrac); hpFracRef.current = hpFrac;
+  const dropSinceRef = useRef<number | null>(null);
+  useEffect(() => { ghostRef.current = hpFrac; setGhost(hpFrac); dropSinceRef.current = null; }, [uid]);
+  useEffect(() => {
+    if (hpFrac > ghostRef.current) { ghostRef.current = hpFrac; setGhost(hpFrac); dropSinceRef.current = null; }
+    else if (hpFrac < ghostRef.current && dropSinceRef.current === null) dropSinceRef.current = Date.now();
+  }, [hpFrac]);
+  useEffect(() => { const iv = setInterval(() => {
+    if (dropSinceRef.current !== null && Date.now() - dropSinceRef.current >= 400 && ghostRef.current > hpFracRef.current) {
+      const next = Math.max(hpFracRef.current, ghostRef.current - 0.55 * 0.06);
+      ghostRef.current = next; setGhost(next);
+      if (next <= hpFracRef.current) dropSinceRef.current = null;
+    }
+  }, 60); return () => clearInterval(iv); }, []);
+  return (<UnitBars sz={sz} star={star} hpFrac={hpFrac} manaFrac={manaFrac} items={items} ghostFrac={ghost} />);
+}
+// Vong ellipse phong nhip o chan tuong khi day mana (san sang tung chieu)
+function PulseRing({ sz }: { sz: number }) {
+  const [on, setOn] = useState(false);
+  useEffect(() => { const iv = setInterval(() => setOn(o => !o), 300); return () => clearInterval(iv); }, []);
+  return (<View pointerEvents="none" style={{ position: 'absolute', left: sz * 0.13, top: sz * 0.76, width: sz * 0.74, height: sz * 0.21, borderRadius: 999, borderWidth: 2, borderColor: '#ffd60a', opacity: on ? 0.95 : 0.55, transform: [{ scale: on ? 1.07 : 1 }] }} />);
+}
 // Duoc lua o goc san: lua chay animation bang interval rieng
-function Torch({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
-  const [big, setBig] = useState(false);
+function Torch({ x, y, s = 1, ph = 0 }: { x: number; y: number; s?: number; ph?: number }) {
+  const [big, setBig] = useState(ph % 2 === 1);
   useEffect(() => { const iv = setInterval(() => setBig(b => !b), 170); return () => clearInterval(iv); }, []);
   const w = 26 * s, h = 40 * s;
   return (<Svg width={w} height={h} style={{ position: 'absolute', left: x - w / 2, top: y - h + 6 } as any} pointerEvents="none">
@@ -145,7 +182,7 @@ function Torch({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
     <Polygon points={(w / 2 - 9 * s) + ',' + (h - 15 * s) + ' ' + (w / 2 + 9 * s) + ',' + (h - 15 * s) + ' ' + (w / 2 + 5.5 * s) + ',' + (h - 7 * s) + ' ' + (w / 2 - 5.5 * s) + ',' + (h - 7 * s)} fill="#6b7280" stroke="#9aa5b1" strokeWidth={1} />
     <Ellipse cx={w / 2} cy={h - 21 * s} rx={6.4 * s * (big ? 1.14 : 0.95)} ry={10 * s * (big ? 1.12 : 0.94)} fill="#fb8500" opacity={0.92} />
     <Ellipse cx={w / 2} cy={h - 18 * s} rx={3.4 * s} ry={5.6 * s * (big ? 1.15 : 0.9)} fill="#ffd60a" opacity={0.95} />
-    <Ellipse cx={w / 2} cy={h - 22 * s} rx={15 * s} ry={15 * s} fill="#ffb703" opacity={0.13} />
+    <Ellipse cx={w / 2} cy={h - 22 * s} rx={15 * s} ry={15 * s} fill="#ffb703" opacity={big ? 0.18 : 0.10} />
   </Svg>);
 }
 // Boc phan tu cho hieu ung bay lo lung (linh thu)
@@ -162,23 +199,48 @@ function FxLayer({ items }: { items: FxItem[] }) {
     {items.map(it => {
       const life = FX_LIFE[it.kind]; const age = now - it.born; if (age < 0 || age > life) return null; const p = age / life;
       if (it.kind === 'dmg' || it.kind === 'heal' || it.kind === 'stun') {
-        const fade = p > 0.7 ? 1 - (p - 0.7) / 0.3 : 1; const isHeal = it.kind === 'heal';
+        const isHeal = it.kind === 'heal';
         const fontSize = it.crit ? 26 : isHeal ? 17 : 16;
-        return (<Text key={it.id} style={{ position: 'absolute', left: it.x - 45, top: it.y - 14, width: 90, textAlign: 'center', fontWeight: '900', fontSize, color: it.color ?? (isHeal ? '#57e389' : it.crit ? '#ffd60a' : '#ffffff'), opacity: fade, transform: [{ translateY: -44 * p }, { scale: it.crit ? 1 + 0.3 * (1 - p) : 1 }], textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }}>{it.crit ? 'CRIT ' : ''}{it.text}</Text>);
+        const q = Math.min(1, p / 0.22); const easeOut = 1 - (1 - q) * (1 - q);
+        const popScale = p < 0.22 ? (it.crit ? 1.8 - 0.62 * easeOut : 1.45 - 0.45 * easeOut) : (it.crit ? 1.18 : 1);
+        const fade = p > 0.55 ? 1 - (p - 0.55) / 0.45 : 1;
+        const ty = -44 * p + (p > 0.55 ? (p - 0.55) * 16 : 0);
+        const tx = it.crit && p < 0.4 ? Math.sin(age * 0.09) * 1.3 : 0;
+        return (<Text key={it.id} style={{ position: 'absolute', left: (it.x + (it.ox ?? 0)) - 45, top: (it.y + (it.oy ?? 0)) - 14, width: 90, textAlign: 'center', fontWeight: '900', fontSize, color: it.color ?? (isHeal ? '#57e389' : it.crit ? '#ffd60a' : '#ffffff'), opacity: fade, transform: [{ translateX: tx }, { translateY: ty }, { scale: popScale }], textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: it.crit ? 4 : 3 }}>{it.crit ? 'CRIT ' : ''}{it.text}</Text>);
       }
       if (it.kind === 'proj') {
         const x2 = it.x2 ?? it.x, y2 = it.y2 ?? it.y;
         const dot = (pp: number, size: number, op: number, color = '#ffd60a') => { const q = Math.max(0, Math.min(1, pp)); const px = it.x + (x2 - it.x) * q, py = it.y + (y2 - it.y) * q - Math.sin(Math.PI * q) * 20; return (<View style={{ position: 'absolute', left: px - size / 2, top: py - size / 2, width: size, height: size, borderRadius: size / 2, backgroundColor: color, opacity: op }} />); };
         // Dan lon + quang sang + vet keo dai de thay ro o nhip tran binh thuong (420ms/frame)
-        return (<View key={it.id} style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }}>{dot(p - 0.38, 7, 0.20)}{dot(p - 0.19, 11, 0.38)}{dot(p, 26, 0.30)}{dot(p, 15, 1)}{dot(p, 7, 0.95, '#fff7d6')}</View>);
+        return (<View key={it.id} style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }}>{dot(p - 0.57, 5, 0.12)}{dot(p - 0.48, 6, 0.16)}{dot(p - 0.38, 7, 0.20)}{dot(p - 0.19, 11, 0.38)}{dot(p, 30, 0.30)}{dot(p, 15, 1)}{dot(p, 7, 0.95, '#fff7d6')}</View>);
       }
       if (it.kind === 'burst') {
-        const target = it.radius ? 2.2 : 1.3; const sc = 0.3 + (target - 0.3) * p; const d = 54;
-        return (<View key={it.id} style={{ position: 'absolute', left: it.x - d / 2, top: it.y - d / 2, width: d, height: d, borderRadius: d / 2, borderWidth: 3, borderColor: it.color ?? '#ffd60a', opacity: 0.9 * (1 - p), transform: [{ scale: sc }] }} />);
+        const rp = it.rp; const col = it.color ?? '#ffd60a';
+        const ringD = rp ? rp * 2 : 54; const ringScale = rp ? 0.3 + 0.7 * p : 0.3 + (1.3 - 0.3) * p;
+        const coreD = rp ? Math.min(54, rp * 0.5) : 30; const coreScale = 1 - 0.75 * p;
+        return (<View key={it.id} style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }}>
+          <View style={{ position: 'absolute', left: it.x - ringD / 2, top: it.y - ringD / 2, width: ringD, height: ringD, borderRadius: ringD / 2, borderWidth: 3, borderColor: col, opacity: 0.9 * (1 - p), transform: [{ scale: ringScale }] }} />
+          <View style={{ position: 'absolute', left: it.x - coreD / 2, top: it.y - coreD / 2, width: coreD, height: coreD, borderRadius: coreD / 2, backgroundColor: col, opacity: 1 - p, transform: [{ scale: coreScale }] }} />
+          <View style={{ position: 'absolute', left: it.x - coreD * 0.3, top: it.y - coreD * 0.3, width: coreD * 0.6, height: coreD * 0.6, borderRadius: coreD * 0.3, backgroundColor: '#ffffff', opacity: 1 - p, transform: [{ scale: coreScale }] }} />
+        </View>);
+      }
+      if (it.kind === 'tele') {
+        const k = 0.55 + 0.45 * p; const w = (it.rp ?? 60) * 2 * k; const h = w * 0.42; const col = it.color ?? '#ffd60a';
+        return (<View key={it.id} style={{ position: 'absolute', left: it.x - w / 2, top: it.y - h / 2, width: w, height: h, borderRadius: 999, borderWidth: 2.5, borderColor: col, overflow: 'hidden' }}>
+          <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: col, opacity: 0.05 + 0.17 * p }} />
+        </View>);
+      }
+      if (it.kind === 'sparks') {
+        const seed = it.seed ?? it.id; const easeOutCubic = 1 - Math.pow(1 - p, 3); const col = it.color ?? '#ffd60a';
+        return (<View key={it.id} style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }}>
+          {Array.from({ length: 10 }).map((_, i) => { const ang = seed * 0.913 + i * 0.6283; const ri = 0.55 + ((((seed >> (i % 8)) + i * 7) % 10) / 10) * 0.7; const dist = easeOutCubic * 52 * ri; const szp = 3 + (i % 3); return (<View key={i} style={{ position: 'absolute', left: it.x + Math.cos(ang) * dist - szp / 2, top: it.y + Math.sin(ang) * dist - szp / 2, width: szp, height: szp, borderRadius: szp / 2, backgroundColor: col, opacity: 1 - p }} />); })}
+        </View>);
       }
       return (<View key={it.id} style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }}>
         <View style={{ position: 'absolute', left: it.x - 15, top: it.y - 15 - 26 * p, width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: '#cdb4f6', opacity: 0.75 * (1 - p), transform: [{ scale: 0.6 + p }] }} />
         <View style={{ position: 'absolute', left: it.x - 6, top: it.y - 6 - 48 * p, width: 12, height: 12, borderRadius: 6, backgroundColor: '#e0c3fc', opacity: 1 - p }} />
+        <View style={{ position: 'absolute', left: it.x - 12, top: it.y - 4 - 48 * p * 0.7, width: 8, height: 8, borderRadius: 4, backgroundColor: '#e0c3fc', opacity: 0.8 * (1 - p) }} />
+        <View style={{ position: 'absolute', left: it.x + 4, top: it.y - 4 - 48 * p * 1.25, width: 8, height: 8, borderRadius: 4, backgroundColor: '#cdb4f6', opacity: 0.8 * (1 - p) }} />
       </View>);
     })}
   </View>);
@@ -188,11 +250,11 @@ function ArenaBanner({ title, sub, tone, onDone }: { title: string; sub?: string
   useEffect(() => { const iv = setInterval(() => setElapsed(e => e + 50), 50); return () => clearInterval(iv); }, []);
   useEffect(() => { if (elapsed >= 1700 && !doneRef.current) { doneRef.current = true; onDone(); } }, [elapsed, onDone]);
   const opacity = elapsed < 250 ? elapsed / 250 : elapsed > 1400 ? Math.max(0, 1 - (elapsed - 1400) / 300) : 1;
-  const scale = elapsed < 250 ? 1.25 - 0.25 * (elapsed / 250) : 1;
+  const scale = elapsed < 250 ? 1.38 - 0.38 * (elapsed / 250) : 1;
   const accent = tone === 'lose' ? '#ef476f' : tone === 'win' ? '#57e389' : '#f5d67b';
   return (<View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: '36%', zIndex: 150, alignItems: 'center', opacity }}>
     <View style={{ transform: [{ scale }], backgroundColor: 'rgba(12,16,32,0.9)', borderWidth: 2, borderColor: accent, borderRadius: 12, paddingHorizontal: 34, paddingVertical: 10, alignItems: 'center', minWidth: 260 }}>
-      <Text style={{ fontSize: 30, fontWeight: '900', color: accent, letterSpacing: 3 }}>{title}</Text>
+      <Text style={{ fontSize: 34, fontWeight: '900', color: accent, letterSpacing: 4 }}>{title}</Text>
       {!!sub && <Text style={{ fontSize: 13, fontWeight: '700', color: '#eef1ff', marginTop: 2 }}>{sub}</Text>}
     </View>
   </View>);
@@ -254,6 +316,20 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   const [banner, setBanner] = useState<{ title: string; sub?: string; tone: 'win' | 'lose' | 'info' } | null>(null);
   const [fxItems, setFxItems] = useState<FxItem[]>([]);
   const [redFlash, setRedFlash] = useState(false);
+  const [winFlash, setWinFlash] = useState(false);
+  // Cau loot bay ve dich (StageFx): OrbFlight that chi mang kind 'gold'|'item' nen
+  // loai 'gem' duoc ve bang cau 'item' va so tien/Ngoc hien khi cham dich luu rieng o day.
+  const [orbs, setOrbs] = useState<OrbFlight[]>([]);
+  const [combineFx, setCombineFx] = useState<{ uid: string; born: number } | null>(null);
+  const [lvlFxBorn, setLvlFxBorn] = useState(0);
+  const orbIdRef = useRef(1);
+  const orbArrivedRef = useRef(new Set<number>());
+  const orbMetaRef = useRef(new Map<number, { amount?: number; gem?: boolean }>());
+  function spawnOrbs(x: number, y: number, specs: { kind: 'gold' | 'gem' | 'item'; amount?: number }[]) {
+    const now = Date.now();
+    const news: OrbFlight[] = specs.map((s, i) => { const id = orbIdRef.current++; orbMetaRef.current.set(id, { amount: s.amount, gem: s.kind === 'gem' }); return { id, x, y, kind: s.kind === 'gold' ? 'gold' : 'item', born: now + i * 70 }; });
+    setOrbs(prev => [...prev.filter(o => now - o.born < 1600), ...news]);
+  }
   const fxIdRef = useRef(1);
   const prevFrameRef = useRef<{ idx: number; t: number }>({ idx: -1, t: -1 });
   const shakeTimerRef = useRef<any>(null);
@@ -283,7 +359,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   const [enemyLabel, setEnemyLabel] = useState('');
   function addUnit(defId: string, toBoard = false) {
     const u: PlacedUnit = { uid: newUid(), defId, star: 1, items: [], x: 0, y: 0 };
-    let nb = [...bench], nd = [...board]; let combined = false;
+    let nb = [...bench], nd = [...board]; let combined = false; let mergedUid: string | null = null;
     if (toBoard && nd.length < level) { u.x = nd.length % 7; u.y = champById(defId).range <= 1 ? 2 : 3; nd.push(u); } else nb.push(u);
     for (let star = 1; star <= 2; star++) {
       const all = [...nd, ...nb]; const same = all.filter(x => x.defId===defId && x.star===star);
@@ -292,11 +368,13 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
         const removeIds = new Set(same.slice(0,3).map(x => x.uid)); const items = same.slice(0,3).flatMap(x => x.items).slice(0,3);
         nd = nd.filter(x => !removeIds.has(x.uid)); nb = nb.filter(x => !removeIds.has(x.uid));
         const merged: PlacedUnit = { uid: newUid(), defId, star: star+1, items, x: same[0].x, y: same[0].y };
+        mergedUid = merged.uid;
         if (nd.length < level) nd.push(merged); else nb.push(merged);
         say(`${champById(defId).name} đã lên ${star+1} sao!`);
       }
     }
     setBoard(nd); setBench(nb.slice(0, 9));
+    if (mergedUid) setCombineFx({ uid: mergedUid, born: Date.now() });
     if (combined) { audio.playSfx('starup'); emitRef.current('combine'); }
   }
   function buy(i: number) {
@@ -307,7 +385,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
     setShop(prev => { const n=[...prev]; n[i]=rollShop(level)[0]; return n; });
   }
   function buyXp() { if (phase!=='plan' || gold < 4 || level >= 9) return; setGold(g => g-4); gainXp(4); say('Mua 4 XP.'); }
-  function gainXp(amount: number) { let nx = xp + amount, nl = level, leveled = false; while (nl < 9 && nx >= xpToNext(nl)) { nx -= xpToNext(nl); nl++; leveled = true; say('Lên cấp '+nl+'!'); } setXp(nx); setLevel(nl); if (leveled) { audio.playSfx('levelup'); emitRef.current('levelup'); } }
+  function gainXp(amount: number) { let nx = xp + amount, nl = level, leveled = false; while (nl < 9 && nx >= xpToNext(nl)) { nx -= xpToNext(nl); nl++; leveled = true; say('Lên cấp '+nl+'!'); } setXp(nx); setLevel(nl); if (leveled) { audio.playSfx('levelup'); setLvlFxBorn(Date.now()); emitRef.current('levelup'); } }
   function reroll() { if (phase!=='plan' || gold < 2 || locked) return; setGold(g => g-2); setShop(rollShop(level)); audio.playSfx('reroll'); emitTut('reroll'); }
   function sellUnitByUid(uid: string) { const u = allUnits.find(x => x.uid===uid); if (!u) return; setGold(g => g + sellValue(u.defId, u.star)); setBoard(b => b.filter(x => x.uid!==uid)); setBench(b => b.filter(x => x.uid!==uid)); if (selUid===uid) setSelUid(null); audio.playSfx('sell'); say('Đã bán '+champById(u.defId).name); }
   function sellSelected() { if (selUid) sellUnitByUid(selUid); }
@@ -420,7 +498,8 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
     const e = enemyForRound(); setEnemyLabel(e.label); resolvedRef.current = false;
     const imap: Record<string, string[]> = {}; [...board, ...e.units].forEach(u => { imap[u.uid] = u.items; }); setItemsByUid(imap);
     const pveFight = mode !== 'arena' || isPveStageRound(round);
-    setBanner({ title: 'VÒNG ' + (isArena ? roundLabel(round) : mode === 'campaign' ? stageDef(stageId).name : mode === 'waves' ? 'Sóng ' + wave : 'Luyện tập'), sub: pveFight ? 'Đấu với quái — ' + e.label : 'Đấu với ' + e.label.replace('Đội của ', ''), tone: 'info' });
+    if (isArena) setBanner({ title: 'GIAO TRANH', sub: 'Vòng ' + roundLabel(round) + ' — ' + (pveFight ? 'Đấu với quái: ' + e.label : 'Đấu với ' + e.label.replace('Đội của ', '')), tone: 'info' });
+    else setBanner({ title: 'VÒNG ' + (mode === 'campaign' ? stageDef(stageId).name : mode === 'waves' ? 'Sóng ' + wave : 'Luyện tập'), sub: pveFight ? 'Đấu với quái — ' + e.label : 'Đấu với ' + e.label.replace('Đội của ', ''), tone: 'info' });
     setFxItems([]);
     const res = simulateBattle(board, e.units, augments, round*17 + wave*31 + stageId);
     setResult(res); setFrameIdx(0); setPhase('battle'); setRightTab('dmg'); audio.playSfx('start'); emitTut('battleStart');
@@ -429,8 +508,9 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   useEffect(() => { if (!isArena || phase!=='plan' || paused || carousel || augChoice || finished) return; setPlanLeft(planMax); const iv = setInterval(() => setPlanLeft(s => { if (s <= 1) { clearInterval(iv); return 0; } if (s <= 6) audio.playSfx('click'); return s - 1; }), 1000); return () => clearInterval(iv); }, [isArena, phase, round, paused, !!carousel, !!augChoice, !!finished]);
   useEffect(() => { if (isArena && phase==='plan' && planLeft === 0 && board.length) startBattle(); }, [planLeft]);
   useEffect(() => { if (phase!=='battle' || !result || paused) return; const iv = setInterval(() => setFrameIdx(f => Math.min(f+1, result.frames.length-1)), 420/speed); return () => clearInterval(iv); }, [phase, result, speed, paused]);
-  useEffect(() => { if (phase!=='battle' || !result) return; const fr = result.frames[Math.min(frameIdx, result.frames.length-1)]; if (!fr) return; const evs = result.events.filter(e => Math.abs(e.t - fr.t) < 0.3); if (evs.some(e => e.text.includes('kỹ năng'))) audio.playSfx('cast'); else if (evs.some(e => e.text.includes(' đánh '))) audio.playSfx('hit'); }, [frameIdx, phase, result]);
+  useEffect(() => { if (phase!=='battle' || !result) return; const fr = result.frames[Math.min(frameIdx, result.frames.length-1)]; if (!fr) return; const evs = result.events.filter(e => Math.abs(e.t - fr.t) < 0.3); const castEv = evs.find(e => e.type === 'cast'); if (castEv) audio.playSfx(skillSfxName(castEv.skillKind)); else if (evs.some(e => e.type === 'attack' || e.type === 'hit')) audio.playSfx('hit'); }, [frameIdx, phase, result]);
   useEffect(() => { if (!redFlash) return; const tm = setTimeout(() => setRedFlash(false), 500); return () => clearTimeout(tm); }, [redFlash]);
+  useEffect(() => { if (!winFlash) return; const tm = setTimeout(() => setWinFlash(false), 500); return () => clearTimeout(tm); }, [winFlash]);
   useEffect(() => () => { if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current); }, []);
   // Spawn hieu ung giao tranh theo cua so event cua frame vua chuyen (chi hien thi)
   useEffect(() => {
@@ -449,22 +529,35 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
       return null;
     };
     const spawned: FxItem[] = []; const now = Date.now();
+    const pveFight = mode !== 'arena' || isPveStageRound(round);
+    let enemyDiedPve = false;
     for (const e of evs) {
       const tgt = posOf(e.tx, e.ty, e.targetUid ?? e.uid); const src = posOf(e.ax, e.ay, e.attackerUid);
       if ((e.type === 'attack' || e.type === 'hit' || e.type === 'poison') && e.amount) {
-        if (tgt) spawned.push({ id: fxIdRef.current++, kind: 'dmg', x: tgt.x, y: tgt.y - m.size * 0.4, text: '-' + e.amount, crit: !!e.crit, color: e.type === 'poison' ? '#c77dff' : e.kind === 'magic' ? '#e0aaff' : undefined, born: now });
+        if (tgt) { const id = fxIdRef.current++; spawned.push({ id, kind: 'dmg', x: tgt.x, y: tgt.y - m.size * 0.4, text: '-' + e.amount, crit: !!e.crit, color: e.type === 'poison' ? '#c77dff' : e.kind === 'magic' ? '#e0aaff' : undefined, born: now, ox: ((id * 37) % 5 - 2) * 10, oy: ((id * 29) % 3) * 7 }); }
         if (e.type === 'attack' && e.ranged && src && tgt) spawned.push({ id: fxIdRef.current++, kind: 'proj', x: src.x, y: src.y - m.size * 0.3, x2: tgt.x, y2: tgt.y - m.size * 0.3, born: now });
       } else if (e.type === 'heal' && e.amount) {
-        if (tgt) spawned.push({ id: fxIdRef.current++, kind: 'heal', x: tgt.x, y: tgt.y - m.size * 0.4, text: '+' + e.amount, born: now });
+        if (tgt) { const id = fxIdRef.current++; spawned.push({ id, kind: 'heal', x: tgt.x, y: tgt.y - m.size * 0.4, text: '+' + e.amount, born: now, ox: ((id * 37) % 5 - 2) * 10, oy: ((id * 29) % 3) * 7 }); }
       } else if (e.type === 'cast') {
-        if (tgt) spawned.push({ id: fxIdRef.current++, kind: 'burst', x: tgt.x, y: tgt.y, color: BURST_COLORS[e.skillKind ?? ''] ?? '#ffd60a', radius: e.radius, born: now });
+        if (tgt) { const col = BURST_COLORS[e.skillKind ?? ''] ?? '#ffd60a';
+          if (e.radius) { const rpVal = e.radius * m.size * 1.05;
+            spawned.push({ id: fxIdRef.current++, kind: 'tele', x: tgt.x, y: tgt.y, color: col, rp: rpVal, born: now });
+            spawned.push({ id: fxIdRef.current++, kind: 'burst', x: tgt.x, y: tgt.y, color: col, rp: rpVal, born: now + 230 });
+            const sid = fxIdRef.current++; spawned.push({ id: sid, kind: 'sparks', x: tgt.x, y: tgt.y, color: col, born: now + 230, seed: sid });
+          } else {
+            spawned.push({ id: fxIdRef.current++, kind: 'burst', x: tgt.x, y: tgt.y, color: col, born: now });
+            const sid = fxIdRef.current++; spawned.push({ id: sid, kind: 'sparks', x: tgt.x, y: tgt.y, color: col, born: now, seed: sid });
+          } }
       } else if (e.type === 'death') {
         if (tgt) spawned.push({ id: fxIdRef.current++, kind: 'soul', x: tgt.x, y: tgt.y, born: now });
+        const dead = cur.units.find(v => v.uid === (e.targetUid ?? e.uid));
+        if (dead && dead.team === 1 && pveFight) { enemyDiedPve = true; if (tgt) spawnOrbs(tgt.x, tgt.y, [{ kind: 'gold' }]); }
       } else if (e.type === 'dodge') {
-        if (tgt) spawned.push({ id: fxIdRef.current++, kind: 'dmg', x: tgt.x, y: tgt.y - m.size * 0.4, text: 'NÉ', color: '#adb5bd', born: now });
+        if (tgt) { const id = fxIdRef.current++; spawned.push({ id, kind: 'dmg', x: tgt.x, y: tgt.y - m.size * 0.4, text: 'NÉ', color: '#adb5bd', born: now, ox: ((id * 37) % 5 - 2) * 10, oy: ((id * 29) % 3) * 7 }); }
       }
     }
-    if (spawned.length) setFxItems(prevItems => [...prevItems.filter(i => now - i.born < 1000), ...spawned].slice(-40));
+    if (spawned.length) setFxItems(prevItems => [...prevItems.filter(i => now - i.born < 1000), ...spawned].slice(-64));
+    if (enemyDiedPve) audio.playSfx('sparkle');
     if (evs.some(e => e.crit && (e.amount ?? 0) >= 120)) { setShake(true); if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current); shakeTimerRef.current = setTimeout(() => setShake(false), 320); }
   }, [frameIdx, phase, result, arenaSize]);
   useEffect(() => { if (phase==='battle' && result && frameIdx >= result.frames.length-1 && !resolvedRef.current) { resolvedRef.current = true; const tm = setTimeout(() => resolveBattle(), 650); return () => clearTimeout(tm); } }, [frameIdx, phase, result]);
@@ -475,14 +568,14 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
     const dmgArr = computeDmg(result); const dealt = dmgArr.filter(d => d.team===0).reduce((a,d) => a+d.dmg, 0); const taken = dmgArr.filter(d => d.team===1).reduce((a,d) => a+d.dmg, 0); setSummary({ win, dealt, taken });
     if (mode==='tutorial') { emitTut('battleEnd'); say(win ? 'Thắng trận luyện tập! Tướng của bạn tự đánh và tung kỹ năng khi đầy mana đó.' : 'Thua trận luyện tập cũng không sao — hướng dẫn vẫn tiếp tục, cứ làm theo mascot nhé.'); setGold(g => g + 10); setPhase('plan'); setResult(null); return; }
     if (mode==='campaign') { const sd = stageDef(stageId); const reward = stageReward(stageId); setBanner({ title: win ? 'THẮNG' : 'THUA', sub: win ? 'Gây ' + dealt + ' sát thương' : 'Nhận ' + taken + ' sát thương', tone: win ? 'win' : 'lose' });
-      if (win) { const frac = result.survivors / Math.max(1, board.length); const stars = frac>=0.7?3:frac>=0.35?2:1;
+      if (win) { setWinFlash(true); spawnOrbs(arenaSize.w / 2, arenaSize.h * 0.3, [{ kind: 'gem' }, { kind: 'gem', amount: reward }]); const frac = result.survivors / Math.max(1, board.length); const stars = frac>=0.7?3:frac>=0.35?2:1;
         loadMeta().then(async m => { m.campaignStars[String(stageId)] = Math.max(m.campaignStars[String(stageId)] ?? 0, stars); m.unlockedStage = Math.max(m.unlockedStage, Math.min(TOTAL_STAGES, stageId+1)); m.gems += reward; if (stageId===TOTAL_STAGES) m.wins += 1; await saveMeta(m); });
         setFinished(`Thắng ${sd.name}! Nhận ${stars} sao và ${reward} Ngọc.`);
         recordRewards({ mode: 'campaign', modeLabel: 'Chiến dịch PvE', resultText: `Thắng ${sd.name} (${stars} sao)`, xp: 30 }); }
       else { setFinished('Thua rồi... Hãy nâng cấp đội hình, ghép sao và thử lại nhé.');
         recordRewards({ mode: 'campaign', modeLabel: 'Chiến dịch PvE', resultText: `Thua tại ${sd.name}`, xp: 8 }); }
       return; }
-    if (mode==='waves') { setBanner({ title: win ? 'THẮNG' : 'THUA', sub: win ? 'Gây ' + dealt + ' sát thương' : 'Dừng ở sóng ' + wave, tone: win ? 'win' : 'lose' }); if (win) { say('Qua sóng '+wave+'! Sóng tiếp theo mạnh hơn.'); setWave(w => w+1); setGold(g => g + 6 + Math.floor(wave/3)); if (wave%3===0) setInventory(inv => [...inv, randomItem()]); setPhase('plan'); setResult(null); }
+    if (mode==='waves') { setBanner({ title: win ? 'THẮNG' : 'THUA', sub: win ? 'Gây ' + dealt + ' sát thương' : 'Dừng ở sóng ' + wave, tone: win ? 'win' : 'lose' }); if (win) { setWinFlash(true); spawnOrbs(arenaSize.w / 2, arenaSize.h * 0.3, [{ kind: 'gold' }, { kind: 'gold', amount: 6 + Math.floor(wave / 3) }]); say('Qua sóng '+wave+'! Sóng tiếp theo mạnh hơn.'); setWave(w => w+1); setGold(g => g + 6 + Math.floor(wave/3)); if (wave%3===0) setInventory(inv => [...inv, randomItem()]); setPhase('plan'); setResult(null); }
       else { addGems(wave*5); setFinished(`Dừng lại ở sóng ${wave}. Kỷ lục được lưu, nhận ${wave*5} Ngọc.`);
         recordRewards({ mode: 'waves', modeLabel: 'Sóng quái vô hạn', resultText: `Dừng lại ở sóng ${wave}`, xp: Math.min(60, 6 + wave * 2) }); } return; }
     // Arena theo cau truc stage TFT
@@ -491,6 +584,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
     if (win) { setStreak(s => s>=0 ? s+1 : 1); } else { setStreak(s => s<=0 ? s-1 : -1); newHp = Math.max(0, hp - dmgTaken); setHp(newHp); say(`Thua round ${roundLabel(round)}, mất ${dmgTaken} máu (theo stage + quân địch còn sống).`); setLegendHurt(true); setRedFlash(true); setTimeout(() => setLegendHurt(false), 1300); if (dmgTaken >= 8) { setShake(true); setTimeout(() => setShake(false), 550); } }
     if (win) say('Thắng round '+roundLabel(round)+'!');
     setBanner({ title: win ? 'THẮNG' : 'THUA', sub: win ? 'Gây ' + dealt + ' sát thương' : '-' + dmgTaken + ' máu', tone: win ? 'win' : 'lose' });
+    if (win) setWinFlash(true);
     const aliveBefore = newPlayers.filter(p => p.alive).length;
     for (let i=1;i<newPlayers.length;i++) { if (!newPlayers[i].alive) continue; const loss = Math.floor(Math.random()*9) + Math.floor(round/3); newPlayers[i].hp = Math.max(0, newPlayers[i].hp - (win && i===oppIdx ? lossDamage(round, result.survivors) : loss)); newPlayers[i].alive = newPlayers[i].hp>0; newPlayers[i].lvl = Math.min(9, 1 + Math.floor(round/3)); if (!newPlayers[i].alive && newPlayers[i].rank===0) newPlayers[i].rank = aliveBefore; }
     newPlayers[0] = { ...newPlayers[0], hp: newHp, alive: newHp>0, lvl: level, rank: newHp>0 ? 0 : aliveBefore };
@@ -498,7 +592,8 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
     const aliveCount = newPlayers.filter(p => p.alive).length;
     const reward = 5 + interestOf(gold) + streakBonus(streak) + (win?1:0) + (augments.includes('vang2') && win ? 4 : 0);
     setGold(g => g + reward); gainXp(2);
-    if (isPveStageRound(round) && win) { setInventory(inv => [...inv, randomItem()]); setGold(g => g+3); say('Round PvE rơi trang bị và vàng!'); }
+    if (win) spawnOrbs(arenaSize.w * 0.5, arenaSize.h * 0.28, [{ kind: 'gold' }, { kind: 'gold' }, { kind: 'gold', amount: reward }]);
+    if (isPveStageRound(round) && win) { setInventory(inv => [...inv, randomItem()]); setGold(g => g+3); spawnOrbs(arenaSize.w / 2, arenaSize.h * 0.3, [{ kind: 'item' }, { kind: 'gold', amount: 3 }, { kind: 'gold' }]); say('Round PvE rơi trang bị và vàng!'); }
     if (augments.includes('hoi1')) setHp(h => Math.min(100, (win? h : newHp) + 2));
     const nextRound = round + 1; setRound(nextRound);
     if (!locked) setShop(rollShop(level));
@@ -524,6 +619,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   // Bien the MOBILE: khung san khau hep (< 900px) dung bo cuc dien thoai ngang
   // (nut tron lon 2 goc duoi, cot noi gon); khung rong dung bo cuc PC. Chung logic.
   const compact = stageSize.w > 0 && stageSize.w < 900;
+  const orbTarget = { x: compact ? arenaSize.w - 76 : arenaSize.w * 0.58, y: arenaSize.h - 18 };
   // COMPACT + chuan bi: shop noi o HANG TREN san (kieu TFT Mobile mua 18 — user chot).
   // Luoi hex duoc day xuong duoi dai shop (tang oy, thu hep chieu cao tinh size) nen
   // khong o nao bi the shop che; moi noi dung hm (render, lop o cham, tha keo doc qua
@@ -554,6 +650,8 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   );
   return (
     <View style={st.root}>
+      <SceneArtImage id="lobby" width={winW} height={winH}/>
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(12,9,26,0.52)' }]}/>
       <View style={[st.frame, { width: frameW, height: frameH }]}>
         {/* ===== SAN KHAU TOAN MAN: tranh arena phu kin khung 16:9, MOI UI la lop noi tren san ===== */}
         <View style={st.stageWrap} onLayout={e => setStageSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
@@ -622,6 +720,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
           {/* CENTER: arena (khong khung/vien rieng — tranh nen nam o stageWrap phia sau) */}
           <View ref={arenaViewRef} style={[st.arena, shake && { transform: [{ translateX: 5 }] }]} onLayout={e => { setArenaSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height }); measureArenaPage(); }}>
             <View pointerEvents="none" style={StyleSheet.absoluteFill}><AmbientParticles width={arenaSize.w} height={arenaSize.h}/></View>
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}><EnvOverlay width={arenaSize.w} height={arenaSize.h}/></View>
                         <Svg style={StyleSheet.absoluteFill} width={arenaSize.w} height={arenaSize.h}>
               {hexVis > 0.01 && Array.from({length: rows}).map((_, y) => Array.from({length: 7}).map((_, x) => { const { cx, cy } = hexCenter(hm, x, y); const occ = phase!=='battle' && board.some(u => u.x===x && u.y===y); const enemyHalf = phase==='battle' && y >= 4; return (
                 <Polygon key={x+'-'+y} points={hexPoints(cx, cy, hm.size)} fill={occ ? `rgba(255,214,110,${(0.20 * hexVis).toFixed(3)})` : enemyHalf ? `rgba(255,130,118,${(0.055 * hexVis).toFixed(3)})` : `rgba(120,255,205,${(0.05 * hexVis).toFixed(3)})`} stroke={enemyHalf ? `rgba(255,150,140,${(0.6 * hexVis).toFixed(3)})` : `rgba(64,224,190,${(0.6 * hexVis).toFixed(3)})`} strokeWidth={1.3}/>
@@ -629,8 +728,8 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
               {phase!=='battle' && selUid != null && (<ValidCellGlow hm={hm} rows={rows} board={board}/>)}
             </Svg>
             {(() => { const bx = hm.ox - hm.size * 0.8, by = hm.oy - hm.size * 0.6, bw = 7.5 * hm.hw + hm.size * 1.6, bh = (2 * hm.size + (rows - 1) * 1.5 * hm.size) + hm.size * 1.15; return (<React.Fragment>
-              <Torch x={bx + 8} y={by + 12} s={0.95} /><Torch x={bx + bw - 8} y={by + 12} s={0.95} />
-              <Torch x={bx + 8} y={by + bh + 14} s={0.8} /><Torch x={bx + bw - 8} y={by + bh + 14} s={0.8} />
+              <Torch x={bx + 8} y={by + 12} s={0.95} ph={0} /><Torch x={bx + bw - 8} y={by + 12} s={0.95} ph={1} />
+              <Torch x={bx + 8} y={by + bh + 14} s={0.8} ph={2} /><Torch x={bx + bw - 8} y={by + bh + 14} s={0.8} ph={3} />
             </React.Fragment>); })()}
             {phase!=='battle' && (
               <View pointerEvents="box-none" style={{ position:'absolute', left:0, top:0, right:0, bottom:0, zIndex: 40 }}>
@@ -646,7 +745,8 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
                 <View style={[{ width: sz, height: sz, alignItems:'center' }, u.star>=2 && { shadowColor: u.star>=3 ? '#ffb703' : '#d7dee8', shadowOpacity: 0.9, shadowRadius: u.star>=3 ? 12 : 7, shadowOffset: { width: 0, height: 0 }, elevation: 6 }]}>
                   <GroundShadow sz={sz}/>
                   <UnitPedestal sz={sz} team={0} star={u.star}/>
-                  <SpriteUnit spec={champById(u.defId)} size={sz} star={u.star} state='idle'/>
+                  <SpriteUnit spec={champById(u.defId)} size={sz} star={u.star} state={combineFx && combineFx.uid === u.uid && Date.now() - combineFx.born < 700 ? 'victory' : 'idle'}/>
+                  {combineFx && combineFx.uid === u.uid && Date.now() - combineFx.born < 700 && <StarBurstFx x={sz / 2} y={sz * 0.45} born={combineFx.born} size={sz}/>}
                   {u.star>=3 && <StarSparkles sz={sz}/>}
                 </View>); return (
               <View key={u.uid} {...getUnitPan(u.uid).panHandlers} style={{ position:'absolute', left: cx - sz/2, top: cy + hm.size*0.28 - sz*0.88, width: sz, height: sz, alignItems:'center', zIndex: isDrag ? 300 : 50 + rowDepth(u.y, 4).zIndex, transform: drag && drag.uid===u.uid ? [{ translateX: drag.dx }, { translateY: drag.dy }, { scale: 1.06 }] : undefined }}>
@@ -663,10 +763,13 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
                   {isTarget && <View style={{ position:'absolute', left: sz*0.16, top: sz*0.08, width: sz*0.68, height: sz*0.8, backgroundColor:'#ffffff', opacity:0.22, borderRadius: sz*0.34 }} pointerEvents="none"/>}
                   {u.star>=3 && <StarSparkles sz={sz}/>}
                   {u.stun > 0 && (<Svg width={sz*0.52} height={16} viewBox="0 0 62 16" style={{ position:'absolute', left: sz*0.24, top: -4, transform: [{ rotate: stunAngle + 'deg' }] } as any} pointerEvents="none"><Polygon points={starPoints(9, 8, 6)} fill="#ffd60a"/><Polygon points={starPoints(31, 8, 6)} fill="#ffd60a"/><Polygon points={starPoints(53, 8, 6)} fill="#ffd60a"/></Svg>)}
+                  {u.stun > 0 && <View pointerEvents="none" style={{ position: 'absolute', left: sz * 0.13, top: sz * 0.76, width: sz * 0.74, height: sz * 0.21, borderRadius: 999, borderWidth: 2, borderColor: '#ffe66d', opacity: 0.8 }} />}
+                  {u.alive && u.maxMana > 0 && u.mana >= u.maxMana && <PulseRing sz={sz} />}
                 </View>
-                <UnitBars sz={sz} star={u.star} hpFrac={u.hp / u.maxHp} manaFrac={u.maxMana ? u.mana / u.maxMana : 0} items={itemsByUid[u.uid] ?? []} />
+                <GhostBars uid={u.uid} sz={sz} star={u.star} hpFrac={u.hp / u.maxHp} manaFrac={u.maxMana ? u.mana / u.maxMana : 0} items={itemsByUid[u.uid] ?? []} />
               </View> ); })}
 <View style={[st.legend, { left: Math.max(4, hm.ox - 78) }]} pointerEvents="none">
+              {lvlFxBorn > 0 && Date.now() - lvlFxBorn < 980 && <LevelPillarFx x={34} y={108} born={lvlFxBorn} height={132}/>}
               <FloatWrap amp={4}>
                 <SpriteUnit spec={champById('toto')} size={56} state={legendHurt ? 'hurt' : 'idle'}/>
               </FloatWrap>
@@ -681,8 +784,10 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             {phase==='battle' && (<View style={st.battleCtrls}><Pressable style={st.smallBtn} onPress={() => result && setFrameIdx(result.frames.length-1)}><Text style={st.smallTxt}>Bỏ qua tới kết quả</Text></Pressable></View>)}
             {phase==='battle' && result && (<View style={st.logFloat}>{result.events.filter(e => Math.abs(e.t - (frame?.t ?? 0)) < 1.4).slice(-2).map((e,i) => <Text key={i} style={st.logTxt}>{e.text}{e.amount?(' ('+e.amount+')'):''}</Text>)}</View>)}
             <FxLayer items={fxItems}/>
+            <OrbFlightLayer orbs={orbs} target={orbTarget} onArrive={(orb) => { if (orbArrivedRef.current.has(orb.id)) return; orbArrivedRef.current.add(orb.id); const meta = orbMetaRef.current.get(orb.id); if (meta && meta.amount !== undefined) { const fid = fxIdRef.current++; setFxItems(prev => [...prev, { id: fid, kind: 'dmg' as const, x: orbTarget.x, y: orbTarget.y - 30, text: '+' + meta.amount + (meta.gem ? ' Ngọc' : ''), color: meta.gem ? '#f3c6ff' : '#ffd60a', born: Date.now() }].slice(-64)); } }}/>
             {banner && <ArenaBanner title={banner.title} sub={banner.sub} tone={banner.tone} onDone={() => setBanner(null)}/>}
             {redFlash && <View pointerEvents="none" style={{ position:'absolute', left:0, top:0, right:0, bottom:0, borderWidth:6, borderColor:'#ef476f', backgroundColor:'rgba(239,71,111,0.12)', zIndex:180 }}/>}
+            {winFlash && <View pointerEvents="none" style={{ position:'absolute', left:0, top:0, right:0, bottom:0, borderWidth:6, borderColor:'#ffd60a', backgroundColor:'rgba(255,214,10,0.10)', zIndex:180 }}/>}
             {/* ===== VUNG BAN KHI KEO: mac dinh AN, chi hien trong luc dang keo 1 tuong tren san ===== */}
             {drag && (() => { const du = board.find(u => u.uid===drag.uid); if (!du) return null; return (<React.Fragment>
               {(['left','right'] as const).map(side => (
@@ -752,8 +857,9 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             {u ? (<React.Fragment>
               <View style={{ position:'absolute', bottom: 5, width: 30, height: 8, borderRadius: 999, backgroundColor: 'rgba(8,26,14,0.32)' }} />
               <View style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'flex-end', zIndex: 2 }}>
-                <SpriteUnit key={u.uid} spec={champById(u.defId)} size={44} star={u.star} state='idle'/>
+                <SpriteUnit key={u.uid} spec={champById(u.defId)} size={44} star={u.star} state={combineFx && combineFx.uid === u.uid && Date.now() - combineFx.born < 700 ? 'victory' : 'idle'}/>
               </View>
+              {combineFx && combineFx.uid === u.uid && Date.now() - combineFx.born < 700 && <StarBurstFx x={27} y={25} born={combineFx.born} size={54}/>}
             </React.Fragment>) : <Text style={st.cellDot}>·</Text>}
           </Pressable> ); })}
           <View style={st.logMini}>{log.slice(0,2).map((l,i) => <Text key={i} style={st.logTxt} numberOfLines={1}>{l}</Text>)}</View>

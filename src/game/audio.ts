@@ -23,6 +23,7 @@ export interface BgmTrack { bpm: number; notes: BgmNote[]; bass?: BgmNote[] }
 export const SFX_NAMES = [
   'click', 'coin', 'sell', 'place', 'reroll', 'starup', 'levelup',
   'equip', 'start', 'hit', 'cast', 'win', 'lose', 'champion', 'error',
+  'burst', 'freeze', 'heal', 'stun', 'sparkle',
 ] as const;
 export type SfxName = (typeof SFX_NAMES)[number];
 export type BgmName = 'home' | 'battle';
@@ -62,7 +63,32 @@ export const SFX: Record<SfxName, SfxDef> = {
   champion: { notes: [N(1046.5, 0, 0.07, 'sine', 0.22), N(1318.51, 0.07, 0.07, 'sine', 0.22), N(1567.98, 0.14, 0.16, 'sine', 0.24)] },
   // Error: thao tac sai - 2 tieng "e e" thap
   error: { notes: [N(185, 0, 0.11, 'sawtooth', 0.22), N(164.81, 0.13, 0.16, 'sawtooth', 0.22)] },
+  // Burst: no manh nhat (dung cho skillKind aoe/burst) - bum tram sau + vet rac cao o dau
+  burst: { notes: [N(72, 0, 0.3, 'sawtooth', 0.32), N(55, 0.02, 0.36, 'square', 0.28), N(196, 0, 0.12, 'sawtooth', 0.2), N(392, 0.03, 0.08, 'square', 0.14)] },
+  // Freeze: lanh, cao, long lanh kieu tinh the bang - chuoi sine cao roi tan dan
+  freeze: { notes: [N(1567.98, 0, 0.09, 'sine', 0.22), N(1318.51, 0.07, 0.09, 'sine', 0.22), N(1760, 0.14, 0.1, 'sine', 0.2), N(2093, 0.21, 0.18, 'sine', 0.18), N(1046.5, 0.21, 0.14, 'triangle', 0.12)] },
+  // Heal (SFX): hoi phuc am ap - hop am triangle di len nhe nhang (khac han 'heal' event cua engine)
+  heal: { notes: [N(523.25, 0, 0.12, 'triangle', 0.22), N(659.25, 0.09, 0.12, 'triangle', 0.22), N(783.99, 0.18, 0.2, 'sine', 0.22)] },
+  // Stun (SFX): choang - "boing" tram lung khuyn + rung ngan
+  stun: { notes: [N(146.83, 0, 0.12, 'sawtooth', 0.26), N(130.81, 0.1, 0.12, 'square', 0.22), N(196, 0.2, 0.09, 'square', 0.18), N(185, 0.29, 0.14, 'square', 0.16)] },
+  // Sparkle: cau loot roi/trung thuong - arpeggio di len 4 not lap lanh (dai hon 'coin' 2 not)
+  sparkle: { notes: [N(987.77, 0, 0.07, 'sine', 0.22), N(1318.51, 0.06, 0.07, 'sine', 0.22), N(1567.98, 0.12, 0.08, 'sine', 0.23), N(2093, 0.18, 0.2, 'sine', 0.24)] },
 };
+
+// Anh xa loai ky nang (SkillKind trong data.ts / skillKind tren BattleEvent) -> SFX phu hop.
+// Chi tra ve ten DA CO trong SFX_NAMES; khong ro/loai con lai -> 'cast' mac dinh nhu cu.
+// GameScreen pha sau: audio.playSfx(skillSfxName(e.skillKind)) khi co event 'cast',
+// va audio.playSfx('sparkle') khi cau loot (OrbFlight) cham dich / ha dich PvE roi cau.
+export function skillSfxName(skillKind?: string): SfxName {
+  const k = (skillKind ?? '').trim().toLowerCase();
+  if (!k) return 'cast';
+  if (k === 'freeze' || k.includes('freeze') || k.includes('frost') || k.includes('ice')) return 'freeze';
+  if (k === 'aoe' || k === 'burst' || k.includes('aoe') || k.includes('burst') || k.includes('explod') || k.includes('bomb')) return 'burst';
+  if (k === 'heal' || k === 'shield' || k.includes('heal') || k.includes('shield')) return 'heal';
+  if (k === 'stun' || k.includes('stun')) return 'stun';
+  // buffAS / summon / execute / poison / lifesteal / dash va moi loai khac: giu 'cast'
+  return 'cast';
+}
 
 // BGM dang sequencer chiptune: note = tan so Hz (number), len = so phach
 // (1 = not den). Giai dieu + bass deu lap lien mach theo tong so phach.

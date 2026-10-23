@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { View } from 'react-native';
 import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Polygon, RadialGradient, Rect, Stop } from 'react-native-svg';
 import ChibiArt from './ChibiArt';
 import { CHAMPIONS, MONSTERS } from '../game/data';
@@ -121,12 +122,30 @@ export function ArenaScene({ width, height }: { width: number; height: number })
   </Svg>);
 }
 // Hat moi truong tu chay rieng (dom dom vang + canh hoa hong troi cham), khong keo parent re-render
+// Mat do tang ~50% so voi ban 10 hat ban dau: 15 hat troi (dom dom/canh hoa) + 8 hat phan hoa roi
+// = 23 hat dong thoi, van duoi tran ~40 hat/component. Moi hat co ph (pha) co dinh theo chi so,
+// KHONG dung Math.random khi render nen khong nhap nhay doi vi tri giua cac lan ve.
 const PARTICLES: { fx: number; fy: number; ph: number; sp: number; s: number; petal: boolean }[] = [
   { fx: 0.08, fy: 0.22, ph: 0.0, sp: 0.5, s: 3.2, petal: false }, { fx: 0.2, fy: 0.68, ph: 1.3, sp: 0.4, s: 2.6, petal: true },
   { fx: 0.34, fy: 0.14, ph: 2.1, sp: 0.6, s: 2.4, petal: false }, { fx: 0.47, fy: 0.8, ph: 0.7, sp: 0.45, s: 3.0, petal: true },
   { fx: 0.58, fy: 0.3, ph: 3.0, sp: 0.55, s: 2.8, petal: false }, { fx: 0.66, fy: 0.62, ph: 1.8, sp: 0.38, s: 2.2, petal: true },
   { fx: 0.76, fy: 0.18, ph: 2.6, sp: 0.5, s: 3.4, petal: false }, { fx: 0.85, fy: 0.52, ph: 0.4, sp: 0.42, s: 2.5, petal: true },
   { fx: 0.92, fy: 0.78, ph: 1.1, sp: 0.6, s: 2.7, petal: false }, { fx: 0.14, fy: 0.44, ph: 2.9, sp: 0.48, s: 2.3, petal: true },
+  { fx: 0.26, fy: 0.36, ph: 0.9, sp: 0.52, s: 2.9, petal: false }, { fx: 0.41, fy: 0.56, ph: 2.4, sp: 0.44, s: 2.4, petal: true },
+  { fx: 0.53, fy: 0.08, ph: 1.6, sp: 0.58, s: 2.5, petal: false }, { fx: 0.71, fy: 0.86, ph: 3.4, sp: 0.41, s: 2.8, petal: true },
+  { fx: 0.88, fy: 0.32, ph: 0.2, sp: 0.53, s: 2.1, petal: false },
+];
+// PHAN HOA ROI: cham nho vang/trang roi cham tu tren xuong (vong lap), lac ngang sin nhe.
+// off = vi tri doc ban dau (0..1), sp = toc do roi (phan chieu cao/giay, rat cham), sway = bien do lac ngang (px).
+const POLLEN: { fx: number; off: number; ph: number; sp: number; sway: number; s: number; white: boolean }[] = [
+  { fx: 0.12, off: 0.05, ph: 0.0, sp: 0.045, sway: 10, s: 1.9, white: false },
+  { fx: 0.24, off: 0.42, ph: 1.4, sp: 0.036, sway: 13, s: 1.6, white: true },
+  { fx: 0.38, off: 0.71, ph: 2.7, sp: 0.052, sway: 9, s: 2.1, white: false },
+  { fx: 0.5, off: 0.22, ph: 0.8, sp: 0.04, sway: 12, s: 1.7, white: true },
+  { fx: 0.62, off: 0.6, ph: 3.5, sp: 0.048, sway: 11, s: 1.9, white: false },
+  { fx: 0.74, off: 0.12, ph: 2.0, sp: 0.034, sway: 14, s: 1.5, white: true },
+  { fx: 0.86, off: 0.52, ph: 1.1, sp: 0.055, sway: 10, s: 2.0, white: false },
+  { fx: 0.95, off: 0.84, ph: 4.1, sp: 0.038, sway: 12, s: 1.6, white: true },
 ];
 export function AmbientParticles({ width, height }: { width: number; height: number }) {
   const [tick, setTick] = useState(0);
@@ -142,7 +161,42 @@ export function AmbientParticles({ width, height }: { width: number; height: num
         ? <Ellipse key={i} cx={x} cy={y} rx={p.s * 1.5} ry={p.s} fill="#ffafcc" opacity={o} transform={'rotate(' + ((t * 30 + p.ph * 40) % 360) + ' ' + x + ' ' + y + ')'} />
         : <Circle key={i} cx={x} cy={y} r={p.s} fill="#ffd60a" opacity={o} />;
     })}
+    {POLLEN.map((p, i) => {
+      // Roi deu xuong, qu cuoi/duoi mep thi mo dan (sin theo tien trinh roi) de vong lap khong bi "nhay"
+      const prog = (p.off + t * p.sp) % 1;
+      const x = p.fx * width + Math.sin(t * 0.9 + p.ph) * p.sway;
+      const y = prog * height;
+      const o = 0.22 + 0.48 * Math.sin(Math.PI * prog);
+      return <Circle key={'pol' + i} cx={x} cy={y} r={p.s} fill={p.white ? '#fffbe6' : '#ffd60a'} opacity={o} />;
+    })}
   </Svg>);
+}
+// ===== LOP PHU MOI TRUONG SONG: song sang mat ho + bong may troi (tu chay, pointerEvents none) =====
+// Dat tren tranh arena (ArenaScene / anh arena) va duoi cac lop UI/tuong. Interval 100ms tu chua
+// trong component: chi EnvOverlay re-render, khong keo parent. Thoi gian suy tu tick (tSec = tick*0.1).
+const CLOUDS: { period: number; off: number; yFrac: number; wFrac: number; h: number; color: string }[] = [
+  { period: 34, off: 0.0, yFrac: 0.16, wFrac: 0.55, h: 54, color: 'rgba(10,20,40,0.10)' },
+  { period: 27, off: 0.45, yFrac: 0.44, wFrac: 0.46, h: 44, color: 'rgba(255,255,240,0.08)' },
+  { period: 40, off: 0.72, yFrac: 0.64, wFrac: 0.6, h: 62, color: 'rgba(10,20,40,0.08)' },
+];
+export function EnvOverlay({ width, height }: { width: number; height: number }) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => { const iv = setInterval(() => setTick(t => t + 1), 100); return () => clearInterval(iv); }, []);
+  if (width <= 0 || height <= 0) return null;
+  const tSec = tick * 0.1;
+  // (a) Song sang mat ho: 2 dai cheo -18 do o vung giua san, opacity dao dong lech pha (2.6s / 3.4s)
+  const band1 = 0.07 + 0.07 * (0.5 + 0.5 * Math.sin((tSec / 2.6) * Math.PI * 2));
+  const band2 = 0.05 + 0.06 * (0.5 + 0.5 * Math.sin((tSec / 3.4) * Math.PI * 2 + 1.7));
+  return (<View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height, overflow: 'hidden' }}>
+    <View style={{ position: 'absolute', left: -width * 0.08, top: height * 0.4, width: width * 1.16, height: 16, borderRadius: 8, backgroundColor: '#ffffff', opacity: band1, transform: [{ rotate: '-18deg' }] }} />
+    <View style={{ position: 'absolute', left: -width * 0.04, top: height * 0.53, width: width * 1.08, height: 22, borderRadius: 11, backgroundColor: '#fffbe6', opacity: band2, transform: [{ rotate: '-18deg' }] }} />
+    {CLOUDS.map((c, i) => {
+      const cw = width * c.wFrac;
+      const prog = ((tSec / c.period) + c.off) % 1;
+      const x = -cw + prog * (width + cw);
+      return (<View key={i} style={{ position: 'absolute', left: x, top: height * c.yFrac, width: cw, height: c.h, borderRadius: c.h / 2, backgroundColor: c.color }} />);
+    })}
+  </View>);
 }
 // ===== LOBBY SCENE: tranh rung huyen ao PHU KINH man hinh (nhieu lop chieu sau) =====
 // Lop: troi teal + tia nang xuyen la -> tan cay xa -> cay giua + hoa anh dao -> quang
