@@ -1,0 +1,2 @@
+import { Stack } from 'expo-router';
+export default function Layout() { return (<Stack screenOptions={{ headerStyle:{ backgroundColor:'#ffe3ef' }, headerTitleStyle:{ fontWeight:'800', color:'#7b2d5b' } }}><Stack.Screen name="index" options={{ title:'Đấu Trường Chibi' }}/><Stack.Screen name="game" options={{ title:'Trận đấu' }}/><Stack.Screen name="campaign" options={{ title:'Chiến Dịch PvE' }}/><Stack.Screen name="collection" options={{ title:'Bộ Sưu Tập Tướng' }}/><Stack.Screen name="guide" options={{ title:'Hướng Dẫn' }}/></Stack>); }

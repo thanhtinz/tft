@@ -1,0 +1,8 @@
+node_modules/
+.expo/
+dist/
+*.muse-github-snapshot-sync.json
+.env
+assets/icon.png
+assets/favicon.png
+scripts/.build/
