@@ -354,7 +354,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   }
   // Ref song: handler keo (tao 1 lan) luon doc phase/hanh dong/vi tri tuong MOI NHAT qua ref nay
   const liveRef = useRef<any>(null);
-  liveRef.current = { phase, sellUnitByUid, tapBoardCell, dropDragOnCell };
+  liveRef.current = { phase, sellUnitByUid, tapBoardCell, dropDragOnCell, cellAtPoint, sellZoneForPoint, sellZoneAt };
   const unitInfoRef = useRef(new Map<string, { x: number; y: number; cx: number; cy: number }>());
   const panCacheRef = useRef(new Map<string, ReturnType<typeof PanResponder.create>>());
   function getUnitPan(uid: string) {
@@ -372,8 +372,8 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
         const info = unitInfoRef.current.get(uid);
         const ne: any = (e as any)?.nativeEvent ?? {};
         let over: 'left' | 'right' | null = null;
-        if (typeof ne.pageX === 'number' && typeof ne.pageY === 'number') over = sellZoneForPoint(ne.pageX - arenaPageRef.current.x, ne.pageY - arenaPageRef.current.y);
-        else if (info) over = sellZoneAt(info.cx + g.dx, info.cy + g.dy);
+        if (typeof ne.pageX === 'number' && typeof ne.pageY === 'number') over = liveRef.current.sellZoneForPoint(ne.pageX - arenaPageRef.current.x, ne.pageY - arenaPageRef.current.y);
+        else if (info) over = liveRef.current.sellZoneAt(info.cx + g.dx, info.cy + g.dy);
         setDrag({ uid, dx: g.dx, dy: g.dy, over }); },
       onPanResponderRelease: (e, g) => { const d = dragRef.current; dragRef.current = null; if (!d || d.uid!==uid) return;
         const info = unitInfoRef.current.get(uid); const L = liveRef.current;
@@ -385,9 +385,9 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
         if (typeof ne.pageX === 'number' && typeof ne.pageY === 'number') { ax = ne.pageX - arenaPageRef.current.x; ay = ne.pageY - arenaPageRef.current.y; }
         else if (info) { ax = info.cx + g.dx; ay = info.cy + g.dy; }
         if (ax !== null && ay !== null) {
-          const over = sellZoneForPoint(ax, ay) ?? sellZoneAt(ax, ay);
+          const over = L.sellZoneForPoint(ax, ay) ?? L.sellZoneAt(ax, ay);
           if (over) { L.sellUnitByUid(uid); return; }
-          const cell = cellAtPoint(ax, ay); if (cell) L.dropDragOnCell(uid, cell.x, cell.y);
+          const cell = L.cellAtPoint(ax, ay); if (cell) L.dropDragOnCell(uid, cell.x, cell.y);
         } },
       onPanResponderTerminate: () => { dragRef.current = null; setDrag(null); },
     });
@@ -524,8 +524,34 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   // Bien the MOBILE: khung san khau hep (< 900px) dung bo cuc dien thoai ngang
   // (nut tron lon 2 goc duoi, cot noi gon); khung rong dung bo cuc PC. Chung logic.
   const compact = stageSize.w > 0 && stageSize.w < 900;
-  const hm = hexMetrics(arenaSize.w, arenaSize.h, rows);
+  // COMPACT + chuan bi: shop noi o HANG TREN san (kieu TFT Mobile mua 18 — user chot).
+  // Luoi hex duoc day xuong duoi dai shop (tang oy, thu hep chieu cao tinh size) nen
+  // khong o nao bi the shop che; moi noi dung hm (render, lop o cham, tha keo doc qua
+  // liveRef) deu nhat quan. Vao giao tranh shop an han -> moi thu quay lai nhu cu.
+  const shopOnTop = compact && phase !== 'battle';
+  const TOP_SHOP_H = 128;
+  const hm = shopOnTop
+    ? (() => { const m = hexMetrics(arenaSize.w, Math.max(80, arenaSize.h - TOP_SHOP_H), rows); return { ...m, oy: m.oy + TOP_SHOP_H }; })()
+    : hexMetrics(arenaSize.w, arenaSize.h, rows);
   const scoutTeam = scout !== null ? (scout === 0 ? board : makeAiTeam(round, scout*3+round)) : [];
+  // Hang the shop: MOT ban duy nhat cho ca hai vi tri (dai duoi o PC, dai tren o
+  // compact) nen highlight tutorial 'shop' bam dung vi tri dang hien.
+  const shopCardsRow = (
+    <View style={[st.cardsRow, hi('shop') && st.tutHi]}>
+      {shop.map((id, i) => { const d = champById(id); const copies = copiesOf(id); const glow = copies >= 2; return (
+        <Pressable key={i} onPress={() => buy(i)} style={[st.shopCard, { borderColor: COST_COLORS[d.cost] }, glow && st.cardGlow]}>
+          <View style={[st.cardArt, { backgroundColor: COST_COLORS[d.cost] + '33' }]}>
+            <SpriteUnit spec={d} size={shopOnTop ? 50 : compact ? 60 : 84} state='idle'/>
+            <View style={st.costBadge}><Text style={st.costBadgeTxt}>{d.cost}</Text></View>
+            {glow && <Text style={st.glowTag}>Sắp lên sao</Text>}
+          </View>
+          <View style={st.cardInfo}>
+            <Text style={st.shopName}>{d.name}</Text>
+            <Text style={st.cardTrait}>{d.traits.map(traitName).join(' · ')}</Text>
+          </View>
+        </Pressable> ); })}
+    </View>
+  );
   return (
     <View style={st.root}>
       <View style={[st.frame, { width: frameW, height: frameH }]}>
@@ -562,7 +588,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
         {/* ===== MIDDLE: dau truong chiem toan bo; cot trai/phai la LOP NOI tuyet doi tren mep san ===== */}
         <View style={st.middle}>
           {/* LEFT: traits + augments + items */}
-          <View style={[st.leftPanel, compact && { width: 130, padding: 4 }]}>
+          <View style={[st.leftPanel, compact && { width: 130, padding: 4 }, shopOnTop && { top: TOP_SHOP_H }]}>
             {compact && (<View style={st.pillRow}>
               <Pressable style={st.pillBtn} onPress={() => { if (augments.length) setAugView(true); else say('Chưa có cường hóa — cường hóa xuất hiện ở các mốc 2-1, 3-2, 4-2.'); }}>
                 <Svg width={17} height={17} viewBox="0 0 24 24"><Polygon points="12,2 21,7 21,17 12,22 3,17 3,7" fill="none" stroke="#7ee0c2" strokeWidth="2" /></Svg>
@@ -712,6 +738,10 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             </>)}
           </View>
         </View>
+        {/* ===== SHOP TREN (chi compact + chuan bi): hang the noi duoi cum stage, tran tren san.
+             right:150 chua khoang cho cot phai + qua cau mau; cot trai da duoc day xuong
+             duoi dai nay (top: TOP_SHOP_H) nen khong phan tu nao chong lap. ===== */}
+        {shopOnTop && (<View style={st.shopTopStrip}>{shopCardsRow}</View>)}
         {/* ===== BENCH: hang o HEX nam ngay mep duoi TRONG san (cung chat lieu mat dat) ===== */}
         {phase!=='battle' && (<View style={[st.benchRow, hi('bench') && st.tutHi]}><Text style={st.benchLbl}>Bench</Text>{Array.from({length:9}).map((_,i) => { const u = bench[i]; const isSel = !!u && selUid===u.uid; return (
           <Pressable key={u ? 'b-' + u.uid : 'e-' + i} onPress={() => u && tapBench(u)} style={st.benchHex}>
@@ -750,7 +780,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
               <Pressable style={[st.shopBtn, { backgroundColor: locked ? '#ef476f' : '#6c757d' }]} onPress={() => setLocked(l => !l)}><Text style={st.shopBtnTxt}>{locked ? 'Đã khóa' : 'Khóa shop'}</Text></Pressable>
             </View>
           </View>)}
-          <View style={{ flex: 1 }}>
+          {shopOnTop ? (<View style={{ flex: 1 }} />) : (<View style={{ flex: 1 }}>
             <View style={st.oddsRow}>{!compact && <Text style={st.dim}>Tỉ lệ shop cấp {level}:</Text>}{!compact && odds.map((o, i) => (<View key={i} style={[st.oddChip, { backgroundColor: COST_COLORS[i+1] }]}><Text style={st.oddTxt}>{i+1} vàng: {o}%</Text></View>))}
               <View style={{ flex: 1 }} />
               {!compact && (<View style={[st.goldChip, hi('gold') && st.tutHi]}>
@@ -760,21 +790,8 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
               </View>)}
               <View style={{ flex: 1 }} />
             </View>
-            <View style={[st.cardsRow, hi('shop') && st.tutHi]}>
-                            {shop.map((id, i) => { const d = champById(id); const copies = copiesOf(id); const glow = copies >= 2; return (
-                <Pressable key={i} onPress={() => buy(i)} style={[st.shopCard, { borderColor: COST_COLORS[d.cost] }, glow && st.cardGlow]}>
-                  <View style={[st.cardArt, { backgroundColor: COST_COLORS[d.cost] + '33' }]}>
-                    <SpriteUnit spec={d} size={compact ? 60 : 84} state='idle'/>
-                    <View style={st.costBadge}><Text style={st.costBadgeTxt}>{d.cost}</Text></View>
-                    {glow && <Text style={st.glowTag}>Sắp lên sao</Text>}
-                  </View>
-                  <View style={st.cardInfo}>
-                    <Text style={st.shopName}>{d.name}</Text>
-                    <Text style={st.cardTrait}>{d.traits.map(traitName).join(' · ')}</Text>
-                  </View>
-                </Pressable> ); })}
-            </View>
-          </View>
+            {shopCardsRow}
+          </View>)}
           <View style={st.shopRight}>
             {compact ? (<React.Fragment>
               {streak!==0 && <View style={st.streakFlame}><Text style={st.streakFlameTxt}>{Math.abs(streak)} {streak>0 ? 'thắng' : 'thua'}</Text></View>}
@@ -896,6 +913,7 @@ const st = StyleSheet.create({
   infoLine:{ fontWeight:'800', color:'#f5d67b' },
   benchRow:{ flexDirection:'row', gap:5, alignItems:'center', paddingHorizontal:8, paddingBottom:6, paddingTop:2, zIndex:25 }, benchLbl:{ fontWeight:'900', color:'#fff6d8', fontSize:12, marginRight:2, textShadowColor:'rgba(0,0,0,0.75)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:3 }, benchHex:{ width:54, height:50, alignItems:'center', justifyContent:'center' }, cellSel:{ borderWidth:3, borderColor:'#ffb703' }, cellDot:{ color:'rgba(240,248,230,0.75)', fontSize:18 }, logMini:{ flex:1, gap:1, backgroundColor:'rgba(10,14,30,0.55)', borderRadius:8, paddingHorizontal:6, paddingVertical:3 },
   shopRow:{ position:'relative', overflow:'hidden', flexDirection:'row', gap:8, padding:8, paddingTop:14, alignItems:'stretch' },
+  shopTopStrip:{ position:'absolute', top:66, left:6, right:150, zIndex:45 },
   shopLeft:{ width:206, gap:6 }, lvlCard:{ backgroundColor:'rgba(14,20,42,0.55)', borderRadius:10, padding:7 }, lvlBig:{ fontWeight:'900', fontSize:16, color:'#f5d67b' }, xpBar:{ height:7, backgroundColor:'rgba(6,10,22,0.5)', borderRadius:4, overflow:'hidden', marginVertical:3 },
   shopBtn:{ flex:1, backgroundColor:'rgba(38,84,150,0.88)', borderRadius:10, paddingVertical:7, alignItems:'center' }, shopBtnTxt:{ color:'#fff', fontWeight:'800', fontSize:10 },
   shopLeftM:{ width:104, gap:5, alignItems:'center', justifyContent:'center' },
