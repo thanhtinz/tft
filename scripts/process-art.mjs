@@ -4,8 +4,8 @@
 //   (boss 640), xuat assets/art/units/<id>.webp (alpha) + <id>.webp.b64 de commit.
 //   Ngoai le: file <id>.green.png dung nen GREEN thuan #00FF00 (cho nhan vat mau hong
 //   gan magenta nhu Slime) - cung thuat toan, doi mau khoa.
-// - scenes/<name>.jpg -> resize 1280x720 (lobby/arena) hoac 1024x360 (banner-*),
-//   xuat assets/art/scenes/<name>.webp + .b64.
+// - scenes/<name>.jpg -> resize 1280x720 (lobby/arena) hoac 1024x360 (banner-*)
+//   hoac 600x840 doc (card-* - lung the bai), xuat assets/art/scenes/<name>.webp + .b64.
 // - Sinh src/game/artManifest.ts voi require tinh tung file.
 // Chay: node scripts/process-art.mjs [--only=id1,id2]
 import sharp from 'sharp';
@@ -181,8 +181,9 @@ async function main() {
     const id = f.replace(/\.(jpg|png)$/, '');
     if (only && !only.has(id)) { if (existsSync(join(OUT_SCENES, id + '.webp.b64'))) sceneIds.push(id); continue; }
     const isBanner = id.startsWith('banner');
+    const isCard = id.startsWith('card-');
     const webp = await sharp(join(RAW_SCENES, f))
-      .resize(isBanner ? { width: 1024, height: 360, fit: 'cover' } : { width: 1280, height: 720, fit: 'cover' })
+      .resize(isBanner ? { width: 1024, height: 360, fit: 'cover' } : isCard ? { width: 600, height: 840, fit: 'cover' } : { width: 1280, height: 720, fit: 'cover' })
       .webp({ quality: 76, effort: 4 }).toBuffer();
     writeFileSync(join(OUT_SCENES, id + '.webp'), webp);
     const b64 = webp.toString('base64');

@@ -11,14 +11,14 @@ Game auto-battler kiểu Teamfight Tactics (TFT) với đồ họa chibi vẽ ta
 
 ## Màn hình trận đấu (giống TFT ở bố cục và nhịp trận)
 - **Khóa ngang**: native tự khóa landscape khi vào trận (expo-screen-orientation) và mở khóa khi thoát; bản web hiển thị khung game ngang 16:9 giữa nền tối (letterbox).
-- **Trên cùng**: dãy ô round của stage hiện tại (ô hiện tại sáng lên, phân biệt PvE/PvP/carousel), nhãn stage-round (ví dụ 2-3), đồng hồ đếm ngược chuẩn bị (hết giờ tự vào giao tranh, có tiếng tick 5 giây cuối), nút tạm dừng, tốc độ trận, bật/tắt nhạc và tiếng.
+- **Trên cùng**: dãy ô round của stage hiện tại (ô hiện tại sáng lên, phân biệt PvE/PvP/lật thẻ), nhãn stage-round (ví dụ 2-3), đồng hồ đếm ngược chuẩn bị (hết giờ tự vào giao tranh, có tiếng tick 5 giây cuối), nút tạm dừng, tốc độ trận, bật/tắt nhạc và tiếng.
 - **Bên trái**: panel Tộc/Hệ với số đếm và mốc (màu đồng/bạc/vàng theo bậc kích hoạt, highlight theo tướng đang chọn), danh sách cường hóa đã chọn, khay trang bị chưa gắn, thông tin tướng đang chọn (bán / về bench).
 - **Giữa**: đấu trường sàn **HEX** 7x4 (hàng so le kiểu TFT) với tranh nền nhiều lớp 2.5D, vòng sáng dưới tướng được chọn, linh thú đại diện người chơi ở góc sân (giật mình khi thua đậm, màn hình rung nhẹ khi mất nhiều máu), số tướng trên bàn/tối đa.
 - **Bên phải**: bảng 8 người chơi (avatar linh thú, tên, thanh máu + số máu, cấp, chuỗi thắng/thua, người bị loại bị xám và hiện hạng, đối thủ của round được viền sáng). **Chạm một người chơi để xem bàn cờ của họ (scouting)**. Sau giao tranh panel tự chuyển sang tab **Thống kê sát thương** (theo nhật ký trận, chủ yếu là đòn đánh thường).
 - **Bench + Shop dưới cùng**: bench 9 ô ngay trên shop; shop gồm thẻ cấp (thanh XP, nút Mua XP 4 vàng — phím F trên web), nút Làm mới 2 vàng (phím D), nút Khóa shop, vàng lớn kèm lãi sắp nhận và chuỗi thắng/thua; 5 thẻ tướng khổ ngang có tranh lớn, tộc/hệ, giá với **màu nền theo bậc giá 1-5** (xám/xanh lá/xanh dương/tím/vàng), phát sáng khi sắp ghép đủ 3 bản sao; dòng **tỉ lệ % ra tướng theo bậc giá ở cấp hiện tại** ngay trên shop.
 
 ## Cấu trúc stage và cơ chế kiểu TFT
-- Stage 1 có 4 round (1-1, 1-2, 1-3 là PvE; 1-4 là PvP). Mỗi stage sau có 7 round, round cuối mỗi stage là PvE (quái lớn). Round giữa stage (x-4) từ stage 2 là **vòng chọn Carousel**: vòng tròn tướng kèm trang bị quay, chạm để chọn 1 (AI chọn sau).
+- Stage 1 có 4 round (1-1, 1-2, 1-3 là PvE; 1-4 là PvP). Mỗi stage sau có 7 round, round cuối mỗi stage là PvE (quái lớn). Round giữa stage (x-4) từ stage 2 là **vòng lật thẻ chọn tướng**: 8 thẻ úp mặt xuống (lưng thẻ vẽ tay trăng-sao vàng-tím), chạm 1 thẻ để lật mở nhận tướng + trang bị của thẻ đó; các thẻ còn lại cũng lật mở rồi phần thưởng mới về hàng chờ (logic thưởng giữ nguyên carousel cũ: 8 tướng khác nhau, mỗi tướng kèm 1 trang bị ngẫu nhiên).
 - **Cường hóa ở 2-1, 3-2, 4-2** (chọn 1 trong 3, hiệu lực cả trận) và hiện thành chip ở panel trái.
 - Sát thương thua round = sát thương theo stage (0/2/3/4/6/8/10/12...) + 2 cho mỗi quân địch còn sống.
 - Kinh tế TFT: vàng cơ bản 5 + lãi tối đa 5 (mốc 10/20/30/40/50) + streak + vàng thắng round; shop 5 ô theo tỉ lệ cấp, ghép sao tự động 3 lên 1 sao cao hơn (x1.8 / x3.2 chỉ số), bench 9 ô, cấp tối đa 9.

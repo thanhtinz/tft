@@ -1,8 +1,8 @@
 // Test headless cho battle engine + economy + rig (chay: npm test)
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { simulateBattle, makeMonsterTeam, computeSynergies, interestOf, streakBonus, rollShop, makeAiTeam, stageSub, roundLabel, isPveStageRound, isCarouselRound, AUG_ROUNDS_TFT, lossDamage } = require('./.build/engine.js');
-const { MONSTERS, CHAMPIONS } = require('./.build/data.js');
+const { simulateBattle, makeMonsterTeam, computeSynergies, interestOf, streakBonus, rollShop, makeAiTeam, stageSub, roundLabel, isPveStageRound, isCarouselRound, AUG_ROUNDS_TFT, lossDamage, genCarouselOptions, CAROUSEL_COUNT } = require('./.build/engine.js');
+const { MONSTERS, CHAMPIONS, ITEMS } = require('./.build/data.js');
 const { CLIPS, BONES, getBoneTransforms, stateForUnit, rowDepth } = require('./.build/rig.js');
 let pass = 0, fail = 0;
 const check = (name, cond) => { console.log((cond ? 'PASS' : 'FAIL') + ' - ' + name); cond ? pass++ : fail++; };
@@ -53,5 +53,15 @@ check('PvE stage rounds: 1,2,3 va cuoi stage (2-7, 3-7); 1-4 va 3-2 khong phai P
 check('Carousel: 2-4 (round 8) va 3-4 (round 15); 2-1 khong phai carousel', isCarouselRound(8) && isCarouselRound(15) && !isCarouselRound(5) && !isCarouselRound(1));
 check('Cuong hoa dung moc 2-1, 3-2, 4-2 (round 5, 13, 20)', JSON.stringify(AUG_ROUNDS_TFT)==='[5,13,20]' && AUG_ROUNDS_TFT.map(ss).join(',')==='2-1,3-2,4-2');
 check('Sat thuong thua: theo stage + 2/quan con song, tang theo stage', lossDamage(1,3)===6 && lossDamage(13,2)===7 && lossDamage(20,1) > lossDamage(5,1));
+// 9. Lat the up thay carousel: dung 8 the, tuong khong trung, tuong + do hop le,
+//    tat dinh theo seed (the lat ra chinh la phan thuong nhan duoc, khong chon trung)
+const lcg = (s0) => { let s = s0; return () => { s = (s*9301+49297)%233280; return s/233280; }; };
+const carOpts = genCarouselOptions(lcg(7));
+check('Lat the: dung 8 the (CAROUSEL_COUNT=8), tuong khong trung nhau', carOpts.length===8 && CAROUSEL_COUNT===8 && new Set(carOpts.map(o => o.defId)).size===8);
+check('Lat the: moi the la tuong hop le kem 1 trang bi hop le', carOpts.every(o => CHAMPIONS.some(c => c.id===o.defId) && ITEMS.some(it => it.id===o.item)));
+check('Lat the: tat dinh theo seed - cung seed ra cung bo the', JSON.stringify(genCarouselOptions(lcg(7)))===JSON.stringify(carOpts));
+let carAllValid = true;
+for (let s = 1; s <= 40; s++) { const os = genCarouselOptions(lcg(s*13)); if (os.length!==8 || new Set(os.map(o => o.defId)).size!==8) carAllValid = false; }
+check('Lat the: 40 seed khac nhau deu du 8 the khong trung', carAllValid);
 console.log(`\nTONG: ${pass} PASS, ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

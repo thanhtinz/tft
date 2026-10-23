@@ -47,5 +47,6 @@ export const SCENE_ART: Record<string, number> = {
   "banner-desert": require('../../assets/art/scenes/banner-desert.webp'),
   "banner-forest": require('../../assets/art/scenes/banner-forest.webp'),
   "banner-ice": require('../../assets/art/scenes/banner-ice.webp'),
+  "card-back": require('../../assets/art/scenes/card-back.webp'),
   "lobby": require('../../assets/art/scenes/lobby.webp'),
 };

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Image, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Svg, { Defs, Ellipse, G, LinearGradient, Polygon, Rect, Stop } from 'react-native-svg';
 import { router } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -10,7 +10,8 @@ import { AnnouncerFx, BeamFx, ItemRewardPopup, LevelPillarFx, MergeSwirlFx, OrbF
 import { arenaForContext } from '../game/arenaTheme';
 import { rowDepth, stateForUnit } from '../game/rig';
 import { AUGMENTS, BOT_NAMES, CHAMPIONS, SHOP_ODDS, TRAITS, champById, itemById, monsterById, traitName } from '../game/data';
-import { AUG_ROUNDS_TFT as AUG_ROUNDS, BattleResult, PlacedUnit, computeSynergies, interestOf, isCarouselRound, isPveStageRound, lossDamage, makeAiTeam, makeMonsterTeam, newUid, pveEnemiesForRound, randomItem, rollShop, roundLabel, sellValue, simulateBattle, stageSub, streakBonus, xpToNext } from '../game/engine';
+import { AUG_ROUNDS_TFT as AUG_ROUNDS, BattleResult, PlacedUnit, computeSynergies, genCarouselOptions, interestOf, isCarouselRound, isPveStageRound, lossDamage, makeAiTeam, makeMonsterTeam, newUid, pveEnemiesForRound, randomItem, rollShop, roundLabel, sellValue, simulateBattle, stageSub, streakBonus, xpToNext } from '../game/engine';
+import { SCENE_ART } from '../game/artManifest';
 import { MONSTERS } from '../game/data';
 import { loadMeta, loadSettings, saveMeta, saveSettings } from '../game/storage';
 import { TOTAL_STAGES, buildStageTeam, stageDef, stageReward } from '../game/stages';
@@ -31,6 +32,39 @@ export function hexMetrics(w: number, h: number, rows: number) { const size = Ma
 export function hexCenter(m: ReturnType<typeof hexMetrics>, x: number, y: number) { return { cx: m.ox + m.hw / 2 + x * m.hw + (y % 2 ? m.hw / 2 : 0), cy: m.oy + m.size + y * 1.5 * m.size }; }
 function hexPoints(cx: number, cy: number, size: number) { const pts: string[] = []; for (let i = 0; i < 6; i++) { const a = (Math.PI / 180) * (60 * i - 30); pts.push((cx + size * 0.94 * Math.cos(a)).toFixed(1) + ',' + (cy + size * 0.94 * Math.sin(a)).toFixed(1)); } return pts.join(' '); }
 interface PInfo { name: string; hp: number; alive: boolean; lvl: number; rank: number; }
+// ===== THE LAT (flip card) cho vong chon tuong kieu LAT THE UP thay carousel =====
+// Lat 3D gia: khung cha xoay rotateY 0 -> 180 theo tien trinh p (interval 16ms,
+// co delay de stagger giua cac the). p < 0.5 hien MAT LUNG (tranh card-back),
+// p >= 0.5 hien MAT TRUOC (da xoay san 180 trong nen khong bi nguoc) - doi mat
+// dung luc the hep nhat (90 do) nen khong thay khoanh khac cat. Kem nhun scale
+// nhe o giua nhip; the duoc chon phồng thêm 5% sau khi mo.
+function FlipCard({ w, flipped, delay, duration, picked, children }: { w: number; flipped: boolean; delay: number; duration: number; picked: boolean; children: React.ReactNode }) {
+  const [p, setP] = useState(0);
+  useEffect(() => {
+    if (!flipped) { setP(0); return; }
+    const t0 = Date.now() + delay;
+    const iv = setInterval(() => {
+      const t = (Date.now() - t0) / duration;
+      if (t < 0) return;
+      const np = Math.min(1, t);
+      setP(np);
+      if (np >= 1) clearInterval(iv);
+    }, 16);
+    return () => clearInterval(iv);
+  }, [flipped, delay, duration]);
+  const h = Math.round(w * 1.4);
+  const front = p >= 0.5;
+  const pop = Math.sin(Math.min(1, p) * Math.PI) * 0.07;
+  return (
+    <View style={{ width: w, height: h, transform: [{ perspective: 800 }, { rotateY: (p * 180) + 'deg' }, { scale: 1 + pop + (picked && front ? 0.05 : 0) }] }} pointerEvents="none">
+      {!front ? (
+        <Image source={SCENE_ART['card-back']} style={{ width: w, height: h, borderRadius: 10, borderWidth: 2, borderColor: '#c9a227' } as any} resizeMode="cover" />
+      ) : (
+        <View style={{ width: w, height: h, transform: [{ rotateY: '180deg' }] }}>{children}</View>
+      )}
+    </View>
+  );
+}
 // ===== NEN TAN VIEN dung chung cho moi chip/panel noi tren san =====
 // Gradient SVG phu kin phan tu cha (cha phai position:relative/absolute nhu binh
 // thuong): 'h' = dam o mep trai, tan dan sang phai ve trong suot; 'hR' = chieu
@@ -334,9 +368,14 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   const tutStep = isTut ? currentStep(tut) : null;
   const [planLeft, setPlanLeft] = useState(30); const [paused, setPaused] = useState(false);
   const planMax = 30;
-  const genCarousel = () => { const pool = [...CHAMPIONS].sort(() => Math.random()-0.5).slice(0, 8); return pool.map(d => ({ defId: d.id, item: randomItem() })); };
-  const [carousel, setCarousel] = useState<{ defId: string; item: string }[] | null>(isArena ? genCarousel() : null);
-  const [carAngle, setCarAngle] = useState(0);
+  // Vong chon tuong kieu LAT THE UP (thay carousel vong tron): carousel = bo the
+  // dang up; carPick = chi so the nguoi choi da chon (null = chua chon, khoa chon
+  // ngay sau lan bam dau); carHover chi de nhac the len tren web.
+  const [carousel, setCarousel] = useState<{ defId: string; item: string }[] | null>(isArena ? genCarouselOptions() : null);
+  const [carPick, setCarPick] = useState<number | null>(null);
+  const [carHover, setCarHover] = useState<number | null>(null);
+  const carTimerRef = useRef<any>(null);
+  useEffect(() => () => { if (carTimerRef.current) clearTimeout(carTimerRef.current); }, []);
   const [scout, setScout] = useState<number | null>(null);
   const [augView, setAugView] = useState(false);
   const [itemsByUid, setItemsByUid] = useState<Record<string, string[]>>({});
@@ -405,7 +444,6 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   const say = (s: string) => setLog(prev => [s, ...prev].slice(0, 8));
   useEffect(() => { if (Platform.OS !== 'web') { ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {}); return () => { ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {}); }; } }, []);
   useEffect(() => { loadSettings().then(s => { setMusicOn(s.music); setSfxOn(s.sfx); audio.setMusicEnabled(s.music); audio.setSfxEnabled(s.sfx); audio.unlock(); audio.startBgm('battle'); }); }, []);
-  useEffect(() => { if (!carousel) return; const iv = setInterval(() => setCarAngle(a => (a + 18) % 360), 650); return () => clearInterval(iv); }, [carousel]);
   useEffect(() => { if (Platform.OS !== 'web') return; const h = (e: KeyboardEvent) => { if (phase !== 'plan' || paused) return; const k = e.key.toLowerCase(); if (k === 'd') reroll(); if (k === 'f') buyXp(); }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); });
   async function toggleAudio(kind: 'music'|'sfx') { audio.unlock(); const s = await loadSettings(); if (kind==='music') { s.music = !s.music; setMusicOn(s.music); audio.setMusicEnabled(s.music); if (s.music) audio.startBgm('battle'); } else { s.sfx = !s.sfx; setSfxOn(s.sfx); audio.setSfxEnabled(s.sfx); } await saveSettings(s); }
   function emitTut(ev: TutEvent) {
@@ -723,12 +761,22 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
     if (newHp<=0 || aliveCount<=1) { const rank = newHp<=0 ? aliveCount : 1; if (rank===1) audio.playSfx('champion'); loadMeta().then(async m => { m.bestRank = Math.min(m.bestRank, rank); m.gems += Math.max(10, (9-rank)*15); if (rank===1) m.wins += 1; await saveMeta(m); }); setFinished(rank===1 ? 'Vô địch! Bạn đứng hạng 1/8. Tuyệt vời!' : `Trận đấu kết thúc. Bạn xếp hạng ${rank}/8.`);
       recordRewards({ mode: 'arena', modeLabel: 'Đấu với AI (Đấu Trường)', resultText: rank===1 ? 'Vô địch Đấu Trường' : `Xếp hạng ${rank}/8 trong Đấu Trường`, placement: rank, xp: xpForPlacement(rank) }); return; }
     if (AUG_ROUNDS.includes(nextRound)) { const pool = [...AUGMENTS].sort(() => Math.random()-0.5).slice(0,3); setAugChoice(pool.map(a => a.id)); say('Đã đến mốc cường hóa '+roundLabel(nextRound)+' — chọn 1 trong 3!'); }
-    if (isCarouselRound(nextRound)) { setCarousel(genCarousel()); audio.playSfx('start'); say('Vòng chọn (carousel) của stage mới: chạm vào 1 tướng + trang bị để nhận!'); }
+    if (isCarouselRound(nextRound)) { setCarousel(genCarouselOptions()); setCarPick(null); setCarHover(null); audio.playSfx('start'); say('Vòng chọn tướng của stage mới: 8 thẻ đang úp — chạm 1 thẻ để lật mở tướng + trang bị!'); }
     setPhase('plan'); setResult(null);
   }
   function chooseAugment(id: string) { const a = AUGMENTS.find(x => x.id===id)!; setAugments(prev => [...prev, id]); setAugChoice(null); audio.playSfx('starup');
     if (a.kind==='gold') setGold(g => g + a.value); if (a.kind==='xp') gainXp(a.value); if (a.kind==='healPlayer') setHp(h => Math.min(100, h + a.value)); say('Đã chọn cường hóa: '+a.name); }
-  function chooseCarousel(opt: { defId: string; item: string }) { setCarousel(null); addUnit(opt.defId); setInventory(inv => [...inv, opt.item]); audio.playSfx('coin'); say(`Vòng chọn: nhận ${champById(opt.defId).name} kèm ${itemById(opt.item)?.name ?? 'trang bị'}! Các đối thủ cũng đã chọn phần của họ.`); }
+  // Bam 1 the up: khoa chon ngay, the chon lat 420ms, cac the con lai lat theo
+  // sau 350ms + stagger theo khoang cach; tat ca mo xong thi dung ~1.4s cho
+  // nguoi choi xem roi moi trao thuong (grantCarousel o moc 2500ms).
+  function pickCarouselCard(i: number) {
+    if (!carousel || carPick !== null) return;
+    setCarPick(i);
+    audio.playSfx('sparkle');
+    const opt = carousel[i];
+    carTimerRef.current = setTimeout(() => grantCarousel(opt), 2500);
+  }
+  function grantCarousel(opt: { defId: string; item: string }) { setCarousel(null); setCarPick(null); setCarHover(null); addUnit(opt.defId); setInventory(inv => [...inv, opt.item]); audio.playSfx('coin'); say(`Lật thẻ: nhận ${champById(opt.defId).name} kèm ${itemById(opt.item)?.name ?? 'trang bị'}! Các đối thủ cũng đã chọn phần của họ.`); }
   const frame = result?.frames[Math.min(frameIdx, (result.frames.length-1) || 0)];
   const hi = (t: string) => isTut && tutStep?.target === t;
   const selUnit = selUid ? allUnits.find(v => v.uid===selUid) : undefined;
@@ -742,6 +790,8 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   // Bien the MOBILE: khung san khau hep (< 900px) dung bo cuc dien thoai ngang
   // (nut tron lon 2 goc duoi, cot noi gon); khung rong dung bo cuc PC. Chung logic.
   const compact = stageSize.w > 0 && stageSize.w < 900;
+  // Kich thuoc the lat: the doc ti le ~3:4.2; compact thu nho de 8 the van vua 1 hang.
+  const cardW = compact ? 68 : 96;
   const orbTarget = { x: compact ? arenaSize.w - 76 : arenaSize.w * 0.58, y: arenaSize.h - 18 };
   // COMPACT + chuan bi: shop noi o HANG TREN san (kieu TFT Mobile mua 18 — user chot).
   // Luoi hex duoc day xuong duoi dai shop (tang oy, thu hep chieu cao tinh size) nen
@@ -1065,16 +1115,21 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
           <Pressable style={st.bigBtn} onPress={() => setPaused(false)}><Text style={st.bigTxt}>Tiếp tục chơi</Text></Pressable>
           <Pressable style={[st.bigBtn, { backgroundColor:'#6c757d' }]} onPress={() => router.back()}><Text style={st.bigTxt}>Thoát về trang chủ</Text></Pressable></View></View>)}
                 {carousel && !finished && (<View style={st.carOverlay}>
-          <Text style={st.carTitle}>Vòng chọn — Carousel</Text>
-          <Text style={st.carDesc}>Vòng tròn tướng kèm trang bị đang quay. Chạm vào 1 ô để nhận tướng + trang bị đó (các đối thủ chọn sau bạn).</Text>
-          <View style={st.carCircle}>
-            <View style={st.carRing}/>
-            {carousel.map((opt, i) => { const ang = (carAngle + i * 45) * Math.PI / 180; const cx = 190 + Math.cos(ang) * 130; const cy = 130 + Math.sin(ang) * 88; const d = champById(opt.defId); return (
-              <Pressable key={i} onPress={() => chooseCarousel(opt)} style={[st.carCell, { left: cx - 50, top: cy - 56, borderColor: COST_COLORS[d.cost] }]}>
-                <SpriteUnit spec={d} size={72} state='idle'/><Text style={st.carName}>{d.name}</Text>
-                <View style={{ flexDirection:'row', alignItems:'center', gap:2 }}><ItemArt color={(itemById(opt.item)?.color) ?? '#ccc'} size={16}/><Text style={st.carItem}>{itemById(opt.item)?.name ?? ''}</Text></View>
+          <Text style={st.carTitle}>CHỌN 1 THẺ!</Text>
+          <Text style={st.carDesc}>{carPick === null ? '8 thẻ đang úp mặt xuống. Chạm vào 1 thẻ để lật mở — thẻ bạn chọn quyết định tướng + trang bị nhận được, các thẻ còn lại cũng sẽ lật mở cho bạn xem mình vừa bỏ lỡ gì!' : 'Thẻ của bạn đã lật mở! Các thẻ còn lại cũng đang mở ra — tướng + trang bị sẽ về hàng chờ ngay sau đây.'}</Text>
+          <View style={st.carRow}>
+            {carousel.map((opt, i) => { const d = champById(opt.defId); const picked = carPick === i; const delay = carPick === null ? 0 : picked ? 0 : 350 + Math.abs(i - carPick) * 60; return (
+              <Pressable key={i} onPress={() => pickCarouselCard(i)} onHoverIn={() => setCarHover(i)} onHoverOut={() => setCarHover(hv => hv === i ? null : hv)} style={{ transform: [{ translateY: carHover === i && carPick === null ? -6 : 0 }] }}>
+                <FlipCard w={cardW} flipped={carPick !== null} delay={delay} duration={picked ? 420 : 320} picked={picked}>
+                  <View style={[st.flipFront, { borderColor: COST_COLORS[d.cost] }, picked && st.flipPicked]}>
+                    <SpriteUnit spec={d} size={Math.round(cardW * 0.64)} state='idle'/>
+                    <Text style={st.carName} numberOfLines={1}>{d.name}</Text>
+                    <View style={[st.carCost, { backgroundColor: COST_COLORS[d.cost] }]}><Text style={st.carCostTxt}>{d.cost} vàng</Text></View>
+                    <View style={{ flexDirection:'row', alignItems:'center', gap:2 }}><ItemArt color={(itemById(opt.item)?.color) ?? '#ccc'} size={14}/><Text style={st.carItem} numberOfLines={1}>{itemById(opt.item)?.name ?? ''}</Text></View>
+                    {picked && <Text style={st.carPickedTxt}>ĐÃ CHỌN</Text>}
+                  </View>
+                </FlipCard>
               </Pressable> ); })}
-            <View style={st.carCenter}><SpriteUnit spec={champById('toto')} size={64} state='victory'/></View>
           </View>
         </View>)}
 {augView && (<View style={st.overlay}><View style={st.modal}>
@@ -1184,6 +1239,10 @@ const st = StyleSheet.create({
   augCard:{ backgroundColor:'#232d4f', borderRadius:14, borderWidth:1.5, borderColor:'#c9a227', padding:11, width:158, alignItems:'center', gap:3 },
   carOverlay:{ position:'absolute', inset:0, backgroundColor:'rgba(8,10,24,0.66)', alignItems:'center', justifyContent:'center', padding:14, zIndex:80, gap:8 } as any,
   carTitle:{ fontSize:20, fontWeight:'900', textAlign:'center', color:'#f5d67b' }, carDesc:{ textAlign:'center', color:'#e8ecff', fontSize:12, lineHeight:17, maxWidth:560 },
-  carCircle:{ width:440, height:290, position:'relative' }, carRing:{ position:'absolute', left:90, top:30, width:200, height:200, borderRadius:100, borderWidth:2, borderColor:'rgba(201,162,39,0.45)' }, carCell:{ position:'absolute', width:100, backgroundColor:'rgba(16,22,44,0.88)', borderRadius:13, borderWidth:2, padding:4, alignItems:'center' }, carName:{ fontWeight:'800', fontSize:10, textAlign:'center', color:'#eef1ff' }, carItem:{ fontSize:9, fontWeight:'600', color:'#aab4d4' }, carCenter:{ position:'absolute', left:190-32, top:130-32 },
+  carRow:{ flexDirection:'row', gap:8, alignItems:'center', justifyContent:'center', flexWrap:'wrap', maxWidth:'97%' },
+  flipFront:{ width:'100%', height:'100%', backgroundColor:'rgba(14,18,38,0.97)', borderRadius:10, borderWidth:2, padding:4, alignItems:'center', justifyContent:'center', gap:2 },
+  flipPicked:{ shadowColor:'#ffd60a', shadowOpacity:0.95, shadowRadius:13, elevation:10 },
+  carName:{ fontWeight:'800', fontSize:10, textAlign:'center', color:'#eef1ff' }, carItem:{ fontSize:9, fontWeight:'600', color:'#aab4d4' },
+  carCost:{ borderRadius:999, paddingHorizontal:6, paddingVertical:1 }, carCostTxt:{ fontSize:9, fontWeight:'900', color:'#ffffff' }, carPickedTxt:{ fontSize:9, fontWeight:'900', color:'#ffd60a', letterSpacing:1 },
   scoutBoard:{ height:210, backgroundColor:'#232d4f', borderRadius:14, position:'relative' }, scoutCell:{ position:'absolute', width:50, height:50, alignItems:'center' },
 });

@@ -186,6 +186,17 @@ export function stageSub(round: number) { if (round <= 4) return { stage: 1, sub
 export function roundLabel(round: number) { const s = stageSub(round); return s.stage + '-' + s.sub; }
 export function isPveStageRound(round: number) { const { stage, sub } = stageSub(round); return (stage === 1 && sub <= 3) || sub === 7; }
 export function isCarouselRound(round: number) { const { stage, sub } = stageSub(round); return stage >= 2 && sub === 4; }
+// Vong chon tuong kieu LAT THE UP: CAROUSEL_COUNT the up mat, nguoi choi chon 1 the
+// lat mo de nhan tuong + trang bi cua the do. Logic phan thuong giu nguyen ban
+// carousel cu: 8 tuong KHAC NHAU ngau nhien tu pool, moi tuong kem 1 trang bi
+// ngau nhien. rnd tiem duoc de test tat dinh.
+export interface CarouselOption { defId: string; item: string }
+export const CAROUSEL_COUNT = 8;
+export function genCarouselOptions(rnd: () => number = Math.random): CarouselOption[] {
+  const pool = [...CHAMPIONS];
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp; }
+  return pool.slice(0, CAROUSEL_COUNT).map(d => ({ defId: d.id, item: randomItem(rnd) }));
+}
 export const AUG_ROUNDS_TFT = [5, 13, 20]; // 2-1, 3-2, 4-2
 const STAGE_DMG_TFT = [0, 0, 2, 3, 4, 6, 8, 10, 12, 14, 16];
 export function lossDamage(round: number, enemySurvivors: number) { const { stage } = stageSub(round); return (STAGE_DMG_TFT[Math.min(stage, STAGE_DMG_TFT.length - 1)] ?? 16) + enemySurvivors * 2; }
