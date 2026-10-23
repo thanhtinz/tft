@@ -431,7 +431,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
           {/* CENTER: arena */}
           <View style={[st.arena, shake && { transform: [{ translateX: 5 }] }]} onLayout={e => setArenaSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
             <SceneArtImage id="arena" width={arenaSize.w} height={arenaSize.h}/>
-            <AmbientParticles width={arenaSize.w} height={arenaSize.h}/>
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}><AmbientParticles width={arenaSize.w} height={arenaSize.h}/></View>
                         <Svg style={StyleSheet.absoluteFill} width={arenaSize.w} height={arenaSize.h}>
               {(() => { const bx = hm.ox - hm.size * 0.8, by = hm.oy - hm.size * 0.6, bw = 7.5 * hm.hw + hm.size * 1.6, bh = (2 * hm.size + (rows - 1) * 1.5 * hm.size) + hm.size * 1.15; return (<React.Fragment>
                 <Rect x={bx} y={by} width={bw} height={bh} rx={16} fill="rgba(10,16,14,0.18)" stroke="#4c5563" strokeWidth={10} strokeOpacity={0.55} />
@@ -439,7 +439,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
                 <Rect x={bx + 2} y={by + 2} width={bw - 4} height={bh - 4} rx={14} fill="none" stroke="#2c313a" strokeWidth={2} strokeOpacity={0.5} />
               </React.Fragment>); })()}
               {Array.from({length: rows}).map((_, y) => Array.from({length: 7}).map((_, x) => { const { cx, cy } = hexCenter(hm, x, y); const occ = phase!=='battle' && board.some(u => u.x===x && u.y===y); const enemyHalf = phase==='battle' && y >= 4; return (
-                <Polygon key={x+'-'+y} points={hexPoints(cx, cy, hm.size)} fill={occ ? 'rgba(255,214,110,0.20)' : enemyHalf ? 'rgba(255,130,118,0.055)' : 'rgba(120,255,205,0.05)'} stroke={enemyHalf ? 'rgba(255,150,140,0.6)' : 'rgba(64,224,190,0.6)'} strokeWidth={1.3} onPress={phase!=='battle' ? () => tapBoardCell(x, y) : undefined}/>
+                <Polygon key={x+'-'+y} points={hexPoints(cx, cy, hm.size)} fill={occ ? 'rgba(255,214,110,0.20)' : enemyHalf ? 'rgba(255,130,118,0.055)' : 'rgba(120,255,205,0.05)'} stroke={enemyHalf ? 'rgba(255,150,140,0.6)' : 'rgba(64,224,190,0.6)'} strokeWidth={1.3}/>
               ); }))}
               {phase!=='battle' && selUid != null && (<ValidCellGlow hm={hm} rows={rows} board={board}/>)}
             </Svg>
@@ -447,6 +447,13 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
               <Torch x={bx + 8} y={by + 12} s={0.95} /><Torch x={bx + bw - 8} y={by + 12} s={0.95} />
               <Torch x={bx + 8} y={by + bh + 14} s={0.8} /><Torch x={bx + bw - 8} y={by + bh + 14} s={0.8} />
             </React.Fragment>); })()}
+            {phase!=='battle' && (
+              <View pointerEvents="box-none" style={{ position:'absolute', left:0, top:0, right:0, bottom:0, zIndex: 40 }}>
+                {Array.from({length: rows}).map((_, y) => Array.from({length: 7}).map((_, x) => { const { cx, cy } = hexCenter(hm, x, y); return (
+                  <Pressable key={'touch-'+x+'-'+y} onPress={() => tapBoardCell(x, y)} style={({ pressed }) => ({ position:'absolute', left: cx - hm.hw/2, top: cy - hm.size*0.75, width: hm.hw, height: hm.size*1.5, backgroundColor: pressed ? 'rgba(255,255,255,0.12)' : 'transparent' })} />
+                ); }))}
+              </View>
+            )}
             {phase==='plan' && (<View pointerEvents="none" style={{ position:'absolute', left:0, right:0, top:0, bottom:0, alignItems:'center', justifyContent:'center', zIndex:1 }}>
               <Text style={{ fontSize: Math.min(120, arenaSize.w * 0.17), fontWeight:'900', color:'rgba(255,255,255,0.10)', letterSpacing: 4 }}>{board.length}/{level}</Text>
             </View>)}
@@ -472,7 +479,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
                 </View>
                 <UnitBars sz={sz} star={u.star} hpFrac={u.hp / u.maxHp} manaFrac={u.maxMana ? u.mana / u.maxMana : 0} items={itemsByUid[u.uid] ?? []} />
               </View> ); })}
-<View style={st.legend}>
+<View style={st.legend} pointerEvents="none">
               <FloatWrap amp={4}>
                 <SpriteUnit spec={champById('toto')} size={56} state={legendHurt ? 'hurt' : 'idle'}/>
               </FloatWrap>
