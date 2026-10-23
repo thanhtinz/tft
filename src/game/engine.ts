@@ -159,3 +159,11 @@ export function pveEnemiesForRound(round: number): PlacedUnit[] {
 export const PVE_ROUNDS = [1,2,3,10,18,26];
 export function isPveRound(round: number) { return PVE_ROUNDS.includes(round); }
 export function randomItem(rnd: () => number = Math.random) { return ITEMS[Math.floor(rnd()*ITEMS.length)].id; }
+// Cau truc stage kieu TFT: stage 1 co 4 round (1-1..1-4), cac stage sau moi stage 7 round.
+export function stageSub(round: number) { if (round <= 4) return { stage: 1, sub: round }; const k = round - 5; return { stage: 2 + Math.floor(k / 7), sub: (k % 7) + 1 }; }
+export function roundLabel(round: number) { const s = stageSub(round); return s.stage + '-' + s.sub; }
+export function isPveStageRound(round: number) { const { stage, sub } = stageSub(round); return (stage === 1 && sub <= 3) || sub === 7; }
+export function isCarouselRound(round: number) { const { stage, sub } = stageSub(round); return stage >= 2 && sub === 4; }
+export const AUG_ROUNDS_TFT = [5, 13, 20]; // 2-1, 3-2, 4-2
+const STAGE_DMG_TFT = [0, 0, 2, 3, 4, 6, 8, 10, 12, 14, 16];
+export function lossDamage(round: number, enemySurvivors: number) { const { stage } = stageSub(round); return (STAGE_DMG_TFT[Math.min(stage, STAGE_DMG_TFT.length - 1)] ?? 16) + enemySurvivors * 2; }

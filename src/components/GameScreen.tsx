@@ -8,7 +8,7 @@ import ChibiRig from './ChibiRig';
 import { LayeredBoardBg } from './SceneArt';
 import { rowDepth, stateForUnit } from '../game/rig';
 import { AUGMENTS, BOT_NAMES, CHAMPIONS, SHOP_ODDS, TRAITS, champById, itemById, monsterById, traitName } from '../game/data';
-import { BattleResult, PlacedUnit, computeSynergies, interestOf, makeAiTeam, makeMonsterTeam, newUid, pveEnemiesForRound, randomItem, rollShop, sellValue, simulateBattle, streakBonus, xpToNext } from '../game/engine';
+import { AUG_ROUNDS_TFT as AUG_ROUNDS, BattleResult, PlacedUnit, computeSynergies, interestOf, isCarouselRound, isPveStageRound, lossDamage, makeAiTeam, makeMonsterTeam, newUid, pveEnemiesForRound, randomItem, rollShop, roundLabel, sellValue, simulateBattle, stageSub, streakBonus, xpToNext } from '../game/engine';
 import { MONSTERS } from '../game/data';
 import { loadMeta, loadSettings, saveMeta, saveSettings } from '../game/storage';
 import { TOTAL_STAGES, buildStageTeam, stageDef, stageReward } from '../game/stages';
@@ -18,14 +18,8 @@ export type GameMode = 'arena' | 'campaign' | 'waves' | 'tutorial';
 interface Props { mode: GameMode; stageId?: number; }
 const STAR_TXT = (s:number) => s===1?'★':s===2?'★★':'★★★';
 export const COST_COLORS: Record<number, string> = { 1:'#8d99ae', 2:'#38b000', 3:'#4361ee', 4:'#9d4edd', 5:'#e0a800' };
-// Cau truc stage kieu TFT: stage 1 co 4 round (1-1..1-4), cac stage sau moi stage 7 round.
-export function stageSub(round: number) { if (round <= 4) return { stage: 1, sub: round }; const k = round - 5; return { stage: 2 + Math.floor(k / 7), sub: (k % 7) + 1 }; }
-export function roundLabel(round: number) { const s = stageSub(round); return s.stage + '-' + s.sub; }
-export function isPveStageRound(round: number) { const { stage, sub } = stageSub(round); return (stage === 1 && sub <= 3) || sub === 7; }
-export function isCarouselRound(round: number) { const { stage, sub } = stageSub(round); return stage >= 2 && sub === 4; }
-const AUG_ROUNDS = [5, 13, 20]; // 2-1, 3-2, 4-2 nhu TFT
-const STAGE_DMG = [0, 0, 2, 3, 4, 6, 8, 10, 12, 14, 16];
-export function lossDamage(round: number, enemySurvivors: number) { const { stage } = stageSub(round); return (STAGE_DMG[Math.min(stage, STAGE_DMG.length - 1)] ?? 16) + enemySurvivors * 2; }
+// Cau truc stage kieu TFT (stageSub / roundLabel / isPveStageRound / isCarouselRound /
+// AUG_ROUNDS_TFT / lossDamage) nam trong engine.ts de test headless duoc.
 // Hex pointy-top: w = 1.732*size, canh doc 1.5*size, hang le lech nua o
 export function hexMetrics(w: number, h: number, rows: number) { const size = Math.max(14, Math.min(w / (7.6 * 1.732), h / (rows * 1.5 + 0.7))); const hw = 1.732 * size; const totalW = 7 * hw + hw / 2; const totalH = 2 * size + (rows - 1) * 1.5 * size; return { size, hw, ox: Math.max(0, (w - totalW) / 2), oy: Math.max(0, (h - totalH) / 2) }; }
 export function hexCenter(m: ReturnType<typeof hexMetrics>, x: number, y: number) { return { cx: m.ox + m.hw / 2 + x * m.hw + (y % 2 ? m.hw / 2 : 0), cy: m.oy + m.size + y * 1.5 * m.size }; }

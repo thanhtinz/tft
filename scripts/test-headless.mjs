@@ -1,7 +1,7 @@
 // Test headless cho battle engine + economy + rig (chay: npm test)
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { simulateBattle, makeMonsterTeam, computeSynergies, interestOf, streakBonus, rollShop, makeAiTeam } = require('./.build/engine.js');
+const { simulateBattle, makeMonsterTeam, computeSynergies, interestOf, streakBonus, rollShop, makeAiTeam, stageSub, roundLabel, isPveStageRound, isCarouselRound, AUG_ROUNDS_TFT, lossDamage } = require('./.build/engine.js');
 const { MONSTERS, CHAMPIONS } = require('./.build/data.js');
 const { CLIPS, BONES, getBoneTransforms, stateForUnit, rowDepth } = require('./.build/rig.js');
 let pass = 0, fail = 0;
@@ -46,5 +46,12 @@ check('State machine: chet -> death, tung chieu -> cast, di chuyen -> walk, than
   stateForUnit({alive:true,moved:false,castAtFrame:false,attackedAtFrame:false,hurtAtFrame:false,battleOver:true,won:true})==='victory');
 // 7. 2.5D depth
 check('2.5D: hang truoc scale lon hon va zIndex cao hon hang sau', rowDepth(3,4).scale > rowDepth(0,4).scale && rowDepth(3,4).zIndex > rowDepth(0,4).zIndex);
+// 8. Cau truc stage kieu TFT: stage 1 co 4 round, stage sau 7 round
+const ss = (r) => { const s = stageSub(r); return s.stage + '-' + s.sub; };
+check('Stage mapping: 1->1-1, 4->1-4, 5->2-1, 11->2-7, 12->3-1, 13->3-2, 20->4-2', ss(1)==='1-1' && ss(4)==='1-4' && ss(5)==='2-1' && ss(11)==='2-7' && ss(12)==='3-1' && ss(13)==='3-2' && ss(20)==='4-2' && roundLabel(13)==='3-2');
+check('PvE stage rounds: 1,2,3 va cuoi stage (2-7, 3-7); 1-4 va 3-2 khong phai PvE', isPveStageRound(1) && isPveStageRound(2) && isPveStageRound(3) && isPveStageRound(11) && isPveStageRound(18) && !isPveStageRound(4) && !isPveStageRound(13));
+check('Carousel: 2-4 (round 8) va 3-4 (round 15); 2-1 khong phai carousel', isCarouselRound(8) && isCarouselRound(15) && !isCarouselRound(5) && !isCarouselRound(1));
+check('Cuong hoa dung moc 2-1, 3-2, 4-2 (round 5, 13, 20)', JSON.stringify(AUG_ROUNDS_TFT)==='[5,13,20]' && AUG_ROUNDS_TFT.map(ss).join(',')==='2-1,3-2,4-2');
+check('Sat thuong thua: theo stage + 2/quan con song, tang theo stage', lossDamage(1,3)===6 && lossDamage(13,2)===7 && lossDamage(20,1) > lossDamage(5,1));
 console.log(`\nTONG: ${pass} PASS, ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
