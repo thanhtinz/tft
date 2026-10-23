@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { ItemArt } from './ChibiArt';
 import ChibiRig from './ChibiRig';
-import { LayeredBoardBg } from './SceneArt';
+import { AmbientParticles, ArenaScene } from './SceneArt';
 import { rowDepth, stateForUnit } from '../game/rig';
 import { AUGMENTS, BOT_NAMES, CHAMPIONS, SHOP_ODDS, TRAITS, champById, itemById, monsterById, traitName } from '../game/data';
 import { AUG_ROUNDS_TFT as AUG_ROUNDS, BattleResult, PlacedUnit, computeSynergies, interestOf, isCarouselRound, isPveStageRound, lossDamage, makeAiTeam, makeMonsterTeam, newUid, pveEnemiesForRound, randomItem, rollShop, roundLabel, sellValue, simulateBattle, stageSub, streakBonus, xpToNext } from '../game/engine';
@@ -14,6 +14,7 @@ import { loadMeta, loadSettings, saveMeta, saveSettings } from '../game/storage'
 import { TOTAL_STAGES, buildStageTeam, stageDef, stageReward } from '../game/stages';
 import { TUT_REWARD, TutEvent, createTutorial, currentStep, onTutEvent, skipTutorial } from '../game/tutorial';
 import { audio } from '../game/audio';
+import { eventsInWindow, renderUnitsForFrame } from '../game/fx';
 export type GameMode = 'arena' | 'campaign' | 'waves' | 'tutorial';
 interface Props { mode: GameMode; stageId?: number; }
 const STAR_TXT = (s:number) => s===1?'★':s===2?'★★':'★★★';
@@ -25,6 +26,84 @@ export function hexMetrics(w: number, h: number, rows: number) { const size = Ma
 export function hexCenter(m: ReturnType<typeof hexMetrics>, x: number, y: number) { return { cx: m.ox + m.hw / 2 + x * m.hw + (y % 2 ? m.hw / 2 : 0), cy: m.oy + m.size + y * 1.5 * m.size }; }
 function hexPoints(cx: number, cy: number, size: number) { const pts: string[] = []; for (let i = 0; i < 6; i++) { const a = (Math.PI / 180) * (60 * i - 30); pts.push((cx + size * 0.94 * Math.cos(a)).toFixed(1) + ',' + (cy + size * 0.94 * Math.sin(a)).toFixed(1)); } return pts.join(' '); }
 interface PInfo { name: string; hp: number; alive: boolean; lvl: number; rank: number; }
+// ===== Lop trinh bay phu: banner / hieu ung giao tranh / o phat sang (chi hien thi, khong chua logic game) =====
+type FxKind = 'dmg' | 'heal' | 'proj' | 'burst' | 'soul' | 'stun';
+interface FxItem { id: number; kind: FxKind; x: number; y: number; x2?: number; y2?: number; text?: string; crit?: boolean; color?: string; radius?: number; born: number; }
+const FX_LIFE: Record<FxKind, number> = { dmg: 750, heal: 750, proj: 240, burst: 500, soul: 900, stun: 750 };
+const BURST_COLORS: Record<string, string> = { aoe: '#fb8500', freeze: '#48cae4', stun: '#9d4edd', heal: '#38b000' };
+const STAR_SCALE = (s: number) => s === 1 ? 1 : s === 2 ? 1.15 : 1.3;
+function starPoints(cx: number, cy: number, r: number) { return cx + ',' + (cy - r) + ' ' + (cx + r * 0.28) + ',' + (cy - r * 0.28) + ' ' + (cx + r) + ',' + cy + ' ' + (cx + r * 0.28) + ',' + (cy + r * 0.28) + ' ' + cx + ',' + (cy + r) + ' ' + (cx - r * 0.28) + ',' + (cy + r * 0.28) + ' ' + (cx - r) + ',' + cy + ' ' + (cx - r * 0.28) + ',' + (cy - r * 0.28); }
+function ValidCellGlow({ hm, rows, board }: { hm: ReturnType<typeof hexMetrics>; rows: number; board: PlacedUnit[] }) {
+  const [on, setOn] = useState(true);
+  useEffect(() => { const iv = setInterval(() => setOn(o => !o), 600); return () => clearInterval(iv); }, []);
+  const cells: React.ReactNode[] = [];
+  for (let y = 0; y < rows; y++) for (let x = 0; x < 7; x++) {
+    if (board.some(u => u.x === x && u.y === y)) continue;
+    const { cx, cy } = hexCenter(hm, x, y);
+    cells.push(<Polygon key={'glow-' + x + '-' + y} points={hexPoints(cx, cy, hm.size)} fill="#ffb703" fillOpacity={on ? 0.16 : 0.04} stroke="#ffb703" strokeWidth={2.2} strokeOpacity={on ? 0.95 : 0.35} />);
+  }
+  return (<>{cells}</>);
+}
+function SelBounce({ children }: { children: React.ReactNode }) {
+  const [up, setUp] = useState(false);
+  useEffect(() => { const iv = setInterval(() => setUp(u => !u), 280); return () => clearInterval(iv); }, []);
+  return (<View style={{ transform: [{ translateY: up ? -6 : 0 }] }}>{children}</View>);
+}
+function UnitPedestal({ sz, team, star }: { sz: number; team: number; star: number }) {
+  const w = sz * 0.62, h = sz * 0.17;
+  const border = star >= 3 ? '#ffb703' : star === 2 ? '#d7dee8' : team === 1 ? '#ff5d5d' : '#4dabff';
+  return (<View style={{ position: 'absolute', left: (sz - w) / 2, top: sz * 0.883 - h / 2, width: w, height: h, borderRadius: 999, borderWidth: 3, borderColor: border, backgroundColor: 'rgba(10,14,28,0.25)' }} />);
+}
+function StarSparkles({ sz }: { sz: number }) {
+  return (<Svg width={sz * 0.44} height={sz * 0.24} viewBox="0 0 52 28" style={{ position: 'absolute', right: 0, top: 0 } as any} pointerEvents="none">
+    <Polygon points={starPoints(10, 14, 7)} fill="#ffd60a" />
+    <Polygon points={starPoints(27, 8, 5.5)} fill="#ffe66d" />
+    <Polygon points={starPoints(43, 15, 6.5)} fill="#ffb703" />
+  </Svg>);
+}
+function FxLayer({ items }: { items: FxItem[] }) {
+  const [, setTick] = useState(0);
+  useEffect(() => { const iv = setInterval(() => setTick(t => t + 1), 50); return () => clearInterval(iv); }, []);
+  const now = Date.now();
+  return (<View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, zIndex: 200 }}>
+    {items.map(it => {
+      const life = FX_LIFE[it.kind]; const age = now - it.born; if (age < 0 || age > life) return null; const p = age / life;
+      if (it.kind === 'dmg' || it.kind === 'heal' || it.kind === 'stun') {
+        const fade = p > 0.7 ? 1 - (p - 0.7) / 0.3 : 1; const isHeal = it.kind === 'heal';
+        const fontSize = it.crit ? 26 : isHeal ? 17 : 16;
+        return (<Text key={it.id} style={{ position: 'absolute', left: it.x - 45, top: it.y - 14, width: 90, textAlign: 'center', fontWeight: '900', fontSize, color: it.color ?? (isHeal ? '#57e389' : it.crit ? '#ffd60a' : '#ffffff'), opacity: fade, transform: [{ translateY: -44 * p }, { scale: it.crit ? 1 + 0.3 * (1 - p) : 1 }], textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }}>{it.crit ? 'CRIT ' : ''}{it.text}</Text>);
+      }
+      if (it.kind === 'proj') {
+        const x2 = it.x2 ?? it.x, y2 = it.y2 ?? it.y;
+        const dot = (pp: number, size: number, op: number) => { const q = Math.max(0, Math.min(1, pp)); const px = it.x + (x2 - it.x) * q, py = it.y + (y2 - it.y) * q - Math.sin(Math.PI * q) * 20; return (<View style={{ position: 'absolute', left: px - size / 2, top: py - size / 2, width: size, height: size, borderRadius: size / 2, backgroundColor: '#ffd60a', opacity: op }} />); };
+        return (<View key={it.id} style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }}>{dot(p - 0.34, 4, 0.18)}{dot(p - 0.17, 6, 0.35)}{dot(p, 10, 1)}</View>);
+      }
+      if (it.kind === 'burst') {
+        const target = it.radius ? 2.2 : 1.3; const sc = 0.3 + (target - 0.3) * p; const d = 54;
+        return (<View key={it.id} style={{ position: 'absolute', left: it.x - d / 2, top: it.y - d / 2, width: d, height: d, borderRadius: d / 2, borderWidth: 3, borderColor: it.color ?? '#ffd60a', opacity: 0.9 * (1 - p), transform: [{ scale: sc }] }} />);
+      }
+      return (<View key={it.id} style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }}>
+        <View style={{ position: 'absolute', left: it.x - 15, top: it.y - 15 - 26 * p, width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: '#cdb4f6', opacity: 0.75 * (1 - p), transform: [{ scale: 0.6 + p }] }} />
+        <View style={{ position: 'absolute', left: it.x - 6, top: it.y - 6 - 48 * p, width: 12, height: 12, borderRadius: 6, backgroundColor: '#e0c3fc', opacity: 1 - p }} />
+      </View>);
+    })}
+  </View>);
+}
+function ArenaBanner({ title, sub, tone, onDone }: { title: string; sub?: string; tone: 'win' | 'lose' | 'info'; onDone: () => void }) {
+  const [elapsed, setElapsed] = useState(0); const doneRef = useRef(false);
+  useEffect(() => { const iv = setInterval(() => setElapsed(e => e + 50), 50); return () => clearInterval(iv); }, []);
+  useEffect(() => { if (elapsed >= 1700 && !doneRef.current) { doneRef.current = true; onDone(); } }, [elapsed, onDone]);
+  const opacity = elapsed < 250 ? elapsed / 250 : elapsed > 1400 ? Math.max(0, 1 - (elapsed - 1400) / 300) : 1;
+  const scale = elapsed < 250 ? 1.25 - 0.25 * (elapsed / 250) : 1;
+  const accent = tone === 'lose' ? '#ef476f' : tone === 'win' ? '#57e389' : '#f5d67b';
+  return (<View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: '36%', zIndex: 150, alignItems: 'center', opacity }}>
+    <View style={{ transform: [{ scale }], backgroundColor: 'rgba(12,16,32,0.9)', borderWidth: 2, borderColor: accent, borderRadius: 12, paddingHorizontal: 34, paddingVertical: 10, alignItems: 'center', minWidth: 260 }}>
+      <Text style={{ fontSize: 30, fontWeight: '900', color: accent, letterSpacing: 3 }}>{title}</Text>
+      {!!sub && <Text style={{ fontSize: 13, fontWeight: '700', color: '#eef1ff', marginTop: 2 }}>{sub}</Text>}
+    </View>
+  </View>);
+}
+
 export default function GameScreen({ mode, stageId = 1 }: Props) {
   const isTut = mode === 'tutorial'; const isArena = mode === 'arena';
   const { width: winW, height: winH } = useWindowDimensions();
@@ -58,6 +137,12 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   const [summary, setSummary] = useState<{ win: boolean; dealt: number; taken: number } | null>(null);
   const [arenaSize, setArenaSize] = useState({ w: 520, h: 300 });
   const [legendHurt, setLegendHurt] = useState(false); const [shake, setShake] = useState(false);
+  const [banner, setBanner] = useState<{ title: string; sub?: string; tone: 'win' | 'lose' | 'info' } | null>(null);
+  const [fxItems, setFxItems] = useState<FxItem[]>([]);
+  const [redFlash, setRedFlash] = useState(false);
+  const fxIdRef = useRef(1);
+  const prevFrameRef = useRef<{ idx: number; t: number }>({ idx: -1, t: -1 });
+  const shakeTimerRef = useRef<any>(null);
   const allUnits = useMemo(() => [...board, ...bench], [board, bench]);
   const synergies = useMemo(() => computeSynergies(board), [board]);
   const say = (s: string) => setLog(prev => [s, ...prev].slice(0, 8));
@@ -135,6 +220,9 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
     audio.unlock(); audio.startBgm('battle');
     if (isArena && !isPveStageRound(round)) setOppIdx(peekOpponent().idx);
     const e = enemyForRound(); setEnemyLabel(e.label); resolvedRef.current = false;
+    const pveFight = mode !== 'arena' || isPveStageRound(round);
+    setBanner({ title: 'VÒNG ' + (isArena ? roundLabel(round) : mode === 'campaign' ? stageDef(stageId).name : mode === 'waves' ? 'Sóng ' + wave : 'Luyện tập'), sub: pveFight ? 'Đấu với quái — ' + e.label : 'Đấu với ' + e.label.replace('Đội của ', ''), tone: 'info' });
+    setFxItems([]);
     const res = simulateBattle(board, e.units, augments, round*17 + wave*31 + stageId);
     setResult(res); setFrameIdx(0); setPhase('battle'); setRightTab('dmg'); audio.playSfx('start'); emitTut('battleStart');
   }
@@ -143,6 +231,43 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   useEffect(() => { if (isArena && phase==='plan' && planLeft === 0 && board.length) startBattle(); }, [planLeft]);
   useEffect(() => { if (phase!=='battle' || !result || paused) return; const iv = setInterval(() => setFrameIdx(f => Math.min(f+1, result.frames.length-1)), 420/speed); return () => clearInterval(iv); }, [phase, result, speed, paused]);
   useEffect(() => { if (phase!=='battle' || !result) return; const fr = result.frames[Math.min(frameIdx, result.frames.length-1)]; if (!fr) return; const evs = result.events.filter(e => Math.abs(e.t - fr.t) < 0.3); if (evs.some(e => e.text.includes('kỹ năng'))) audio.playSfx('cast'); else if (evs.some(e => e.text.includes(' đánh '))) audio.playSfx('hit'); }, [frameIdx, phase, result]);
+  useEffect(() => { if (!redFlash) return; const tm = setTimeout(() => setRedFlash(false), 500); return () => clearTimeout(tm); }, [redFlash]);
+  useEffect(() => () => { if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current); }, []);
+  // Spawn hieu ung giao tranh theo cua so event cua frame vua chuyen (chi hien thi)
+  useEffect(() => {
+    if (phase !== 'battle' || !result) { prevFrameRef.current = { idx: -1, t: -1 }; return; }
+    const cur = result.frames[Math.min(frameIdx, result.frames.length - 1)]; if (!cur) return;
+    const prev = prevFrameRef.current; if (prev.idx === frameIdx) return;
+    const t0 = prev.idx >= 0 && prev.idx < frameIdx ? prev.t : frameIdx > 0 ? (result.frames[frameIdx - 1]?.t ?? cur.t) : -1;
+    prevFrameRef.current = { idx: frameIdx, t: cur.t };
+    if (frameIdx === 0) return;
+    const evs = eventsInWindow(result.events, t0, cur.t); if (!evs.length) return;
+    const m = hexMetrics(arenaSize.w, arenaSize.h, 7);
+    const posOf = (gx?: number, gy?: number, uid?: string) => {
+      if (gx !== undefined && gy !== undefined) { const c = hexCenter(m, Math.max(0, Math.min(6, gx)), Math.max(0, Math.min(6, gy))); return { x: c.cx, y: c.cy }; }
+      const u = uid ? cur.units.find(v => v.uid === uid) : undefined;
+      if (u) { const c = hexCenter(m, Math.max(0, Math.min(6, u.x)), Math.max(0, Math.min(6, u.y))); return { x: c.cx, y: c.cy }; }
+      return null;
+    };
+    const spawned: FxItem[] = []; const now = Date.now();
+    for (const e of evs) {
+      const tgt = posOf(e.tx, e.ty, e.targetUid ?? e.uid); const src = posOf(e.ax, e.ay, e.attackerUid);
+      if ((e.type === 'attack' || e.type === 'hit' || e.type === 'poison') && e.amount) {
+        if (tgt) spawned.push({ id: fxIdRef.current++, kind: 'dmg', x: tgt.x, y: tgt.y - m.size * 0.4, text: '-' + e.amount, crit: !!e.crit, color: e.type === 'poison' ? '#c77dff' : e.kind === 'magic' ? '#e0aaff' : undefined, born: now });
+        if (e.type === 'attack' && e.ranged && src && tgt) spawned.push({ id: fxIdRef.current++, kind: 'proj', x: src.x, y: src.y - m.size * 0.3, x2: tgt.x, y2: tgt.y - m.size * 0.3, born: now });
+      } else if (e.type === 'heal' && e.amount) {
+        if (tgt) spawned.push({ id: fxIdRef.current++, kind: 'heal', x: tgt.x, y: tgt.y - m.size * 0.4, text: '+' + e.amount, born: now });
+      } else if (e.type === 'cast') {
+        if (tgt) spawned.push({ id: fxIdRef.current++, kind: 'burst', x: tgt.x, y: tgt.y, color: BURST_COLORS[e.skillKind ?? ''] ?? '#ffd60a', radius: e.radius, born: now });
+      } else if (e.type === 'death') {
+        if (tgt) spawned.push({ id: fxIdRef.current++, kind: 'soul', x: tgt.x, y: tgt.y, born: now });
+      } else if (e.type === 'dodge') {
+        if (tgt) spawned.push({ id: fxIdRef.current++, kind: 'dmg', x: tgt.x, y: tgt.y - m.size * 0.4, text: 'NÉ', color: '#adb5bd', born: now });
+      }
+    }
+    if (spawned.length) setFxItems(prevItems => [...prevItems.filter(i => now - i.born < 1000), ...spawned].slice(-40));
+    if (evs.some(e => e.crit && (e.amount ?? 0) >= 120)) { setShake(true); if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current); shakeTimerRef.current = setTimeout(() => setShake(false), 320); }
+  }, [frameIdx, phase, result, arenaSize]);
   useEffect(() => { if (phase==='battle' && result && frameIdx >= result.frames.length-1 && !resolvedRef.current) { resolvedRef.current = true; const tm = setTimeout(() => resolveBattle(), 650); return () => clearTimeout(tm); } }, [frameIdx, phase, result]);
   async function addGems(n: number) { const m = await loadMeta(); m.gems += n; if (mode==='waves') m.bestWave = Math.max(m.bestWave, wave); await saveMeta(m); }
   function computeDmg(res: BattleResult) { const map = new Map<string, { name: string; dmg: number; team: number }>(); const myNames = new Map(board.map(u => [champById(u.defId).name, 0])); for (const e of res.events) { if (!e.amount) continue; const m = e.text.match(/^(.*?) đánh /); if (!m) continue; const name = m[1]; const team = myNames.has(name) ? 0 : 1; const cur = map.get(name) ?? { name, dmg: 0, team }; cur.dmg += e.amount; map.set(name, cur); } const arr = [...map.values()].sort((a,b) => b.dmg - a.dmg); setDmgStats(arr); return arr; }
@@ -150,19 +275,20 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
     if (!result) return; const win = result.winner===0; setPhase('done'); audio.playSfx(win ? 'win' : 'lose');
     const dmgArr = computeDmg(result); const dealt = dmgArr.filter(d => d.team===0).reduce((a,d) => a+d.dmg, 0); const taken = dmgArr.filter(d => d.team===1).reduce((a,d) => a+d.dmg, 0); setSummary({ win, dealt, taken });
     if (mode==='tutorial') { emitTut('battleEnd'); say(win ? 'Thắng trận luyện tập! Tướng của bạn tự đánh và tung kỹ năng khi đầy mana đó.' : 'Thua trận luyện tập cũng không sao — hướng dẫn vẫn tiếp tục, cứ làm theo mascot nhé.'); setGold(g => g + 10); setPhase('plan'); setResult(null); return; }
-    if (mode==='campaign') { const sd = stageDef(stageId); const reward = stageReward(stageId);
+    if (mode==='campaign') { const sd = stageDef(stageId); const reward = stageReward(stageId); setBanner({ title: win ? 'THẮNG' : 'THUA', sub: win ? 'Gây ' + dealt + ' sát thương' : 'Nhận ' + taken + ' sát thương', tone: win ? 'win' : 'lose' });
       if (win) { const frac = result.survivors / Math.max(1, board.length); const stars = frac>=0.7?3:frac>=0.35?2:1;
         loadMeta().then(async m => { m.campaignStars[String(stageId)] = Math.max(m.campaignStars[String(stageId)] ?? 0, stars); m.unlockedStage = Math.max(m.unlockedStage, Math.min(TOTAL_STAGES, stageId+1)); m.gems += reward; if (stageId===TOTAL_STAGES) m.wins += 1; await saveMeta(m); });
         setFinished(`Thắng ${sd.name}! Nhận ${stars} sao và ${reward} Ngọc.`); }
       else setFinished('Thua rồi... Hãy nâng cấp đội hình, ghép sao và thử lại nhé.');
       return; }
-    if (mode==='waves') { if (win) { say('Qua sóng '+wave+'! Sóng tiếp theo mạnh hơn.'); setWave(w => w+1); setGold(g => g + 6 + Math.floor(wave/3)); if (wave%3===0) setInventory(inv => [...inv, randomItem()]); setPhase('plan'); setResult(null); }
+    if (mode==='waves') { setBanner({ title: win ? 'THẮNG' : 'THUA', sub: win ? 'Gây ' + dealt + ' sát thương' : 'Dừng ở sóng ' + wave, tone: win ? 'win' : 'lose' }); if (win) { say('Qua sóng '+wave+'! Sóng tiếp theo mạnh hơn.'); setWave(w => w+1); setGold(g => g + 6 + Math.floor(wave/3)); if (wave%3===0) setInventory(inv => [...inv, randomItem()]); setPhase('plan'); setResult(null); }
       else { addGems(wave*5); setFinished(`Dừng lại ở sóng ${wave}. Kỷ lục được lưu, nhận ${wave*5} Ngọc.`); } return; }
     // Arena theo cau truc stage TFT
     const dmgTaken = win ? 0 : lossDamage(round, result.enemySurvivors);
     let newHp = hp; const newPlayers = players.map(p => ({ ...p, lvl: p.lvl }));
-    if (win) { setStreak(s => s>=0 ? s+1 : 1); } else { setStreak(s => s<=0 ? s-1 : -1); newHp = Math.max(0, hp - dmgTaken); setHp(newHp); say(`Thua round ${roundLabel(round)}, mất ${dmgTaken} máu (theo stage + quân địch còn sống).`); setLegendHurt(true); setTimeout(() => setLegendHurt(false), 1300); if (dmgTaken >= 8) { setShake(true); setTimeout(() => setShake(false), 550); } }
+    if (win) { setStreak(s => s>=0 ? s+1 : 1); } else { setStreak(s => s<=0 ? s-1 : -1); newHp = Math.max(0, hp - dmgTaken); setHp(newHp); say(`Thua round ${roundLabel(round)}, mất ${dmgTaken} máu (theo stage + quân địch còn sống).`); setLegendHurt(true); setRedFlash(true); setTimeout(() => setLegendHurt(false), 1300); if (dmgTaken >= 8) { setShake(true); setTimeout(() => setShake(false), 550); } }
     if (win) say('Thắng round '+roundLabel(round)+'!');
+    setBanner({ title: win ? 'THẮNG' : 'THUA', sub: win ? 'Gây ' + dealt + ' sát thương' : '-' + dmgTaken + ' máu', tone: win ? 'win' : 'lose' });
     const aliveBefore = newPlayers.filter(p => p.alive).length;
     for (let i=1;i<newPlayers.length;i++) { if (!newPlayers[i].alive) continue; const loss = Math.floor(Math.random()*9) + Math.floor(round/3); newPlayers[i].hp = Math.max(0, newPlayers[i].hp - (win && i===oppIdx ? lossDamage(round, result.survivors) : loss)); newPlayers[i].alive = newPlayers[i].hp>0; newPlayers[i].lvl = Math.min(9, 1 + Math.floor(round/3)); if (!newPlayers[i].alive && newPlayers[i].rank===0) newPlayers[i].rank = aliveBefore; }
     newPlayers[0] = { ...newPlayers[0], hp: newHp, alive: newHp>0, lvl: level, rank: newHp>0 ? 0 : aliveBefore };
@@ -201,11 +327,11 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
         <View style={st.topbar}>
           <View style={st.stageDots}>
             <Text style={st.stageLbl}>{isArena ? roundLabel(round) : mode==='campaign' ? stageDef(stageId).name : mode==='waves' ? 'Sóng '+wave : 'Luyện tập'}</Text>
-            {isArena && stageRounds.map(r => { const ss = stageSub(r); const kind = r===round ? 'cur' : isPveStageRound(r) ? 'pve' : isCarouselRound(r) ? 'car' : 'pvp'; return (<View key={r} style={[st.dot, kind==='cur' && st.dotCur, kind==='pve' && st.dotPve, kind==='car' && st.dotCar]}><Text style={st.dotTxt}>{ss.sub}</Text></View>); })}
+            {isArena && stageRounds.map(r => { const ss = stageSub(r); const kind = r===round ? 'cur' : isPveStageRound(r) ? 'pve' : isCarouselRound(r) ? 'car' : 'pvp'; return (<View key={r} style={[st.dot, kind==='cur' && st.dotCur, kind==='pve' && st.dotPve, kind==='car' && st.dotCar]}><Text style={[st.dotTxt, kind==='cur' && { color: '#23180a' }]}>{ss.sub}</Text></View>); })}
           </View>
           <View style={st.timerBox}>
             {phase==='battle' ? <Text style={st.timerTxt}>Đang giao tranh: {enemyLabel}</Text>
-            : isArena ? (<><View style={st.timerBar}><View style={[st.timerFill, { width: (planLeft/planMax*100)+'%', backgroundColor: planLeft<=5 ? '#ef476f' : '#38b000' }]} /></View><Text style={[st.timerTxt, planLeft<=5 && { color: '#ef476f' }]}>{paused ? 'Đang tạm dừng' : 'Chuẩn bị: '+planLeft+'s'}</Text></>)
+            : isArena ? (<><View style={st.timerBar}><View style={[st.timerFill, { width: (planLeft/planMax*100)+'%', backgroundColor: planLeft<=5 ? '#ef476f' : '#f5c542' }]} /></View><Text style={[st.timerTxt, planLeft<=5 && { color: '#ef476f' }]}>{paused ? 'Đang tạm dừng' : 'Chuẩn bị: '+planLeft+'s'}</Text></>)
             : <Text style={st.timerTxt}>{mode==='campaign' ? ('Độ khó: '+stageDef(stageId).power+' — Thưởng: '+stageReward(stageId)+' Ngọc') : 'Chuẩn bị tự do'}</Text>}
             {summary && phase!=='battle' && <Text style={st.sumTxt}>{summary.win ? 'Thắng' : 'Thua'} — Gây {summary.dealt} / Nhận {summary.taken} sát thương (đánh thường)</Text>}
           </View>
@@ -223,9 +349,9 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             <Text style={st.panelTitle}>Tộc / Hệ</Text>
             <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
               {traitRows.map(r => { const hl = selUnit && champById(selUnit.defId).traits.includes(r.t.id); const tierColor = r.tier===1 ? '#cd8f52' : r.tier===2 ? '#a8b6c4' : r.tier>=3 ? '#f5c542' : undefined; return (
-                <View key={r.t.id} style={[st.traitRow, r.tier>0 && { backgroundColor: '#fff3d6', borderColor: tierColor }, hl && st.traitHl]}>
+                <View key={r.t.id} style={[st.traitRow, r.tier>0 && { backgroundColor: '#4a3a10', borderColor: tierColor }, hl && st.traitHl]}>
                   <Text style={st.traitName}>{r.t.name}</Text>
-                  <Text style={[st.traitCnt, r.tier>0 && { color: '#a86e00', fontWeight:'900' }]}>{r.c}{r.next ? '/'+r.next : ' (tối đa)'}</Text>
+                  <Text style={[st.traitCnt, r.tier>0 && { color: '#ffd60a', fontWeight:'900' }]}>{r.c}{r.next ? '/'+r.next : ' (tối đa)'}</Text>
                 </View> ); })}
               {!traitRows.length && <Text style={st.dim}>Chưa có tướng trên bàn</Text>}
               {!!augments.length && <><Text style={[st.panelTitle, { marginTop: 8 }]}>Cường hóa</Text>{augments.map(id => { const a = AUGMENTS.find(x => x.id===id); return a ? <View key={id} style={st.augChip}><Text style={st.augTxt}>{a.name}</Text></View> : null; })}</>}
@@ -240,32 +366,51 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
           </View>
           {/* CENTER: arena */}
           <View style={[st.arena, shake && { transform: [{ translateX: 5 }] }]} onLayout={e => setArenaSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
-            <LayeredBoardBg width={Math.min(arenaSize.w, 560)}/>
-            <Svg style={StyleSheet.absoluteFill} width={arenaSize.w} height={arenaSize.h}>
-              {Array.from({length: rows}).map((_, y) => Array.from({length: 7}).map((_, x) => { const { cx, cy } = hexCenter(hm, x, y); const occ = phase!=='battle' && board.some(u => u.x===x && u.y===y); return (<Polygon key={x+'-'+y} points={hexPoints(cx, cy, hm.size)} fill={occ ? '#ffe3ef' : y < (phase==='battle' ? 3 : 4) ? '#ffffffb8' : '#dff7e8b8'} stroke="#95d5b2" strokeWidth={1.2} onPress={phase!=='battle' ? () => tapBoardCell(x, y) : undefined}/>); }))}
+            <ArenaScene width={arenaSize.w} height={arenaSize.h}/>
+            <AmbientParticles width={arenaSize.w} height={arenaSize.h}/>
+                        <Svg style={StyleSheet.absoluteFill} width={arenaSize.w} height={arenaSize.h}>
+              {Array.from({length: rows}).map((_, y) => Array.from({length: 7}).map((_, x) => { const { cx, cy } = hexCenter(hm, x, y); const occ = phase!=='battle' && board.some(u => u.x===x && u.y===y); const enemyHalf = phase==='battle' && y >= 4; return (<React.Fragment key={x+'-'+y}>
+                <Polygon points={hexPoints(cx, cy + hm.size*0.12, hm.size)} fill={enemyHalf ? '#a14a3f99' : '#2e7d5b99'} stroke="transparent" strokeWidth={0}/>
+                <Polygon points={hexPoints(cx, cy, hm.size)} fill={occ ? '#ffe9a8cc' : enemyHalf ? '#ffcfb873' : '#b9fbc073'} stroke={enemyHalf ? '#e5989b' : '#7fc8a9'} strokeWidth={1.2} onPress={phase!=='battle' ? () => tapBoardCell(x, y) : undefined}/>
+              </React.Fragment>); }))}
+              {phase!=='battle' && selUid != null && (<ValidCellGlow hm={hm} rows={rows} board={board}/>)}
             </Svg>
-            {phase!=='battle' && board.map(u => { const { cx, cy } = hexCenter(hm, u.x, u.y); const sz = hm.size * 1.5 * rowDepth(u.y, 4).scale; return (
-              <View key={u.uid} style={{ position:'absolute', left: cx - sz/2, top: cy - sz*0.86, width: sz, height: sz, alignItems:'center' }} pointerEvents="none">
-                {selUid===u.uid && <View style={[st.selRing, { width: sz*0.9, height: sz*0.3, bottom: -2 }]} />}
-                <ChibiRig spec={champById(u.defId)} size={sz} star={u.star} state='idle'/>
+                        {phase!=='battle' && board.map(u => { const { cx, cy } = hexCenter(hm, u.x, u.y); const sz = hm.size * 2.05 * rowDepth(u.y, 4).scale * STAR_SCALE(u.star); const isSel = selUid===u.uid; const rig = (
+                <View style={[{ width: sz, height: sz, alignItems:'center' }, u.star>=2 && { shadowColor: u.star>=3 ? '#ffb703' : '#d7dee8', shadowOpacity: 0.9, shadowRadius: u.star>=3 ? 12 : 7, shadowOffset: { width: 0, height: 0 }, elevation: 6 }]}>
+                  <UnitPedestal sz={sz} team={0} star={u.star}/>
+                  <ChibiRig spec={champById(u.defId)} size={sz} star={u.star} state='idle'/>
+                  {u.star>=3 && <StarSparkles sz={sz}/>}
+                </View>); return (
+              <View key={u.uid} style={{ position:'absolute', left: cx - sz/2, top: cy + hm.size*0.28 - sz*0.88, width: sz, height: sz, alignItems:'center', zIndex: rowDepth(u.y, 4).zIndex }} pointerEvents="none">
+                {isSel && <View style={[st.selRing, { width: sz*0.9, height: sz*0.3, bottom: -2 }]} />}
+                {isSel ? <SelBounce>{rig}</SelBounce> : rig}
               </View> ); })}
-            {phase==='battle' && frame && [...frame.units].sort((a,b) => a.y-b.y).map(u => { const { cx, cy } = hexCenter(hm, Math.max(0, Math.min(6, u.x)), Math.max(0, Math.min(6, u.y))); const prev = result && frameIdx>0 ? result.frames[frameIdx-1].units.find(v => v.uid===u.uid) : undefined; const evs = result ? result.events.filter(e => Math.abs(e.t-frame.t)<0.3) : []; const animState = stateForUnit({ alive: u.alive, moved: !!prev && (prev.x!==u.x || prev.y!==u.y), castAtFrame: evs.some(e => e.uid===u.uid && e.text.includes('kỹ năng')), attackedAtFrame: evs.some(e => e.text.startsWith(u.name+' đánh')), hurtAtFrame: evs.some(e => e.uid===u.uid && !!e.amount), battleOver: frameIdx >= (result?.frames.length ?? 1)-1, won: result?.winner===u.team }); const dep = rowDepth(u.y, 7); const sz = hm.size * 1.45 * dep.scale; return (
-              <View key={u.uid} style={{ position:'absolute', left: cx - sz/2, top: cy - sz*0.86, width: sz, zIndex: dep.zIndex, alignItems:'center' }}>
-                <ChibiRig spec={u.isMonster ? monsterById(u.defId) : champById(u.defId)} size={sz} star={u.star} state={animState} flip={u.team===1}/>
-                <View style={st.hpBar}><View style={[st.hpFill, { width: Math.max(0, Math.min(100, u.hp/u.maxHp*100))+'%' } ]}/></View>
-                <View style={st.manaBar}><View style={[st.manaFill, { width: Math.min(100, u.mana/u.maxMana*100)+'%' } ]}/></View>
+            {phase==='battle' && frame && result && renderUnitsForFrame(frame).map(u => { const { cx, cy } = hexCenter(hm, Math.max(0, Math.min(6, u.x)), Math.max(0, Math.min(6, u.y))); const prev = frameIdx>0 ? result.frames[frameIdx-1].units.find(v => v.uid===u.uid) : undefined; const prevT = frameIdx>0 ? result.frames[frameIdx-1].t : frame.t - 0.5; const evs = eventsInWindow(result.events, prevT, frame.t); const isTarget = evs.some(e => (e.type==='attack' || e.type==='hit') && (e.targetUid ?? e.uid)===u.uid); const lungeEv = evs.find(e => e.type==='attack' && e.attackerUid===u.uid && !e.ranged); const lx = lungeEv && lungeEv.tx!==undefined ? Math.sign(lungeEv.tx - u.x)*12 : 0; const ly = lungeEv && lungeEv.ty!==undefined ? Math.sign(lungeEv.ty - u.y)*6 : 0; const animState = stateForUnit({ alive: u.alive, moved: !!prev && (prev.x!==u.x || prev.y!==u.y), castAtFrame: evs.some(e => e.type==='cast' && e.attackerUid===u.uid), attackedAtFrame: evs.some(e => e.type==='attack' && e.attackerUid===u.uid), hurtAtFrame: evs.some(e => (e.targetUid ?? e.uid)===u.uid && !!e.amount), battleOver: frameIdx >= result.frames.length-1, won: result.winner===u.team }); const dep = rowDepth(u.y, 7); const sz = hm.size * 2.05 * dep.scale * STAR_SCALE(u.star); const stunAngle = (frame.t * 120) % 360; return (
+              <View key={u.uid} style={{ position:'absolute', left: cx - sz/2 + lx + (isTarget ? (frameIdx % 2 === 0 ? 3 : -3) : 0), top: cy + hm.size*0.28 - sz*0.88 + ly, width: sz, zIndex: dep.zIndex, alignItems:'center' }}>
+                <View style={[{ width: sz, height: sz, alignItems:'center' }, u.star>=2 && { shadowColor: u.star>=3 ? '#ffb703' : '#d7dee8', shadowOpacity: 0.9, shadowRadius: u.star>=3 ? 12 : 7, shadowOffset: { width: 0, height: 0 }, elevation: 6 }]}>
+                  <UnitPedestal sz={sz} team={u.team} star={u.star}/>
+                  <ChibiRig spec={u.art} size={sz} star={u.star} state={animState} flip={u.team===1}/>
+                  {isTarget && <View style={{ position:'absolute', left:0, top:0, width: sz, height: sz, backgroundColor:'#ffffff', opacity:0.55, borderRadius:12 }} pointerEvents="none"/>}
+                  {u.star>=3 && <StarSparkles sz={sz}/>}
+                  {u.stun > 0 && (<Svg width={sz*0.52} height={16} viewBox="0 0 62 16" style={{ position:'absolute', left: sz*0.24, top: -4, transform: [{ rotate: stunAngle + 'deg' }] } as any} pointerEvents="none"><Polygon points={starPoints(9, 8, 6)} fill="#ffd60a"/><Polygon points={starPoints(31, 8, 6)} fill="#ffd60a"/><Polygon points={starPoints(53, 8, 6)} fill="#ffd60a"/></Svg>)}
+                </View>
+                <View style={[st.hpBar, { borderWidth: 1, borderColor: 'rgba(6,8,20,0.55)' }]}><View style={[st.hpFill, { width: Math.max(0, Math.min(100, u.hp/u.maxHp*100))+'%', backgroundColor: u.team===1 ? '#ef476f' : '#38b000' } ]}/></View>
+                <View style={[st.manaBar, { borderWidth: 1, borderColor: 'rgba(6,8,20,0.55)' }]}><View style={[st.manaFill, { width: Math.min(100, u.mana/u.maxMana*100)+'%' } ]}/></View>
               </View> ); })}
-            <View style={st.legend}>
+<View style={st.legend}>
               <ChibiRig spec={champById('toto')} size={52} state={legendHurt ? 'hurt' : 'idle'}/>
               <View><Text style={st.legendName}>Linh thú của bạn</Text>{isArena && <Text style={st.legendHp}>{hp} máu — Đội {board.length}/{level}</Text>}{mode==='campaign' && <Text style={st.legendHp}>{stageDef(stageId).name}</Text>}</View>
             </View>
             {phase==='battle' && (<View style={st.battleCtrls}><Pressable style={st.smallBtn} onPress={() => result && setFrameIdx(result.frames.length-1)}><Text style={st.smallTxt}>Bỏ qua tới kết quả</Text></Pressable></View>)}
             {phase==='battle' && result && (<View style={st.logFloat}>{result.events.filter(e => Math.abs(e.t - (frame?.t ?? 0)) < 1.4).slice(-2).map((e,i) => <Text key={i} style={st.logTxt}>{e.text}{e.amount?(' ('+e.amount+')'):''}</Text>)}</View>)}
+            <FxLayer items={fxItems}/>
+            {banner && <ArenaBanner title={banner.title} sub={banner.sub} tone={banner.tone} onDone={() => setBanner(null)}/>}
+            {redFlash && <View pointerEvents="none" style={{ position:'absolute', left:0, top:0, right:0, bottom:0, borderWidth:6, borderColor:'#ef476f', backgroundColor:'rgba(239,71,111,0.12)', zIndex:180 }}/>}
           </View>
           {/* RIGHT: scoreboard / damage */}
           <View style={st.rightPanel}>
             {isArena ? (<>
-              <View style={st.tabRow}><Pressable style={[st.tab, rightTab==='players' && st.tabOn]} onPress={() => setRightTab('players')}><Text style={st.tabTxt}>Người chơi</Text></Pressable><Pressable style={[st.tab, rightTab==='dmg' && st.tabOn]} onPress={() => setRightTab('dmg')}><Text style={st.tabTxt}>Sát thương</Text></Pressable></View>
+              <View style={st.tabRow}><Pressable style={[st.tab, rightTab==='players' && st.tabOn]} onPress={() => setRightTab('players')}><Text style={[st.tabTxt, rightTab==='players' && st.tabTxtOn]}>Người chơi</Text></Pressable><Pressable style={[st.tab, rightTab==='dmg' && st.tabOn]} onPress={() => setRightTab('dmg')}><Text style={[st.tabTxt, rightTab==='dmg' && st.tabTxtOn]}>Sát thương</Text></Pressable></View>
               {rightTab==='players' ? (<ScrollView showsVerticalScrollIndicator={false}>{players.map((p, i) => { const isOpp = phase!=='battle' ? peekOpponent().idx===i : oppIdx===i; return (
                 <Pressable key={i} onPress={() => { setScout(i); audio.playSfx('click'); }} style={[st.pRow, !p.alive && st.pDead, isOpp && p.alive && st.pOpp]}>
                   <ChibiRig spec={CHAMPIONS[(i*3) % CHAMPIONS.length]} size={34} state={p.alive ? 'idle' : 'death'}/>
@@ -275,14 +420,14 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
                     <Text style={st.pHp}>{p.hp} máu{i===0 && streak !== 0 ? ' — Chuỗi ' + (streak>0 ? 'thắng ' : 'thua ') + Math.abs(streak) : ''}</Text>
                   </View>
                 </Pressable> ); })}</ScrollView>)
-              : (<ScrollView showsVerticalScrollIndicator={false}><Text style={st.dim}>Sát thương đánh thường theo nhật ký trận gần nhất. Chạm người chơi ở tab Người chơi để xem bàn cờ của họ.</Text>{dmgStats.map((d, i) => (<View key={i} style={st.dRow}><Text style={[st.dName, { color: d.team===0 ? '#28418c' : '#a4133c' }]}>{d.name}</Text><View style={st.dBar}><View style={{ height: 10, borderRadius: 5, width: (d.dmg/maxDmg*100)+'%', backgroundColor: d.team===0 ? '#4361ee' : '#ef476f' }} /></View><Text style={st.dVal}>{d.dmg}</Text></View>))}{!dmgStats.length && <Text style={st.dim}>Chưa có dữ liệu — hãy đấu một round.</Text>}</ScrollView>)}
+              : (<ScrollView showsVerticalScrollIndicator={false}><Text style={st.dim}>Sát thương đánh thường theo nhật ký trận gần nhất. Chạm người chơi ở tab Người chơi để xem bàn cờ của họ.</Text>{dmgStats.map((d, i) => (<View key={i} style={st.dRow}><Text style={[st.dName, { color: d.team===0 ? '#7fb3ff' : '#ff8fab' }]}>{d.name}</Text><View style={st.dBar}><View style={{ height: 10, borderRadius: 5, width: (d.dmg/maxDmg*100)+'%', backgroundColor: d.team===0 ? '#4361ee' : '#ef476f' }} /></View><Text style={st.dVal}>{d.dmg}</Text></View>))}{!dmgStats.length && <Text style={st.dim}>Chưa có dữ liệu — hãy đấu một round.</Text>}</ScrollView>)}
             </>) : (<>
               <Text style={st.panelTitle}>{mode==='campaign' ? 'Thông tin ải' : mode==='waves' ? 'Thử thách' : 'Ghi chú'}</Text>
               {mode==='campaign' && <><Text style={st.infoLine}>{stageDef(stageId).name}</Text><Text style={st.dim}>Chương {stageDef(stageId).chapter} — Độ khó {stageDef(stageId).power}</Text><Text style={st.dim}>Thưởng thắng: {stageReward(stageId)} Ngọc. Tổng chiến dịch: {TOTAL_STAGES} màn.</Text></>}
               {mode==='waves' && <Text style={st.dim}>Sóng {wave}: quái mạnh dần theo sóng. Cứ 3 sóng nhận 1 trang bị ngẫu nhiên.</Text>}
               {isTut && <Text style={st.dim}>Làm theo hướng dẫn của mascot Nana ở phía trên. Hoàn thành lần đầu nhận {TUT_REWARD} Ngọc.</Text>}
               <Text style={[st.panelTitle, { marginTop: 8 }]}>Sát thương (đánh thường)</Text>
-              <ScrollView showsVerticalScrollIndicator={false}>{dmgStats.map((d, i) => (<View key={i} style={st.dRow}><Text style={[st.dName, { color: d.team===0 ? '#28418c' : '#a4133c' }]}>{d.name}</Text><View style={st.dBar}><View style={{ height: 10, borderRadius: 5, width: (d.dmg/maxDmg*100)+'%', backgroundColor: d.team===0 ? '#4361ee' : '#ef476f' }} /></View><Text style={st.dVal}>{d.dmg}</Text></View>))}{!dmgStats.length && <Text style={st.dim}>Chưa có dữ liệu.</Text>}</ScrollView>
+              <ScrollView showsVerticalScrollIndicator={false}>{dmgStats.map((d, i) => (<View key={i} style={st.dRow}><Text style={[st.dName, { color: d.team===0 ? '#7fb3ff' : '#ff8fab' }]}>{d.name}</Text><View style={st.dBar}><View style={{ height: 10, borderRadius: 5, width: (d.dmg/maxDmg*100)+'%', backgroundColor: d.team===0 ? '#4361ee' : '#ef476f' }} /></View><Text style={st.dVal}>{d.dmg}</Text></View>))}{!dmgStats.length && <Text style={st.dim}>Chưa có dữ liệu.</Text>}</ScrollView>
             </>)}
           </View>
         </View>
@@ -305,12 +450,17 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
           <View style={{ flex: 1 }}>
             <View style={st.oddsRow}><Text style={st.dim}>Tỉ lệ shop cấp {level}:</Text>{odds.map((o, i) => (<View key={i} style={[st.oddChip, { backgroundColor: COST_COLORS[i+1] }]}><Text style={st.oddTxt}>{i+1} vàng: {o}%</Text></View>))}</View>
             <View style={[st.cardsRow, hi('shop') && st.tutHi]}>
-              {shop.map((id, i) => { const d = champById(id); const copies = copiesOf(id); const glow = copies >= 2; return (
+                            {shop.map((id, i) => { const d = champById(id); const copies = copiesOf(id); const glow = copies >= 2; return (
                 <Pressable key={i} onPress={() => buy(i)} style={[st.shopCard, { borderColor: COST_COLORS[d.cost] }, glow && st.cardGlow]}>
-                  <View style={st.cardTop}><Text style={st.cardTrait}>{d.traits.map(traitName).join(' · ')}</Text>{glow && <Text style={st.glowTag}>Sắp lên sao</Text>}</View>
-                  <ChibiRig spec={d} size={64} state='idle'/>
-                  <Text style={st.shopName}>{d.name}</Text>
-                  <View style={[st.costBar, { backgroundColor: COST_COLORS[d.cost] }]}><Text style={st.costTxt}>{d.cost} vàng</Text><Text style={st.costTxt}>{STAR_TXT(1)}</Text></View>
+                  <View style={[st.cardArt, { backgroundColor: COST_COLORS[d.cost] + '33' }]}>
+                    <ChibiRig spec={d} size={84} state='idle'/>
+                    <View style={st.costBadge}><Text style={st.costBadgeTxt}>{d.cost}</Text></View>
+                    {glow && <Text style={st.glowTag}>Sắp lên sao</Text>}
+                  </View>
+                  <View style={st.cardInfo}>
+                    <Text style={st.shopName}>{d.name}</Text>
+                    <Text style={st.cardTrait}>{d.traits.map(traitName).join(' · ')}</Text>
+                  </View>
                 </Pressable> ); })}
             </View>
           </View>
@@ -334,18 +484,20 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
         {paused && (<View style={st.overlay}><View style={st.modal}><Text style={st.modalTitle}>Tạm dừng</Text><Text style={st.modalDesc}>Trận đấu đang tạm dừng.</Text>
           <Pressable style={st.bigBtn} onPress={() => setPaused(false)}><Text style={st.bigTxt}>Tiếp tục chơi</Text></Pressable>
           <Pressable style={[st.bigBtn, { backgroundColor:'#6c757d' }]} onPress={() => router.back()}><Text style={st.bigTxt}>Thoát về trang chủ</Text></Pressable></View></View>)}
-        {carousel && !finished && (<View style={st.overlay}><View style={[st.modal, { maxWidth: 640 }]}>
-          <Text style={st.modalTitle}>Vòng chọn — Carousel</Text><Text style={st.modalDesc}>Vòng tròn tướng kèm trang bị đang quay. Chạm vào 1 ô để nhận tướng + trang bị đó (các đối thủ chọn sau bạn).</Text>
+                {carousel && !finished && (<View style={st.carOverlay}>
+          <Text style={st.carTitle}>Vòng chọn — Carousel</Text>
+          <Text style={st.carDesc}>Vòng tròn tướng kèm trang bị đang quay. Chạm vào 1 ô để nhận tướng + trang bị đó (các đối thủ chọn sau bạn).</Text>
           <View style={st.carCircle}>
+            <View style={st.carRing}/>
             {carousel.map((opt, i) => { const ang = (carAngle + i * 45) * Math.PI / 180; const cx = 190 + Math.cos(ang) * 130; const cy = 130 + Math.sin(ang) * 88; const d = champById(opt.defId); return (
-              <Pressable key={i} onPress={() => chooseCarousel(opt)} style={[st.carCell, { left: cx - 46, top: cy - 52, borderColor: COST_COLORS[d.cost] }]}>
-                <ChibiRig spec={d} size={54} state='walk'/><Text style={st.carName}>{d.name}</Text>
+              <Pressable key={i} onPress={() => chooseCarousel(opt)} style={[st.carCell, { left: cx - 50, top: cy - 56, borderColor: COST_COLORS[d.cost] }]}>
+                <ChibiRig spec={d} size={72} state='idle'/><Text style={st.carName}>{d.name}</Text>
                 <View style={{ flexDirection:'row', alignItems:'center', gap:2 }}><ItemArt color={(itemById(opt.item)?.color) ?? '#ccc'} size={16}/><Text style={st.carItem}>{itemById(opt.item)?.name ?? ''}</Text></View>
               </Pressable> ); })}
             <View style={st.carCenter}><ChibiRig spec={champById('toto')} size={64} state='victory'/></View>
           </View>
-        </View></View>)}
-        {scout !== null && (<View style={st.overlay}><View style={[st.modal, { maxWidth: 560 }]}>
+        </View>)}
+{scout !== null && (<View style={st.overlay}><View style={[st.modal, { maxWidth: 560 }]}>
           <Text style={st.modalTitle}>Bàn cờ của {players[scout]?.name ?? 'Đối thủ'} (chỉ xem)</Text>
           <Text style={st.modalDesc}>Cấp {scout === 0 ? level : players[scout]?.lvl} — {scoutTeam.length} tướng trên bàn. Xem đội hình đối thủ để sắp xếp lại đội của bạn.</Text>
           <View style={st.scoutBoard}>
@@ -367,51 +519,55 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   );
 }
 const st = StyleSheet.create({
-  root:{ flex:1, backgroundColor:'#241a2e', alignItems:'center', justifyContent:'center' },
-  frame:{ backgroundColor:'#fff7fb', borderRadius:16, padding:8, gap:6, overflow:'hidden', maxWidth:'100%', maxHeight:'100%' },
-  topbar:{ flexDirection:'row', gap:10, alignItems:'center', backgroundColor:'#ffe3ef', borderRadius:12, paddingHorizontal:10, paddingVertical:6 },
-  stageDots:{ flexDirection:'row', gap:4, alignItems:'center' }, stageLbl:{ fontWeight:'900', fontSize:17, color:'#7b2d5b', marginRight:4 },
-  dot:{ width:22, height:22, borderRadius:11, backgroundColor:'#fff', alignItems:'center', justifyContent:'center', borderWidth:1, borderColor:'#d8b4c8' }, dotCur:{ backgroundColor:'#ff70a6', borderColor:'#ff70a6', transform:[{scale:1.2}] }, dotPve:{ backgroundColor:'#ffe5b4' }, dotCar:{ backgroundColor:'#cdb4f6' }, dotTxt:{ fontSize:11, fontWeight:'800', color:'#5b3a29' },
-  timerBox:{ flex:1, gap:2 }, timerBar:{ height:8, backgroundColor:'#0002', borderRadius:4, overflow:'hidden' }, timerFill:{ height:8, borderRadius:4 }, timerTxt:{ fontWeight:'800', color:'#28418c', fontSize:12 }, sumTxt:{ fontSize:11, color:'#555', fontWeight:'600' },
-  topBtns:{ flexDirection:'row', gap:6 }, tBtn:{ backgroundColor:'#4361ee', borderRadius:999, paddingHorizontal:10, paddingVertical:6 }, tBtnTxt:{ color:'#fff', fontWeight:'700', fontSize:11 },
+  root:{ flex:1, backgroundColor:'#14101f', alignItems:'center', justifyContent:'center' },
+  frame:{ backgroundColor:'#10182e', borderRadius:16, borderWidth:2, borderColor:'#c9a227', padding:8, gap:6, overflow:'hidden', maxWidth:'100%', maxHeight:'100%' },
+  topbar:{ flexDirection:'row', gap:10, alignItems:'center', backgroundColor:'#1a2340', borderRadius:12, borderWidth:1, borderColor:'#c9a227', paddingHorizontal:10, paddingVertical:6 },
+  stageDots:{ flexDirection:'row', gap:4, alignItems:'center' }, stageLbl:{ fontWeight:'900', fontSize:17, color:'#f5d67b', marginRight:4 },
+  dot:{ width:22, height:22, borderRadius:11, backgroundColor:'#2a3454', alignItems:'center', justifyContent:'center', borderWidth:1, borderColor:'#46538a' }, dotCur:{ backgroundColor:'#f5c542', borderColor:'#f5c542', transform:[{scale:1.2}] }, dotPve:{ backgroundColor:'#8a5a13' }, dotCar:{ backgroundColor:'#5a189a' }, dotTxt:{ fontSize:11, fontWeight:'800', color:'#eef1ff' },
+  timerBox:{ flex:1, gap:2 }, timerBar:{ height:8, backgroundColor:'rgba(255,255,255,0.14)', borderRadius:4, overflow:'hidden' }, timerFill:{ height:8, borderRadius:4 }, timerTxt:{ fontWeight:'800', color:'#eef1ff', fontSize:12 }, sumTxt:{ fontSize:11, color:'#aab4d4', fontWeight:'600' },
+  topBtns:{ flexDirection:'row', gap:6 }, tBtn:{ backgroundColor:'#2f6db3', borderRadius:999, paddingHorizontal:10, paddingVertical:6, borderTopWidth:1, borderTopColor:'#8fc1f5', borderBottomWidth:4, borderBottomColor:'#1c4472' }, tBtnTxt:{ color:'#fff', fontWeight:'700', fontSize:11 },
   middle:{ flex:1, flexDirection:'row', gap:8, minHeight:0 },
-  leftPanel:{ width:172, backgroundColor:'#fff', borderRadius:14, padding:8, borderWidth:1, borderColor:'#ffd6e0' },
-  rightPanel:{ width:196, backgroundColor:'#fff', borderRadius:14, padding:8, borderWidth:1, borderColor:'#ffd6e0' },
-  panelTitle:{ fontWeight:'900', color:'#7b2d5b', marginBottom:4 },
-  traitRow:{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', backgroundColor:'#f6f1f8', borderRadius:9, paddingHorizontal:8, paddingVertical:4, marginBottom:4, borderWidth:1, borderColor:'transparent' }, traitHl:{ borderColor:'#ff70a6', borderWidth:2 }, traitName:{ fontWeight:'700', fontSize:12, color:'#333' }, traitCnt:{ fontSize:12, color:'#777', fontWeight:'700' },
-  augChip:{ backgroundColor:'#fff3b0', borderRadius:9, paddingHorizontal:8, paddingVertical:4, marginBottom:4 }, augTxt:{ fontSize:11, fontWeight:'700', color:'#6b5200' },
-  invWrap:{ flexDirection:'row', flexWrap:'wrap', gap:6 }, invCell:{ backgroundColor:'#fff7fb', borderRadius:10, padding:4, alignItems:'center', width:74, borderWidth:1, borderColor:'#ffd6e0' }, invTxt:{ fontSize:9, textAlign:'center', fontWeight:'600' },
-  selMini:{ marginTop:8, backgroundColor:'#eef6ff', borderRadius:10, padding:7 }, selName:{ fontWeight:'800', fontSize:12 }, miniBtn:{ backgroundColor:'#4361ee', borderRadius:999, paddingHorizontal:9, paddingVertical:4 }, miniTxt:{ color:'#fff', fontWeight:'700', fontSize:10 },
-  arena:{ flex:1, backgroundColor:'#d8f3dc', borderRadius:16, borderWidth:3, borderColor:'#95d5b2', position:'relative', overflow:'hidden', alignItems:'center' },
+  leftPanel:{ width:172, backgroundColor:'rgba(26,35,64,0.96)', borderRadius:14, padding:8, borderWidth:1.5, borderColor:'#c9a227' },
+  rightPanel:{ width:196, backgroundColor:'rgba(26,35,64,0.96)', borderRadius:14, padding:8, borderWidth:1.5, borderColor:'#c9a227' },
+  panelTitle:{ fontWeight:'900', color:'#f5d67b', marginBottom:4 },
+  traitRow:{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', backgroundColor:'#242f52', borderRadius:9, paddingHorizontal:8, paddingVertical:4, marginBottom:4, borderWidth:1, borderColor:'transparent' }, traitHl:{ borderColor:'#ffb703', borderWidth:2 }, traitName:{ fontWeight:'700', fontSize:12, color:'#eef1ff' }, traitCnt:{ fontSize:12, color:'#aab4d4', fontWeight:'700' },
+  augChip:{ backgroundColor:'#4a3a10', borderRadius:9, paddingHorizontal:8, paddingVertical:4, marginBottom:4 }, augTxt:{ fontSize:11, fontWeight:'700', color:'#ffd60a' },
+  invWrap:{ flexDirection:'row', flexWrap:'wrap', gap:6 }, invCell:{ backgroundColor:'#232d4f', borderRadius:10, padding:4, alignItems:'center', width:74, borderWidth:1, borderColor:'#46538a' }, invTxt:{ fontSize:9, textAlign:'center', fontWeight:'600', color:'#e8ecff' },
+  selMini:{ marginTop:8, backgroundColor:'#232d4f', borderRadius:10, padding:7 }, selName:{ fontWeight:'800', fontSize:12, color:'#eef1ff' }, miniBtn:{ backgroundColor:'#2f6db3', borderRadius:999, paddingHorizontal:9, paddingVertical:4, borderTopWidth:1, borderTopColor:'#8fc1f5', borderBottomWidth:3, borderBottomColor:'#1c4472' }, miniTxt:{ color:'#fff', fontWeight:'700', fontSize:10 },
+  arena:{ flex:1, backgroundColor:'#1d3a2a', borderRadius:16, borderWidth:2, borderColor:'#c9a227', position:'relative', overflow:'hidden', alignItems:'center' },
   selRing:{ position:'absolute', borderWidth:3, borderColor:'#ffb703', borderRadius:999, backgroundColor:'#ffb70333' },
-  hpBar:{ width:'92%', height:5, backgroundColor:'#0003', borderRadius:3, overflow:'hidden' }, hpFill:{ height:5, backgroundColor:'#38b000' }, manaBar:{ width:'92%', height:4, backgroundColor:'#0003', borderRadius:3, overflow:'hidden', marginTop:1 }, manaFill:{ height:4, backgroundColor:'#4361ee' },
-  legend:{ position:'absolute', left:8, bottom:6, flexDirection:'row', alignItems:'center', gap:6, backgroundColor:'#ffffffcc', borderRadius:999, paddingRight:12, paddingLeft:2, paddingVertical:2 }, legendName:{ fontWeight:'800', fontSize:11, color:'#7b2d5b' }, legendHp:{ fontSize:11, color:'#555', fontWeight:'600' },
+  hpBar:{ width:'92%', height:5, backgroundColor:'rgba(6,8,20,0.5)', borderRadius:3, overflow:'hidden' }, hpFill:{ height:5, backgroundColor:'#38b000' }, manaBar:{ width:'92%', height:4, backgroundColor:'rgba(6,8,20,0.5)', borderRadius:3, overflow:'hidden', marginTop:1 }, manaFill:{ height:4, backgroundColor:'#4dabff' },
+  legend:{ position:'absolute', left:8, bottom:6, flexDirection:'row', alignItems:'center', gap:6, backgroundColor:'rgba(16,22,44,0.88)', borderRadius:999, paddingRight:12, paddingLeft:2, paddingVertical:2 }, legendName:{ fontWeight:'800', fontSize:11, color:'#f5d67b' }, legendHp:{ fontSize:11, color:'#aab4d4', fontWeight:'600' },
   battleCtrls:{ position:'absolute', right:8, bottom:8, flexDirection:'row', gap:6 },
-  logFloat:{ position:'absolute', left:8, top:8, backgroundColor:'#ffffffd9', borderRadius:10, padding:7, maxWidth:300 }, logTxt:{ fontSize:11, color:'#444' },
-  tabRow:{ flexDirection:'row', gap:6, marginBottom:6 }, tab:{ flex:1, backgroundColor:'#f1e7f5', borderRadius:999, paddingVertical:5, alignItems:'center' }, tabOn:{ backgroundColor:'#ff70a6' }, tabTxt:{ fontWeight:'800', fontSize:11, color:'#333' },
-  pRow:{ flexDirection:'row', gap:7, alignItems:'center', backgroundColor:'#f7fbff', borderRadius:11, padding:6, marginBottom:5, borderWidth:2, borderColor:'transparent' }, pDead:{ opacity:0.45, backgroundColor:'#eee' }, pOpp:{ borderColor:'#ffb703', backgroundColor:'#fff8e1' }, pName:{ fontWeight:'800', fontSize:11 }, pHpBar:{ height:7, backgroundColor:'#0002', borderRadius:4, overflow:'hidden', marginVertical:2 }, pHpFill:{ height:7 }, pHp:{ fontSize:10, color:'#555', fontWeight:'600' },
-  dRow:{ flexDirection:'row', alignItems:'center', gap:6, marginBottom:5 }, dName:{ width:86, fontSize:11, fontWeight:'700' }, dBar:{ flex:1, backgroundColor:'#0001', borderRadius:5 }, dVal:{ width:38, fontSize:11, fontWeight:'800', textAlign:'right' },
-  infoLine:{ fontWeight:'800', color:'#5b3a29' },
-  benchRow:{ flexDirection:'row', gap:5, alignItems:'center', backgroundColor:'#fff', borderRadius:12, padding:6, borderWidth:1, borderColor:'#ffd6e0' }, benchLbl:{ fontWeight:'900', color:'#7b2d5b', fontSize:12, marginRight:2 }, benchCell:{ width:50, height:50, backgroundColor:'#fff7fb', borderRadius:10, alignItems:'center', justifyContent:'center', borderWidth:1, borderColor:'#ffd6e0' }, cellSel:{ borderWidth:3, borderColor:'#ff70a6' }, cellDot:{ color:'#95d5b2', fontSize:18 }, logMini:{ flex:1, gap:1 },
-  shopRow:{ flexDirection:'row', gap:8, backgroundColor:'#fff', borderRadius:14, padding:8, borderWidth:1, borderColor:'#ffd6e0', alignItems:'stretch' },
-  shopLeft:{ width:206, gap:6 }, lvlCard:{ backgroundColor:'#eef2ff', borderRadius:10, padding:7 }, lvlBig:{ fontWeight:'900', fontSize:16, color:'#28418c' }, xpBar:{ height:7, backgroundColor:'#0002', borderRadius:4, overflow:'hidden', marginVertical:3 },
-  shopBtn:{ flex:1, backgroundColor:'#4361ee', borderRadius:10, paddingVertical:7, alignItems:'center' }, shopBtnTxt:{ color:'#fff', fontWeight:'800', fontSize:10 },
-  goldBox:{ backgroundColor:'#fff3b0', borderRadius:10, padding:7 }, goldTxt:{ fontWeight:'900', fontSize:16, color:'#7a5b00' },
+  logFloat:{ position:'absolute', left:8, top:8, backgroundColor:'rgba(10,14,30,0.82)', borderRadius:10, padding:7, maxWidth:300 }, logTxt:{ fontSize:11, color:'#ffe9a8' },
+  tabRow:{ flexDirection:'row', gap:6, marginBottom:6 }, tab:{ flex:1, backgroundColor:'#242f52', borderRadius:999, paddingVertical:5, alignItems:'center' }, tabOn:{ backgroundColor:'#f5c542' }, tabTxt:{ fontWeight:'800', fontSize:11, color:'#eef1ff' }, tabTxtOn:{ color:'#23180a' },
+  pRow:{ flexDirection:'row', gap:7, alignItems:'center', backgroundColor:'#232d4f', borderRadius:11, padding:6, marginBottom:5, borderWidth:2, borderColor:'transparent' }, pDead:{ opacity:0.45, backgroundColor:'#1a2340' }, pOpp:{ borderColor:'#ffb703', backgroundColor:'#232d4f' }, pName:{ fontWeight:'800', fontSize:11, color:'#eef1ff' }, pHpBar:{ height:7, backgroundColor:'rgba(255,255,255,0.14)', borderRadius:4, overflow:'hidden', marginVertical:2 }, pHpFill:{ height:7 }, pHp:{ fontSize:10, color:'#aab4d4', fontWeight:'600' },
+  dRow:{ flexDirection:'row', alignItems:'center', gap:6, marginBottom:5 }, dName:{ width:86, fontSize:11, fontWeight:'700' }, dBar:{ flex:1, backgroundColor:'rgba(255,255,255,0.12)', borderRadius:5 }, dVal:{ width:38, fontSize:11, fontWeight:'800', textAlign:'right', color:'#eef1ff' },
+  infoLine:{ fontWeight:'800', color:'#f5d67b' },
+  benchRow:{ flexDirection:'row', gap:5, alignItems:'center', backgroundColor:'rgba(26,35,64,0.96)', borderRadius:12, padding:6, borderWidth:1.5, borderColor:'#c9a227' }, benchLbl:{ fontWeight:'900', color:'#f5d67b', fontSize:12, marginRight:2 }, benchCell:{ width:50, height:50, backgroundColor:'#232d4f', borderRadius:10, alignItems:'center', justifyContent:'center', borderWidth:1, borderColor:'#46538a' }, cellSel:{ borderWidth:3, borderColor:'#ffb703' }, cellDot:{ color:'#7f8fc4', fontSize:18 }, logMini:{ flex:1, gap:1 },
+  shopRow:{ flexDirection:'row', gap:8, backgroundColor:'rgba(26,35,64,0.96)', borderRadius:14, padding:8, borderWidth:1.5, borderColor:'#c9a227', alignItems:'stretch' },
+  shopLeft:{ width:206, gap:6 }, lvlCard:{ backgroundColor:'#232d4f', borderRadius:10, padding:7 }, lvlBig:{ fontWeight:'900', fontSize:16, color:'#f5d67b' }, xpBar:{ height:7, backgroundColor:'rgba(255,255,255,0.14)', borderRadius:4, overflow:'hidden', marginVertical:3 },
+  shopBtn:{ flex:1, backgroundColor:'#2f6db3', borderRadius:10, paddingVertical:7, alignItems:'center', borderTopWidth:1, borderTopColor:'#8fc1f5', borderBottomWidth:4, borderBottomColor:'#1c4472' }, shopBtnTxt:{ color:'#fff', fontWeight:'800', fontSize:10 },
+  goldBox:{ backgroundColor:'#4a3a10', borderRadius:10, padding:7, borderWidth:1.5, borderColor:'#c9a227' }, goldTxt:{ fontWeight:'900', fontSize:16, color:'#ffd60a' },
   oddsRow:{ flexDirection:'row', gap:5, alignItems:'center', marginBottom:5, flexWrap:'wrap' }, oddChip:{ borderRadius:999, paddingHorizontal:8, paddingVertical:2 }, oddTxt:{ color:'#fff', fontWeight:'800', fontSize:10 },
-  cardsRow:{ flexDirection:'row', gap:7 }, shopCard:{ flex:1, maxWidth:172, backgroundColor:'#fff7fb', borderRadius:13, padding:6, alignItems:'center', borderWidth:2, gap:1 }, cardGlow:{ borderColor:'#ffb703', shadowColor:'#ffb703', shadowOpacity:0.85, shadowRadius:9, elevation:6, backgroundColor:'#fffbe8' },
-  cardTop:{ flexDirection:'row', justifyContent:'space-between', width:'100%', alignItems:'center' }, cardTrait:{ fontSize:9, color:'#666', fontWeight:'600', flex:1 }, glowTag:{ fontSize:9, fontWeight:'900', color:'#a86e00', backgroundColor:'#ffe08a', borderRadius:6, paddingHorizontal:4, paddingVertical:1 },
-  shopName:{ fontWeight:'800', textAlign:'center', fontSize:12 }, costBar:{ flexDirection:'row', justifyContent:'space-between', width:'100%', borderRadius:7, paddingHorizontal:8, paddingVertical:3 }, costTxt:{ color:'#fff', fontWeight:'900', fontSize:11 },
-  fightBtn:{ width:118, backgroundColor:'#ff70a6', borderRadius:14, alignItems:'center', justifyContent:'center', padding:8, gap:2 }, fightTxt:{ color:'#fff', fontWeight:'900', fontSize:15, textAlign:'center' }, fightSub:{ color:'#ffe3ef', fontWeight:'600', fontSize:10, textAlign:'center' },
+  cardsRow:{ flexDirection:'row', gap:7 }, shopCard:{ flex:1, maxWidth:172, backgroundColor:'#1e2748', borderRadius:13, padding:6, alignItems:'center', borderWidth:2, gap:4 }, cardGlow:{ borderColor:'#ffb703', shadowColor:'#ffb703', shadowOpacity:0.95, shadowRadius:12, elevation:8, backgroundColor:'#2a2f57' },
+  cardArt:{ width:'100%', alignItems:'center', borderRadius:9, paddingVertical:2, position:'relative' }, cardInfo:{ width:'100%', backgroundColor:'#141b33', borderRadius:8, paddingHorizontal:6, paddingVertical:4, alignItems:'center', gap:1 },
+  costBadge:{ position:'absolute', right:4, top:4, width:30, height:30, borderRadius:15, backgroundColor:'#ffb703', borderWidth:1, borderColor:'rgba(255,255,255,0.35)', alignItems:'center', justifyContent:'center' }, costBadgeTxt:{ color:'#23180a', fontWeight:'900', fontSize:14 },
+  cardTrait:{ fontSize:9, color:'#aab4d4', fontWeight:'600', textAlign:'center' }, glowTag:{ position:'absolute', left:4, top:4, fontSize:9, fontWeight:'900', color:'#6b5200', backgroundColor:'#ffe08a', borderRadius:6, paddingHorizontal:4, paddingVertical:1 },
+  shopName:{ fontWeight:'800', textAlign:'center', fontSize:12, color:'#eef1ff' },
+  fightBtn:{ width:118, backgroundColor:'#c2255c', borderRadius:14, alignItems:'center', justifyContent:'center', padding:8, gap:2, borderBottomWidth:5, borderBottomColor:'#6d1434', borderTopWidth:1, borderTopColor:'#ff8fab' }, fightTxt:{ color:'#fff', fontWeight:'900', fontSize:16, textAlign:'center' }, fightSub:{ color:'#ffd6e7', fontWeight:'600', fontSize:10, textAlign:'center' },
   homeLink:{ alignSelf:'center', paddingVertical:1 },
-  dim:{ fontSize:11, color:'#777', lineHeight:15 }, synRow:{ flexDirection:'row', flexWrap:'wrap', gap:6 }, synChip:{ backgroundColor:'#eef2ff', borderRadius:999, paddingHorizontal:9, paddingVertical:4, fontSize:12 }, synActive:{ backgroundColor:'#ffe08a', fontWeight:'800' },
-  coach:{ position:'absolute', top:52, alignSelf:'center', width:'92%', maxWidth:600, flexDirection:'row', gap:10, backgroundColor:'#eef6ff', borderRadius:16, padding:10, borderWidth:2, borderColor:'#4361ee', alignItems:'center', zIndex:60, shadowColor:'#000', shadowOpacity:0.25, shadowRadius:10, elevation:8 }, coachTitle:{ fontWeight:'900', color:'#28418c' }, coachTxt:{ color:'#333', lineHeight:18, fontSize:12 },
+  dim:{ fontSize:11, color:'#aab4d4', lineHeight:15 }, synRow:{ flexDirection:'row', flexWrap:'wrap', gap:6 }, synChip:{ backgroundColor:'#242f52', borderRadius:999, paddingHorizontal:9, paddingVertical:4, fontSize:12, color:'#e8ecff' }, synActive:{ backgroundColor:'#4a3a10', fontWeight:'800', color:'#ffd60a' },
+  coach:{ position:'absolute', top:52, alignSelf:'center', width:'92%', maxWidth:600, flexDirection:'row', gap:10, backgroundColor:'rgba(26,35,64,0.97)', borderRadius:16, padding:10, borderWidth:2, borderColor:'#c9a227', alignItems:'center', zIndex:60, shadowColor:'#000', shadowOpacity:0.25, shadowRadius:10, elevation:8 }, coachTitle:{ fontWeight:'900', color:'#f5d67b' }, coachTxt:{ color:'#e8ecff', lineHeight:18, fontSize:12 },
   tutHi:{ borderWidth:3, borderColor:'#ffb703', borderRadius:12 }, tutHiBtn:{ borderWidth:3, borderColor:'#ffb703' },
-  section:{ fontWeight:'800', color:'#5b3a29' }, shopTrait:{ fontSize:11, color:'#555', textAlign:'center' },
-  smallBtn:{ backgroundColor:'#4361ee', borderRadius:999, paddingHorizontal:12, paddingVertical:7 }, smallTxt:{ color:'#fff', fontWeight:'700', fontSize:12 },
-  bigBtn:{ backgroundColor:'#ff70a6', borderRadius:999, paddingVertical:12, alignItems:'center', marginTop:4 }, bigTxt:{ color:'#fff', fontWeight:'800', fontSize:15 },
-  overlay:{ position:'absolute', inset:0, backgroundColor:'#150a24cc', alignItems:'center', justifyContent:'center', padding:14, zIndex:80 } as any,
-  modal:{ backgroundColor:'#fff7fb', borderRadius:20, padding:16, gap:9, maxWidth:560, width:'100%', maxHeight:'94%' }, modalTitle:{ fontSize:19, fontWeight:'900', textAlign:'center', color:'#7b2d5b' }, modalDesc:{ textAlign:'center', color:'#555', fontSize:12, lineHeight:17 }, modalRow:{ flexDirection:'row', gap:9, justifyContent:'center', flexWrap:'wrap' },
-  augCard:{ backgroundColor:'#fff3b0', borderRadius:14, padding:11, width:158, alignItems:'center', gap:3 },
-  carCircle:{ height:290, position:'relative' }, carCell:{ position:'absolute', width:92, backgroundColor:'#fff', borderRadius:13, borderWidth:2, padding:4, alignItems:'center' }, carName:{ fontWeight:'800', fontSize:10, textAlign:'center' }, carItem:{ fontSize:9, fontWeight:'600', color:'#555' }, carCenter:{ position:'absolute', left:190-32, top:130-32 },
-  scoutBoard:{ height:210, backgroundColor:'#d8f3dc', borderRadius:14, position:'relative' }, scoutCell:{ position:'absolute', width:50, height:50, alignItems:'center' },
+  section:{ fontWeight:'800', color:'#f5d67b' }, shopTrait:{ fontSize:11, color:'#aab4d4', textAlign:'center' },
+  smallBtn:{ backgroundColor:'#2f6db3', borderRadius:999, paddingHorizontal:12, paddingVertical:7, borderTopWidth:1, borderTopColor:'#8fc1f5', borderBottomWidth:4, borderBottomColor:'#1c4472' }, smallTxt:{ color:'#fff', fontWeight:'700', fontSize:12 },
+  bigBtn:{ backgroundColor:'#2f6db3', borderRadius:999, paddingVertical:12, alignItems:'center', marginTop:4, borderTopWidth:1, borderTopColor:'#8fc1f5', borderBottomWidth:5, borderBottomColor:'#1c4472' }, bigTxt:{ color:'#fff', fontWeight:'800', fontSize:15 },
+  overlay:{ position:'absolute', inset:0, backgroundColor:'rgba(8,10,24,0.78)', alignItems:'center', justifyContent:'center', padding:14, zIndex:80 } as any,
+  modal:{ backgroundColor:'#1a2340', borderRadius:20, borderWidth:2, borderColor:'#c9a227', padding:16, gap:9, maxWidth:560, width:'100%', maxHeight:'94%' }, modalTitle:{ fontSize:19, fontWeight:'900', textAlign:'center', color:'#f5d67b' }, modalDesc:{ textAlign:'center', color:'#e8ecff', fontSize:12, lineHeight:17 }, modalRow:{ flexDirection:'row', gap:9, justifyContent:'center', flexWrap:'wrap' },
+  augCard:{ backgroundColor:'#232d4f', borderRadius:14, borderWidth:1.5, borderColor:'#c9a227', padding:11, width:158, alignItems:'center', gap:3 },
+  carOverlay:{ position:'absolute', inset:0, backgroundColor:'rgba(8,10,24,0.66)', alignItems:'center', justifyContent:'center', padding:14, zIndex:80, gap:8 } as any,
+  carTitle:{ fontSize:20, fontWeight:'900', textAlign:'center', color:'#f5d67b' }, carDesc:{ textAlign:'center', color:'#e8ecff', fontSize:12, lineHeight:17, maxWidth:560 },
+  carCircle:{ width:440, height:290, position:'relative' }, carRing:{ position:'absolute', left:90, top:30, width:200, height:200, borderRadius:100, borderWidth:2, borderColor:'rgba(201,162,39,0.45)' }, carCell:{ position:'absolute', width:100, backgroundColor:'rgba(16,22,44,0.88)', borderRadius:13, borderWidth:2, padding:4, alignItems:'center' }, carName:{ fontWeight:'800', fontSize:10, textAlign:'center', color:'#eef1ff' }, carItem:{ fontSize:9, fontWeight:'600', color:'#aab4d4' }, carCenter:{ position:'absolute', left:190-32, top:130-32 },
+  scoutBoard:{ height:210, backgroundColor:'#232d4f', borderRadius:14, position:'relative' }, scoutCell:{ position:'absolute', width:50, height:50, alignItems:'center' },
 });

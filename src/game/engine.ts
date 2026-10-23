@@ -53,16 +53,32 @@ export function unitBuffFor(u: PlacedUnit, all: PlacedUnit[], aug: string[]): Te
   if (aug.includes('mau1')) merged.hpPct += 15; if (aug.includes('sat1')) merged.adPct += 12; if (aug.includes('toc1')) merged.asPct += 12; if (aug.includes('giapdoi')) merged.armor += 15;
   return merged;
 }
-export interface FightUnit { uid: string; defId: string; name: string; team: number; star: number; x: number; y: number; hp: number; maxHp: number; mana: number; maxMana: number; shield: number; stun: number; atkCd: number; alive: boolean; isMonster?: boolean; color: string; }
+export interface FightUnit { uid: string; defId: string; artId: string; name: string; team: number; star: number; x: number; y: number; hp: number; maxHp: number; mana: number; maxMana: number; shield: number; stun: number; atkCd: number; alive: boolean; isMonster?: boolean; color: string; range: number; }
 export interface BattleFrame { t: number; units: FightUnit[]; }
-export interface BattleEvent { t: number; text: string; amount?: number; uid?: string; }
+export type BattleEventType = 'attack' | 'hit' | 'cast' | 'heal' | 'death' | 'dodge' | 'poison' | 'roundEnd';
+export interface BattleEvent {
+  t: number;
+  type: BattleEventType;
+  text: string;
+  amount?: number;
+  crit?: boolean;
+  kind?: 'phys' | 'magic' | 'heal';
+  uid?: string;
+  attackerUid?: string;
+  targetUid?: string;
+  ax?: number; ay?: number;
+  tx?: number; ty?: number;
+  ranged?: boolean;
+  skillKind?: string; skillName?: string;
+  radius?: number;
+}
 export interface BattleResult { winner: number; frames: BattleFrame[]; events: BattleEvent[]; survivors: number; enemySurvivors: number; duration: number; }
 interface SimUnit extends FightUnit { ad: number; ap: number; armor: number; mr: number; as: number; range: number; crit: number; lifesteal: number; dodge: number; manaRegen: number; poison: number; buffAsUntil: number; baseAs: number; skillKind: string; skillPower: number; skillName: string; }
 const dist = (a:{x:number;y:number}, b:{x:number;y:number}) => Math.max(Math.abs(a.x-b.x), Math.abs(a.y-b.y));
 function makeSim(u: PlacedUnit, team: number, aug: string[], all: PlacedUnit[]): SimUnit {
   const d = defOf(u); const st = statsOf(u); const buff = unitBuffFor(u, all, aug);
   const maxHp = st.hp * (1 + buff.hpPct/100);
-  return { uid:u.uid, defId:u.defId, name:d.name, team, star:u.star, x:u.x, y: team===0? u.y : 6-u.y, hp:maxHp, maxHp, mana: Math.min(st.manaStart, st.maxMana), maxMana: st.maxMana, shield: maxHp * buff.shieldPct/100, stun:0, atkCd:0, alive:true, isMonster:u.isMonster, color:d.color,
+  return { uid:u.uid, defId:u.defId, artId:d.id, name:d.name, team, star:u.star, x:u.x, y: team===0? u.y : 6-u.y, hp:maxHp, maxHp, mana: Math.min(st.manaStart, st.maxMana), maxMana: st.maxMana, shield: maxHp * buff.shieldPct/100, stun:0, atkCd:0, alive:true, isMonster:u.isMonster, color:d.color,
     ad: st.ad*(1+buff.adPct/100), ap: st.ap+buff.apPct, armor: st.armor+buff.armor, mr: st.mr+buff.armor, as: st.as*(1+buff.asPct/100), baseAs: st.as*(1+buff.asPct/100), range:d.range, crit: st.crit+buff.crit, lifesteal: st.lifesteal, dodge: buff.dodge, manaRegen: buff.manaRegen, poison:0, buffAsUntil:0, skillKind:d.skill.kind, skillPower:d.skill.power, skillName:d.skill.name };
 }
 export function simulateBattle(player: PlacedUnit[], enemy: PlacedUnit[], aug: string[] = [], seed = 1): BattleResult {
@@ -70,13 +86,15 @@ export function simulateBattle(player: PlacedUnit[], enemy: PlacedUnit[], aug: s
   const units: SimUnit[] = [...player.map(u => makeSim(u, 0, aug, player)), ...enemy.map(u => makeSim(u, 1, [], enemy))];
   const frames: BattleFrame[] = []; const events: BattleEvent[] = [];
   const snap = (t:number) => frames.push({ t, units: units.map(u => ({ ...u })) });
-  const dmg = (src: SimUnit, tgt: SimUnit, raw: number, magic: boolean, t: number) => {
-    if (!tgt.alive) return 0; if (rnd()*100 < tgt.dodge) { events.push({t, text:`${tgt.name} né đòn!`, uid:tgt.uid}); return 0; }
+  const dmg = (src: SimUnit, tgt: SimUnit, raw: number, magic: boolean, t: number, skillSrc?: { skillKind: string; skillName: string }) => {
+    if (!tgt.alive) return 0; if (rnd()*100 < tgt.dodge) { events.push({t, type:'dodge', text:`${tgt.name} né đòn!`, uid:tgt.uid, attackerUid:src.uid, targetUid:tgt.uid, ax:src.x, ay:src.y, tx:tgt.x, ty:tgt.y, ranged: src.range>1, kind: magic ? 'magic' : 'phys', ...(skillSrc ? { skillKind: skillSrc.skillKind, skillName: skillSrc.skillName } : {})}); return 0; }
     const mit = magic ? tgt.mr : tgt.armor; let dealt = raw * (100/(100+Math.max(0,mit)));
+    const totalDealt = dealt;
     if (tgt.shield > 0) { const absorbed = Math.min(tgt.shield, dealt); tgt.shield -= absorbed; dealt -= absorbed; }
     tgt.hp -= dealt; tgt.mana = Math.min(tgt.maxMana, tgt.mana + dealt*0.08);
     if (src.lifesteal > 0) src.hp = Math.min(src.maxHp, src.hp + dealt*src.lifesteal/100);
-    if (tgt.hp <= 0) { tgt.hp = 0; tgt.alive = false; events.push({t, text:`${tgt.name} đã gục ngã`, uid:tgt.uid}); }
+    if (skillSrc && totalDealt > 0) { events.push({t, type:'hit', text:`${src.name} kỹ năng ${skillSrc.skillName} trúng ${tgt.name} -${Math.round(totalDealt)}`, amount: Math.round(totalDealt), uid:tgt.uid, attackerUid:src.uid, targetUid:tgt.uid, ax:src.x, ay:src.y, tx:tgt.x, ty:tgt.y, ranged: src.range>1, kind: magic ? 'magic' : 'phys', skillKind: skillSrc.skillKind, skillName: skillSrc.skillName}); }
+    if (tgt.hp <= 0) { tgt.hp = 0; tgt.alive = false; events.push({t, type:'death', text:`${tgt.name} đã gục ngã`, uid:tgt.uid, attackerUid:src.uid, targetUid:tgt.uid, ax:src.x, ay:src.y, tx:tgt.x, ty:tgt.y}); }
     return dealt;
   };
   snap(0);
@@ -87,7 +105,7 @@ export function simulateBattle(player: PlacedUnit[], enemy: PlacedUnit[], aug: s
     if (!alive0 || !alive1) break;
     for (const u of units) {
       if (!u.alive) continue;
-      if (u.poison > 0) { u.hp -= 8*dt*4; u.poison -= dt; if (u.hp<=0){u.hp=0;u.alive=false; events.push({t,text:`${u.name} gục vì trúng độc`,uid:u.uid}); continue;} }
+      if (u.poison > 0) { u.hp -= 8*dt*4; u.poison -= dt; if (u.hp<=0){u.hp=0;u.alive=false; events.push({t,type:'death',text:`${u.name} gục vì trúng độc`,uid:u.uid,targetUid:u.uid,tx:u.x,ty:u.y,kind:'magic'}); continue;} }
       if (u.buffAsUntil > 0 && t > u.buffAsUntil) { u.as = u.baseAs; u.buffAsUntil = 0; }
       if (u.stun > 0) { u.stun -= dt; continue; }
       u.mana = Math.min(u.maxMana, u.mana + u.manaRegen*dt);
@@ -96,29 +114,33 @@ export function simulateBattle(player: PlacedUnit[], enemy: PlacedUnit[], aug: s
       // Ky nang khi day mana
       if (u.mana >= u.maxMana) {
         u.mana = 0; const power = u.skillPower * (u.ap/100) * (u.star===1?1:u.star===2?1.5:2.2); const allies = units.filter(a => a.alive && a.team===u.team);
-        events.push({t, text:`${u.name} tung kỹ năng ${u.skillName}!`, uid:u.uid});
-        if (u.skillKind==='burst') dmg(u, target, power, true, t);
-        else if (u.skillKind==='aoe') foes.slice(0,4).forEach(f => dmg(u, f, power, true, t));
-        else if (u.skillKind==='stun') { dmg(u, target, power, true, t); target.stun = 1.5; }
-        else if (u.skillKind==='freeze') { foes.slice(0,3).forEach(f => { dmg(u, f, power, true, t); f.stun = 2; }); }
-        else if (u.skillKind==='heal') { allies.sort((a,b)=>a.hp/a.maxHp-b.hp/b.maxHp).slice(0,2).forEach(a => { a.hp = Math.min(a.maxHp, a.hp + power); }); }
+        const skillSrc = { skillKind: u.skillKind, skillName: u.skillName };
+        const isSelfSkill = u.skillKind==='heal' || u.skillKind==='shield' || u.skillKind==='buffAS' || u.skillKind==='summon';
+        const castTx = isSelfSkill ? u.x : target.x; const castTy = isSelfSkill ? u.y : target.y;
+        events.push({t, type:'cast', text:`${u.name} tung kỹ năng ${u.skillName}!`, uid:u.uid, attackerUid:u.uid, targetUid: isSelfSkill ? u.uid : target.uid, ax:u.x, ay:u.y, tx:castTx, ty:castTy, ranged: u.range>1, skillKind:u.skillKind, skillName:u.skillName, radius: (u.skillKind==='aoe' || u.skillKind==='freeze') ? 2 : undefined});
+        if (u.skillKind==='burst') dmg(u, target, power, true, t, skillSrc);
+        else if (u.skillKind==='aoe') foes.slice(0,4).forEach(f => dmg(u, f, power, true, t, skillSrc));
+        else if (u.skillKind==='stun') { dmg(u, target, power, true, t, skillSrc); target.stun = 1.5; }
+        else if (u.skillKind==='freeze') { foes.slice(0,3).forEach(f => { dmg(u, f, power, true, t, skillSrc); f.stun = 2; }); }
+        else if (u.skillKind==='heal') { allies.sort((a,b)=>a.hp/a.maxHp-b.hp/b.maxHp).slice(0,2).forEach(a => { const before = a.hp; a.hp = Math.min(a.maxHp, a.hp + power); const healed = a.hp - before; if (healed > 0) events.push({t, type:'heal', text:`${u.name} hồi ${Math.round(healed)} máu cho ${a.name}`, amount: Math.round(healed), kind:'heal', uid:a.uid, attackerUid:u.uid, targetUid:a.uid, ax:u.x, ay:u.y, tx:a.x, ty:a.y, ranged: u.range>1, skillKind:u.skillKind, skillName:u.skillName}); }); }
         else if (u.skillKind==='shield') { u.shield += power; const near = allies[0]; if (near && near!==u) near.shield += power*0.6; }
         else if (u.skillKind==='buffAS') { allies.forEach(a => { a.as = a.baseAs * (1 + u.skillPower/100); a.buffAsUntil = t+5; }); if (u.defId==='king') u.shield += 200; }
-        else if (u.skillKind==='summon') { const golem: SimUnit = { ...u, uid:u.uid+'-golem'+Math.floor(t), defId:'golem-summon', name:'Golem Bánh', hp:900, maxHp:900, ad:40, mana:9999, maxMana:9999, skillKind:'burst', skillPower:50, x:u.x, y:u.y, shield:0, poison:0 }; units.push(golem); }
-        else if (u.skillKind==='execute') { const weak = [...foes].sort((a,b)=>a.hp-b.hp)[0]; dmg(u, weak, power * (weak.hp/weak.maxHp < 0.4 ? 1.8 : 1), false, t); }
-        else if (u.skillKind==='poison') { dmg(u, target, power, true, t); target.poison = 4; }
-        else if (u.skillKind==='lifesteal') { const dealt = dmg(u, target, power, true, t); u.hp = Math.min(u.maxHp, u.hp + dealt*0.6); }
-        else if (u.skillKind==='dash') { u.x = target.x; u.y = target.y; dmg(u, target, power, false, t); }
+        else if (u.skillKind==='summon') { const golem: SimUnit = { ...u, uid:u.uid+'-golem'+Math.floor(t), defId:'golem-summon', artId:'golem', range:1, name:'Golem Bánh', hp:900, maxHp:900, ad:40, mana:9999, maxMana:9999, skillKind:'burst', skillPower:50, x:u.x, y:u.y, shield:0, poison:0 }; units.push(golem); }
+        else if (u.skillKind==='execute') { const weak = [...foes].sort((a,b)=>a.hp-b.hp)[0]; dmg(u, weak, power * (weak.hp/weak.maxHp < 0.4 ? 1.8 : 1), false, t, skillSrc); }
+        else if (u.skillKind==='poison') { dmg(u, target, power, true, t, skillSrc); target.poison = 4; }
+        else if (u.skillKind==='lifesteal') { const dealt = dmg(u, target, power, true, t, skillSrc); u.hp = Math.min(u.maxHp, u.hp + dealt*0.6); }
+        else if (u.skillKind==='dash') { u.x = target.x; u.y = target.y; dmg(u, target, power, false, t, skillSrc); }
         continue;
       }
       if (dist(u, target) > u.range) { u.x += Math.sign(target.x-u.x); if (dist(u,target) > u.range) u.y += Math.sign(target.y-u.y); u.x = Math.max(0, Math.min(6, u.x)); u.y = Math.max(0, Math.min(6, u.y)); continue; }
-      u.atkCd -= dt; if (u.atkCd <= 0) { u.atkCd = 1/Math.max(0.2, u.as); const crit = rnd()*100 < u.crit; const raw = u.ad * (crit ? 1.6 : 1) * (0.9 + rnd()*0.2); const dealt = dmg(u, target, raw, false, t); if (dealt>0) events.push({t, text:`${u.name} đánh ${target.name} -${Math.round(dealt)}`, amount: Math.round(dealt), uid: target.uid}); u.mana = Math.min(u.maxMana, u.mana + 10); }
+      u.atkCd -= dt; if (u.atkCd <= 0) { u.atkCd = 1/Math.max(0.2, u.as); const crit = rnd()*100 < u.crit; const raw = u.ad * (crit ? 1.6 : 1) * (0.9 + rnd()*0.2); const dealt = dmg(u, target, raw, false, t); if (dealt>0) events.push({t, type:'attack', text:`${u.name} đánh ${target.name} -${Math.round(dealt)}`, amount: Math.round(dealt), crit, kind:'phys', uid: target.uid, attackerUid: u.uid, targetUid: target.uid, ax:u.x, ay:u.y, tx:target.x, ty:target.y, ranged: u.range>1}); u.mana = Math.min(u.maxMana, u.mana + 10); }
     }
     if (Math.round(t*4) % 2 === 0) snap(t);
   }
   snap(t);
   const s0 = units.filter(u => u.alive && u.team===0).length; const s1 = units.filter(u => u.alive && u.team===1).length;
   let winner = 1; if (s0 > s1) winner = 0; else if (s0 === s1) { const h0 = units.filter(u=>u.team===0).reduce((a,u)=>a+u.hp,0); const h1 = units.filter(u=>u.team===1).reduce((a,u)=>a+u.hp,0); winner = h0 >= h1 ? 0 : 1; }
+  events.push({t, type:'roundEnd', text:'Kết thúc trận'});
   return { winner, frames, events, survivors: s0, enemySurvivors: s1, duration: t };
 }
 // Kinh te, shop, ghep sao, AI

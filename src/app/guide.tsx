@@ -25,4 +25,4 @@ export default function Guide() {
     {LINES.map(([t, b]) => (<View key={t} style={s.card}><Text style={s.t}>{t}</Text><Text style={s.b}>{b}</Text></View>))}
   </ScrollView>);
 }
-const s = StyleSheet.create({ screen:{ flex:1, backgroundColor:'#fff7fb' }, h:{ fontSize:24, fontWeight:'900', color:'#7b2d5b' }, card:{ backgroundColor:'#fff', borderRadius:14, padding:12, width:'100%', maxWidth:620 }, t:{ fontWeight:'800', fontSize:16, color:'#5b3a29', marginBottom:4 }, b:{ color:'#444', lineHeight:20 } });
+const s = StyleSheet.create({ screen:{ flex:1, backgroundColor:'#0d1326' }, h:{ fontSize:24, fontWeight:'900', color:'#f5d67b' }, card:{ backgroundColor:'#1c2547', borderRadius:14, padding:12, width:'100%', maxWidth:620, borderWidth:1, borderColor:'#c9a22755' }, t:{ fontWeight:'800', fontSize:16, color:'#f5d67b', marginBottom:4 }, b:{ color:'#aab4d4', lineHeight:20 } });

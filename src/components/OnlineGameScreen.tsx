@@ -10,6 +10,7 @@ import { AUGMENTS, CHAMPIONS, champById, itemById, monsterById, traitName } from
 import { BattleResult, PlacedUnit, computeSynergies, interestOf, isPveRound, newUid, pveEnemiesForRound, randomItem, rollShop, sellValue, simulateBattle, streakBonus, xpToNext } from '../game/engine';
 import { loadMeta, loadPlayer, saveMeta } from '../game/storage';
 import { audio } from '../game/audio';
+import { renderUnitsForFrame } from '../game/fx';
 import { BattleInfo, OnlineMatch, StandingsInfo, quickMatch } from '../game/onlineClient';
 import { RoomPlayer, TeamSnapshot, deserializeTeam, pairSeed } from '../game/online';
 
@@ -219,9 +220,9 @@ export default function OnlineGameScreen({ mode, joinCode, playerName }: Props) 
           <Pressable key={x + '-' + y} onPress={() => tapBoardCell(x, y)} style={[st.cell, { left: 6 + x * cell, top: 6 + y * cell, width: cell - 4, height: cell - 4 }, selUid && u?.uid === selUid && st.cellSel]}>
             {u ? <ChibiRig spec={champById(u.defId)} size={(cell - 4) * rowDepth(y, 4).scale} star={u.star} state='idle' /> : <Text style={st.cellDot}>·</Text>}
           </Pressable>); }))}
-        {phase === 'battle' && frame && [...frame.units].sort((a, b) => a.y - b.y).map(u => { const prev = result && frameIdx > 0 ? result.frames[frameIdx - 1].units.find(v => v.uid === u.uid) : undefined; const evs = result ? result.events.filter(e => Math.abs(e.t - frame.t) < 0.3) : []; const animState = stateForUnit({ alive: u.alive, moved: !!prev && (prev.x !== u.x || prev.y !== u.y), castAtFrame: evs.some(e => e.uid === u.uid && e.text.includes('kỹ năng')), attackedAtFrame: evs.some(e => e.text.startsWith(u.name + ' đánh')), hurtAtFrame: evs.some(e => e.uid === u.uid && !!e.amount), battleOver: frameIdx >= (result?.frames.length ?? 1) - 1, won: result?.winner === u.team }); const dep = rowDepth(u.y, 7); return (
+        {phase === 'battle' && frame && renderUnitsForFrame(frame).map(u => { const prev = result && frameIdx > 0 ? result.frames[frameIdx - 1].units.find(v => v.uid === u.uid) : undefined; const evs = result ? result.events.filter(e => Math.abs(e.t - frame.t) < 0.3) : []; const animState = stateForUnit({ alive: u.alive, moved: !!prev && (prev.x !== u.x || prev.y !== u.y), castAtFrame: evs.some(e => e.uid === u.uid && e.text.includes('kỹ năng')), attackedAtFrame: evs.some(e => e.text.startsWith(u.name + ' đánh')), hurtAtFrame: evs.some(e => e.uid === u.uid && !!e.amount), battleOver: frameIdx >= (result?.frames.length ?? 1) - 1, won: result?.winner === u.team }); const dep = rowDepth(u.y, 7); return (
           <View key={u.uid} style={[st.battleUnit, { left: 6 + u.x * cell, top: 6 + u.y * cell, width: cell - 2, height: cell - 2, zIndex: dep.zIndex }]}>
-            <ChibiRig spec={u.isMonster ? monsterById(u.defId) : champById(u.defId)} size={(cell - 6) * dep.scale + 8} star={u.star} state={animState} flip={u.team === 1} />
+            <ChibiRig spec={u.art} size={(cell - 6) * dep.scale + 8} star={u.star} state={animState} flip={u.team === 1} />
             <View style={st.hpBar}><View style={[st.hpFill, { width: Math.max(0, Math.min(100, u.hp / u.maxHp * 100)) + '%' }]} /></View>
             <View style={st.manaBar}><View style={[st.manaFill, { width: Math.min(100, u.mana / u.maxMana * 100) + '%' }]} /></View>
           </View>); })}

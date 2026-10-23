@@ -32,7 +32,7 @@
     "icons": "node scripts/generate-icons.mjs",
     "ios": "expo run:ios",
     "start": "expo start",
-    "test": "tsc --ignoreConfig --ignoreDeprecations 6.0 src/game/data.ts src/game/engine.ts src/game/rig.ts --outDir scripts/.build --module commonjs --target es2020 --moduleResolution node10 --skipLibCheck --esModuleInterop && node scripts/test-headless.mjs && node scripts/test-online.mjs && node scripts/test-stages.mjs && node scripts/test-audio.mjs && node scripts/test-tutorial.mjs",
+    "test": "tsc --ignoreConfig --ignoreDeprecations 6.0 src/game/data.ts src/game/engine.ts src/game/rig.ts --outDir scripts/.build --module commonjs --target es2020 --moduleResolution node10 --skipLibCheck --esModuleInterop && node scripts/test-headless.mjs && node scripts/test-online.mjs && node scripts/test-stages.mjs && node scripts/test-audio.mjs && node scripts/test-tutorial.mjs && node scripts/test-fx.mjs",
     "typecheck": "tsc --noEmit",
     "web": "expo start --web",
     "audio": "node scripts/generate-audio.mjs"
