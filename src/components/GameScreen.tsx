@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Svg, { Ellipse, G, Polygon, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -32,7 +32,7 @@ interface PInfo { name: string; hp: number; alive: boolean; lvl: number; rank: n
 // ===== Lop trinh bay phu: banner / hieu ung giao tranh / o phat sang (chi hien thi, khong chua logic game) =====
 type FxKind = 'dmg' | 'heal' | 'proj' | 'burst' | 'soul' | 'stun';
 interface FxItem { id: number; kind: FxKind; x: number; y: number; x2?: number; y2?: number; text?: string; crit?: boolean; color?: string; radius?: number; born: number; }
-const FX_LIFE: Record<FxKind, number> = { dmg: 750, heal: 750, proj: 240, burst: 500, soul: 900, stun: 750 };
+const FX_LIFE: Record<FxKind, number> = { dmg: 750, heal: 750, proj: 380, burst: 500, soul: 900, stun: 750 };
 const BURST_COLORS: Record<string, string> = { aoe: '#fb8500', freeze: '#48cae4', stun: '#9d4edd', heal: '#38b000' };
 const STAR_SCALE = (s: number) => s === 1 ? 1 : s === 2 ? 1.15 : 1.3;
 function starPoints(cx: number, cy: number, r: number) { return cx + ',' + (cy - r) + ' ' + (cx + r * 0.28) + ',' + (cy - r * 0.28) + ' ' + (cx + r) + ',' + cy + ' ' + (cx + r * 0.28) + ',' + (cy + r * 0.28) + ' ' + cx + ',' + (cy + r) + ' ' + (cx - r * 0.28) + ',' + (cy + r * 0.28) + ' ' + (cx - r) + ',' + cy + ' ' + (cx - r * 0.28) + ',' + (cy - r * 0.28); }
@@ -51,6 +51,17 @@ function SelBounce({ children }: { children: React.ReactNode }) {
   const [up, setUp] = useState(false);
   useEffect(() => { const iv = setInterval(() => setUp(u => !u), 280); return () => clearInterval(iv); }, []);
   return (<View style={{ transform: [{ translateY: up ? -6 : 0 }] }}>{children}</View>);
+}
+// Bong do MEM duoi chan tuong: 2 lop ellipse (ngoai mo + loi dam) neo cung vi tri
+// voi be pedestal (tam ~0.883*sz tu dinh hop) de tuong "dung tren mat dat".
+// Dich (team 1) dung loi bong nau-do dam hon de tach khoi nen ho sang o giua san.
+function GroundShadow({ sz, team = 0 }: { sz: number; team?: number }) {
+  const outer = team === 1 ? 'rgba(43,10,12,0.26)' : 'rgba(8,26,14,0.20)';
+  const core = team === 1 ? 'rgba(43,10,12,0.46)' : 'rgba(8,26,14,0.34)';
+  return (<View pointerEvents="none" style={{ position: 'absolute', left: sz * 0.15, top: sz * 0.795, width: sz * 0.7, height: sz * 0.19 }}>
+    <View style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', borderRadius: 999, backgroundColor: outer }} />
+    <View style={{ position: 'absolute', left: sz * 0.11, top: sz * 0.038, width: sz * 0.48, height: sz * 0.115, borderRadius: 999, backgroundColor: core }} />
+  </View>);
 }
 function UnitPedestal({ sz, team, star }: { sz: number; team: number; star: number }) {
   const w = sz * 0.62, h = sz * 0.17;
@@ -118,8 +129,9 @@ function FxLayer({ items }: { items: FxItem[] }) {
       }
       if (it.kind === 'proj') {
         const x2 = it.x2 ?? it.x, y2 = it.y2 ?? it.y;
-        const dot = (pp: number, size: number, op: number) => { const q = Math.max(0, Math.min(1, pp)); const px = it.x + (x2 - it.x) * q, py = it.y + (y2 - it.y) * q - Math.sin(Math.PI * q) * 20; return (<View style={{ position: 'absolute', left: px - size / 2, top: py - size / 2, width: size, height: size, borderRadius: size / 2, backgroundColor: '#ffd60a', opacity: op }} />); };
-        return (<View key={it.id} style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }}>{dot(p - 0.34, 4, 0.18)}{dot(p - 0.17, 6, 0.35)}{dot(p, 10, 1)}</View>);
+        const dot = (pp: number, size: number, op: number, color = '#ffd60a') => { const q = Math.max(0, Math.min(1, pp)); const px = it.x + (x2 - it.x) * q, py = it.y + (y2 - it.y) * q - Math.sin(Math.PI * q) * 20; return (<View style={{ position: 'absolute', left: px - size / 2, top: py - size / 2, width: size, height: size, borderRadius: size / 2, backgroundColor: color, opacity: op }} />); };
+        // Dan lon + quang sang + vet keo dai de thay ro o nhip tran binh thuong (420ms/frame)
+        return (<View key={it.id} style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }}>{dot(p - 0.38, 7, 0.20)}{dot(p - 0.19, 11, 0.38)}{dot(p, 26, 0.30)}{dot(p, 15, 1)}{dot(p, 7, 0.95, '#fff7d6')}</View>);
       }
       if (it.kind === 'burst') {
         const target = it.radius ? 2.2 : 1.3; const sc = 0.3 + (target - 0.3) * p; const d = 54;
@@ -189,6 +201,14 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   const [dmgStats, setDmgStats] = useState<{ name: string; dmg: number; team: number }[]>([]);
   const [summary, setSummary] = useState<{ win: boolean; dealt: number; taken: number } | null>(null);
   const [arenaSize, setArenaSize] = useState({ w: 520, h: 300 });
+  const [stageSize, setStageSize] = useState({ w: 900, h: 420 });
+  // Do hien cua luoi hex: 1 o phase chuan bi, mo dan ve 0 khi giao tranh (tuong danh tren mat dat tran)
+  const [hexVis, setHexVis] = useState(1); const hexVisRef = useRef(1);
+  useEffect(() => { const target = phase === 'battle' ? 0 : 1; if (hexVisRef.current === target) return; const iv = setInterval(() => { const cur = hexVisRef.current; const n = cur + (target - cur) * 0.3; const done = Math.abs(n - target) < 0.03; hexVisRef.current = done ? target : n; setHexVis(hexVisRef.current); if (done) clearInterval(iv); }, 30); return () => clearInterval(iv); }, [phase]);
+  // KEO tuong tren san (phase chuan bi): drag = trang thai keo dang dien ra (vi tri lech
+  // so voi o goc + vung ban dang hover); dragRef = phien keo tho (chua qua nguong thi la bam)
+  const [drag, setDrag] = useState<{ uid: string; dx: number; dy: number; over: 'left' | 'right' | null } | null>(null);
+  const dragRef = useRef<{ uid: string; active: boolean } | null>(null);
   const [legendHurt, setLegendHurt] = useState(false); const [shake, setShake] = useState(false);
   const [banner, setBanner] = useState<{ title: string; sub?: string; tone: 'win' | 'lose' | 'info' } | null>(null);
   const [fxItems, setFxItems] = useState<FxItem[]>([]);
@@ -248,7 +268,47 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   function buyXp() { if (phase!=='plan' || gold < 4 || level >= 9) return; setGold(g => g-4); gainXp(4); say('Mua 4 XP.'); }
   function gainXp(amount: number) { let nx = xp + amount, nl = level, leveled = false; while (nl < 9 && nx >= xpToNext(nl)) { nx -= xpToNext(nl); nl++; leveled = true; say('Lên cấp '+nl+'!'); } setXp(nx); setLevel(nl); if (leveled) { audio.playSfx('levelup'); emitRef.current('levelup'); } }
   function reroll() { if (phase!=='plan' || gold < 2 || locked) return; setGold(g => g-2); setShop(rollShop(level)); audio.playSfx('reroll'); emitTut('reroll'); }
-  function sellSelected() { const u = allUnits.find(x => x.uid===selUid); if (!u) return; setGold(g => g + sellValue(u.defId, u.star)); setBoard(b => b.filter(x => x.uid!==selUid)); setBench(b => b.filter(x => x.uid!==selUid)); setSelUid(null); audio.playSfx('sell'); say('Đã bán '+champById(u.defId).name); }
+  function sellUnitByUid(uid: string) { const u = allUnits.find(x => x.uid===uid); if (!u) return; setGold(g => g + sellValue(u.defId, u.star)); setBoard(b => b.filter(x => x.uid!==uid)); setBench(b => b.filter(x => x.uid!==uid)); if (selUid===uid) setSelUid(null); audio.playSfx('sell'); say('Đã bán '+champById(u.defId).name); }
+  function sellSelected() { if (selUid) sellUnitByUid(selUid); }
+  // ===== KEO TUONG TREN SAN: tha vao vung ban 2 goc duoi = ban, tha vao o hex = di chuyen/hoan doi =====
+  const SELL_ZONE_R = 124;
+  function sellZoneAt(px: number, py: number): 'left' | 'right' | null {
+    if (py < arenaSize.h - SELL_ZONE_R) return null;
+    if (px < SELL_ZONE_R) return 'left';
+    if (px > arenaSize.w - SELL_ZONE_R) return 'right';
+    return null;
+  }
+  function cellAtPoint(px: number, py: number): { x: number; y: number } | null {
+    let best: { x: number; y: number } | null = null; let bestD = Infinity;
+    for (let y = 0; y < rows; y++) for (let x = 0; x < 7; x++) { const { cx, cy } = hexCenter(hm, x, y); const d = Math.hypot(px - cx, py - cy); if (d < bestD) { bestD = d; best = { x, y }; } }
+    return bestD <= hm.hw * 0.85 ? best : null;
+  }
+  function dropDragOnCell(uid: string, x: number, y: number) {
+    const u = board.find(v => v.uid===uid); if (!u || (u.x===x && u.y===y)) return;
+    const occupant = board.find(v => v.x===x && v.y===y);
+    if (occupant) { const ox = u.x, oy = u.y; setBoard(prev => prev.map(v => v.uid===uid ? {...v, x, y} : v.uid===occupant.uid ? {...v, x: ox, y: oy} : v)); }
+    else setBoard(prev => prev.map(v => v.uid===uid ? {...v, x, y} : v));
+    audio.playSfx('place'); setSelUid(null);
+  }
+  // PanResponder cho 1 tuong tren san: di chuyen < 8px khi nha = BAM (di qua tapBoardCell
+  // nhu lop o cham Pressable), vuot nguong = KEO that (tuong di theo con tro/ngon tay)
+  function makeUnitPan(u: PlacedUnit, cx: number, cy: number) {
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => phase==='plan',
+      onMoveShouldSetPanResponder: () => phase==='plan',
+      onPanResponderTerminationRequest: () => !(dragRef.current && dragRef.current.active),
+      onPanResponderGrant: () => { dragRef.current = { uid: u.uid, active: false }; },
+      onPanResponderMove: (_, g) => { const d = dragRef.current; if (!d || d.uid!==u.uid) return;
+        if (!d.active && Math.hypot(g.dx, g.dy) > 8) d.active = true;
+        if (d.active) setDrag({ uid: u.uid, dx: g.dx, dy: g.dy, over: sellZoneAt(cx + g.dx, cy + g.dy) }); },
+      onPanResponderRelease: (_, g) => { const d = dragRef.current; dragRef.current = null; if (!d) return;
+        if (!d.active) { tapBoardCell(u.x, u.y); return; }
+        const over = sellZoneAt(cx + g.dx, cy + g.dy); setDrag(null);
+        if (over) { sellUnitByUid(u.uid); return; }
+        const cell = cellAtPoint(cx + g.dx, cy + g.dy); if (cell) dropDragOnCell(u.uid, cell.x, cell.y); },
+      onPanResponderTerminate: () => { dragRef.current = null; setDrag(null); },
+    });
+  }
   function tapBoardCell(x: number, y: number) {
     if (phase!=='plan') return; const occupant = board.find(u => u.x===x && u.y===y);
     if (selItem) { const target = occupant; if (target) equipTo(target); return; }
@@ -406,6 +466,9 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             <Pressable style={st.tBtn} onPress={() => toggleAudio('sfx')}><Text style={st.tBtnTxt}>Tiếng {sfxOn?'Bật':'Tắt'}</Text></Pressable>
           </View>
         </View>
+        {/* ===== SAN KHAU TRAN VIEN: tranh arena phu kin ca vung giua + bench, panel noi tren tranh ===== */}
+        <View style={st.stageWrap} onLayout={e => setStageSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
+          <SceneArtImage id="arena" width={stageSize.w} height={stageSize.h}/>
         {/* ===== MIDDLE ===== */}
         <View style={st.middle}>
           {/* LEFT: traits + augments + items */}
@@ -428,18 +491,12 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
                 <View style={{ flexDirection:'row', gap:6, marginTop:4 }}><Pressable style={st.miniBtn} onPress={sellSelected}><Text style={st.miniTxt}>Bán +{sellValue(selUnit.defId, selUnit.star)}</Text></Pressable>{board.some(v => v.uid===selUid) && <Pressable style={st.miniBtn} onPress={moveToBench}><Text style={st.miniTxt}>Về bench</Text></Pressable>}</View></View>}
             </ScrollView>
           </View>
-          {/* CENTER: arena */}
+          {/* CENTER: arena (khong khung/vien rieng — tranh nen nam o stageWrap phia sau) */}
           <View style={[st.arena, shake && { transform: [{ translateX: 5 }] }]} onLayout={e => setArenaSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
-            <SceneArtImage id="arena" width={arenaSize.w} height={arenaSize.h}/>
             <View pointerEvents="none" style={StyleSheet.absoluteFill}><AmbientParticles width={arenaSize.w} height={arenaSize.h}/></View>
                         <Svg style={StyleSheet.absoluteFill} width={arenaSize.w} height={arenaSize.h}>
-              {(() => { const bx = hm.ox - hm.size * 0.8, by = hm.oy - hm.size * 0.6, bw = 7.5 * hm.hw + hm.size * 1.6, bh = (2 * hm.size + (rows - 1) * 1.5 * hm.size) + hm.size * 1.15; return (<React.Fragment>
-                <Rect x={bx} y={by} width={bw} height={bh} rx={16} fill="rgba(10,16,14,0.18)" stroke="#4c5563" strokeWidth={10} strokeOpacity={0.55} />
-                <Rect x={bx + 6} y={by + 6} width={bw - 12} height={bh - 12} rx={12} fill="none" stroke="#aeb8c4" strokeWidth={1.4} strokeOpacity={0.35} />
-                <Rect x={bx + 2} y={by + 2} width={bw - 4} height={bh - 4} rx={14} fill="none" stroke="#2c313a" strokeWidth={2} strokeOpacity={0.5} />
-              </React.Fragment>); })()}
-              {Array.from({length: rows}).map((_, y) => Array.from({length: 7}).map((_, x) => { const { cx, cy } = hexCenter(hm, x, y); const occ = phase!=='battle' && board.some(u => u.x===x && u.y===y); const enemyHalf = phase==='battle' && y >= 4; return (
-                <Polygon key={x+'-'+y} points={hexPoints(cx, cy, hm.size)} fill={occ ? 'rgba(255,214,110,0.20)' : enemyHalf ? 'rgba(255,130,118,0.055)' : 'rgba(120,255,205,0.05)'} stroke={enemyHalf ? 'rgba(255,150,140,0.6)' : 'rgba(64,224,190,0.6)'} strokeWidth={1.3}/>
+              {hexVis > 0.01 && Array.from({length: rows}).map((_, y) => Array.from({length: 7}).map((_, x) => { const { cx, cy } = hexCenter(hm, x, y); const occ = phase!=='battle' && board.some(u => u.x===x && u.y===y); const enemyHalf = phase==='battle' && y >= 4; return (
+                <Polygon key={x+'-'+y} points={hexPoints(cx, cy, hm.size)} fill={occ ? `rgba(255,214,110,${(0.20 * hexVis).toFixed(3)})` : enemyHalf ? `rgba(255,130,118,${(0.055 * hexVis).toFixed(3)})` : `rgba(120,255,205,${(0.05 * hexVis).toFixed(3)})`} stroke={enemyHalf ? `rgba(255,150,140,${(0.6 * hexVis).toFixed(3)})` : `rgba(64,224,190,${(0.6 * hexVis).toFixed(3)})`} strokeWidth={1.3}/>
               ); }))}
               {phase!=='battle' && selUid != null && (<ValidCellGlow hm={hm} rows={rows} board={board}/>)}
             </Svg>
@@ -457,23 +514,25 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             {phase==='plan' && (<View pointerEvents="none" style={{ position:'absolute', left:0, right:0, top:0, bottom:0, alignItems:'center', justifyContent:'center', zIndex:1 }}>
               <Text style={{ fontSize: Math.min(120, arenaSize.w * 0.17), fontWeight:'900', color:'rgba(255,255,255,0.10)', letterSpacing: 4 }}>{board.length}/{level}</Text>
             </View>)}
-                        {phase!=='battle' && board.map(u => { const { cx, cy } = hexCenter(hm, u.x, u.y); const sz = hm.size * 2.05 * rowDepth(u.y, 4).scale * STAR_SCALE(u.star); const isSel = selUid===u.uid; const rig = (
+                        {phase!=='battle' && board.map(u => { const { cx, cy } = hexCenter(hm, u.x, u.y); const sz = hm.size * 2.05 * rowDepth(u.y, 4).scale * STAR_SCALE(u.star); const isSel = selUid===u.uid; const isDrag = !!drag && drag.uid===u.uid; const rig = (
                 <View style={[{ width: sz, height: sz, alignItems:'center' }, u.star>=2 && { shadowColor: u.star>=3 ? '#ffb703' : '#d7dee8', shadowOpacity: 0.9, shadowRadius: u.star>=3 ? 12 : 7, shadowOffset: { width: 0, height: 0 }, elevation: 6 }]}>
+                  <GroundShadow sz={sz}/>
                   <UnitPedestal sz={sz} team={0} star={u.star}/>
                   <SpriteUnit spec={champById(u.defId)} size={sz} star={u.star} state='idle'/>
                   {u.star>=3 && <StarSparkles sz={sz}/>}
                 </View>); return (
-              <View key={u.uid} style={{ position:'absolute', left: cx - sz/2, top: cy + hm.size*0.28 - sz*0.88, width: sz, height: sz, alignItems:'center', zIndex: rowDepth(u.y, 4).zIndex }} pointerEvents="none">
-                {isSel && <View style={[st.selRing, { width: sz*0.9, height: sz*0.3, bottom: -2 }]} />}
-                {isSel ? <SelBounce>{rig}</SelBounce> : rig}
+              <View key={u.uid} {...makeUnitPan(u, cx, cy).panHandlers} style={{ position:'absolute', left: cx - sz/2, top: cy + hm.size*0.28 - sz*0.88, width: sz, height: sz, alignItems:'center', zIndex: isDrag ? 300 : 50 + rowDepth(u.y, 4).zIndex, transform: drag && drag.uid===u.uid ? [{ translateX: drag.dx }, { translateY: drag.dy }, { scale: 1.06 }] : undefined }}>
+                {isSel && !isDrag && <View style={[st.selRing, { width: sz*0.9, height: sz*0.3, bottom: -2 }]} />}
+                {isSel && !isDrag ? <SelBounce>{rig}</SelBounce> : rig}
                 <UnitBars sz={sz} star={u.star} hpFrac={1} manaFrac={0} items={u.items} />
               </View> ); })}
             {phase==='battle' && frame && result && renderUnitsForFrame(frame).map(u => { const { cx, cy } = hexCenter(hm, Math.max(0, Math.min(6, u.x)), Math.max(0, Math.min(6, u.y))); const prev = frameIdx>0 ? result.frames[frameIdx-1].units.find(v => v.uid===u.uid) : undefined; const prevT = frameIdx>0 ? result.frames[frameIdx-1].t : frame.t - 0.5; const evs = eventsInWindow(result.events, prevT, frame.t); const isTarget = evs.some(e => (e.type==='attack' || e.type==='hit') && (e.targetUid ?? e.uid)===u.uid); const lungeEv = evs.find(e => e.type==='attack' && e.attackerUid===u.uid && !e.ranged); const lx = lungeEv && lungeEv.tx!==undefined ? Math.sign(lungeEv.tx - u.x)*12 : 0; const ly = lungeEv && lungeEv.ty!==undefined ? Math.sign(lungeEv.ty - u.y)*6 : 0; const animState = stateForUnit({ alive: u.alive, moved: !!prev && (prev.x!==u.x || prev.y!==u.y), castAtFrame: evs.some(e => e.type==='cast' && e.attackerUid===u.uid), attackedAtFrame: evs.some(e => e.type==='attack' && e.attackerUid===u.uid), hurtAtFrame: evs.some(e => (e.targetUid ?? e.uid)===u.uid && !!e.amount), battleOver: frameIdx >= result.frames.length-1, won: result.winner===u.team }); const dep = rowDepth(u.y, 7); const sz = hm.size * 2.05 * dep.scale * STAR_SCALE(u.star); const stunAngle = (frame.t * 120) % 360; return (
               <View key={u.uid} style={{ position:'absolute', left: cx - sz/2 + lx + (isTarget ? (frameIdx % 2 === 0 ? 3 : -3) : 0), top: cy + hm.size*0.28 - sz*0.88 + ly, width: sz, zIndex: dep.zIndex, alignItems:'center' }}>
-                <View style={[{ width: sz, height: sz, alignItems:'center' }, u.star>=2 && { shadowColor: u.star>=3 ? '#ffb703' : '#d7dee8', shadowOpacity: 0.9, shadowRadius: u.star>=3 ? 12 : 7, shadowOffset: { width: 0, height: 0 }, elevation: 6 }]}>
+                <View style={[{ width: sz, height: sz, alignItems:'center', shadowColor:'#04170b', shadowOpacity: 0.5, shadowRadius: 5, shadowOffset: { width: 0, height: 3 } }, u.star>=2 && { shadowColor: u.star>=3 ? '#ffb703' : '#d7dee8', shadowOpacity: 0.9, shadowRadius: u.star>=3 ? 12 : 7, shadowOffset: { width: 0, height: 0 }, elevation: 6 }]}>
+                  <GroundShadow sz={sz} team={u.team}/>
                   <UnitPedestal sz={sz} team={u.team} star={u.star}/>
                   <SpriteUnit spec={u.art} size={sz} star={u.star} state={animState} flip={u.team===1}/>
-                  {isTarget && <View style={{ position:'absolute', left:0, top:0, width: sz, height: sz, backgroundColor:'#ffffff', opacity:0.55, borderRadius:12 }} pointerEvents="none"/>}
+                  {isTarget && <View style={{ position:'absolute', left: sz*0.16, top: sz*0.08, width: sz*0.68, height: sz*0.8, backgroundColor:'#ffffff', opacity:0.22, borderRadius: sz*0.34 }} pointerEvents="none"/>}
                   {u.star>=3 && <StarSparkles sz={sz}/>}
                   {u.stun > 0 && (<Svg width={sz*0.52} height={16} viewBox="0 0 62 16" style={{ position:'absolute', left: sz*0.24, top: -4, transform: [{ rotate: stunAngle + 'deg' }] } as any} pointerEvents="none"><Polygon points={starPoints(9, 8, 6)} fill="#ffd60a"/><Polygon points={starPoints(31, 8, 6)} fill="#ffd60a"/><Polygon points={starPoints(53, 8, 6)} fill="#ffd60a"/></Svg>)}
                 </View>
@@ -483,6 +542,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
               <FloatWrap amp={4}>
                 <SpriteUnit spec={champById('toto')} size={56} state={legendHurt ? 'hurt' : 'idle'}/>
               </FloatWrap>
+              <View style={{ width: 46, height: 11, borderRadius: 999, backgroundColor: 'rgba(8,26,14,0.35)', marginTop: -8 }} />
               <Text style={st.legendName}>Toto</Text>
               <View style={st.legendBadge}><Text style={st.legendBadgeTxt}>{isArena ? 'Cấp ' + level : mode==='campaign' ? 'PvE' : mode==='waves' ? 'Sóng ' + wave : 'Tập'}</Text></View>
               <View style={{ width: 68 }}>
@@ -495,6 +555,17 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             <FxLayer items={fxItems}/>
             {banner && <ArenaBanner title={banner.title} sub={banner.sub} tone={banner.tone} onDone={() => setBanner(null)}/>}
             {redFlash && <View pointerEvents="none" style={{ position:'absolute', left:0, top:0, right:0, bottom:0, borderWidth:6, borderColor:'#ef476f', backgroundColor:'rgba(239,71,111,0.12)', zIndex:180 }}/>}
+            {/* ===== VUNG BAN KHI KEO: mac dinh AN, chi hien trong luc dang keo 1 tuong tren san ===== */}
+            {drag && (() => { const du = board.find(u => u.uid===drag.uid); if (!du) return null; return (<React.Fragment>
+              {(['left','right'] as const).map(side => (
+                <View key={side} pointerEvents="none" style={[st.sellZone, side==='left' ? { left: -36 } : { right: -36 }, drag.over===side && st.sellZoneHot]}>
+                  <View style={{ alignItems:'center', gap: 1, marginBottom: 26, marginLeft: side==='left' ? 26 : 0, marginRight: side==='right' ? 26 : 0 }}>
+                    <Svg width={26} height={26} viewBox="0 0 24 24"><Rect x="5" y="7" width="14" height="13" rx="2" fill="#f3b8c6" /><Rect x="3.5" y="4.5" width="17" height="3" rx="1.5" fill="#ffe3ec" /><Rect x="9.5" y="2" width="5" height="3" rx="1.4" fill="#ffe3ec" /><Rect x="8.6" y="10" width="2.2" height="7" fill="#5c0f22" /><Rect x="13.2" y="10" width="2.2" height="7" fill="#5c0f22" /></Svg>
+                    <Text style={st.sellZoneGold}>{sellValue(du.defId, du.star)} vàng</Text>
+                    <Text style={st.sellZoneLbl}>Thả để bán</Text>
+                  </View>
+                </View> ))}
+            </React.Fragment>); })()}
           </View>
           {/* RIGHT: scoreboard / damage */}
           <View style={st.rightPanel}>
@@ -528,11 +599,23 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             </>)}
           </View>
         </View>
-        {/* ===== BENCH (o da long vao mep duoi san) ===== */}
-        {phase!=='battle' && (<View style={[st.benchRow, hi('bench') && st.tutHi]}><Text style={st.benchLbl}>Bench</Text>{Array.from({length:9}).map((_,i) => { const u = bench[i]; return (
-          <Pressable key={i} onPress={() => u && tapBench(u)} style={[st.benchCell, u && selUid===u.uid && st.cellSel]}>{u ? <SpriteUnit spec={champById(u.defId)} size={44} star={u.star} state='idle'/> : <Text style={st.cellDot}>·</Text>}</Pressable> ); })}
+        {/* ===== BENCH: hang o HEX nam ngay mep duoi TRONG san (cung chat lieu mat dat) ===== */}
+        {phase!=='battle' && (<View style={[st.benchRow, hi('bench') && st.tutHi]}><Text style={st.benchLbl}>Bench</Text>{Array.from({length:9}).map((_,i) => { const u = bench[i]; const isSel = !!u && selUid===u.uid; return (
+          <Pressable key={u ? 'b-' + u.uid : 'e-' + i} onPress={() => u && tapBench(u)} style={st.benchHex}>
+            <Svg width={54} height={50} style={{ position:'absolute', left:0, top:0 } as any} pointerEvents="none">
+              <Polygon points={hexPoints(27, 25, 23)} fill={u ? 'rgba(88,104,78,0.94)' : 'rgba(58,70,56,0.72)'} stroke={isSel ? '#ffb703' : '#93a487'} strokeWidth={isSel ? 3 : 1.6}/>
+              <Polygon points={hexPoints(27, 22.5, 19.5)} fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth={1}/>
+            </Svg>
+            {u ? (<React.Fragment>
+              <View style={{ position:'absolute', bottom: 5, width: 30, height: 8, borderRadius: 999, backgroundColor: 'rgba(8,26,14,0.32)' }} />
+              <View style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'flex-end', zIndex: 2 }}>
+                <SpriteUnit key={u.uid} spec={champById(u.defId)} size={44} star={u.star} state='idle'/>
+              </View>
+            </React.Fragment>) : <Text style={st.cellDot}>·</Text>}
+          </Pressable> ); })}
           <View style={st.logMini}>{log.slice(0,2).map((l,i) => <Text key={i} style={st.logTxt} numberOfLines={1}>{l}</Text>)}</View>
         </View>)}
+        </View>
         {/* ===== SHOP ===== */}
         {phase!=='battle' && (<View style={st.shopRow}>
           <View style={st.shopLeft}>
@@ -564,23 +647,6 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
           {phase==='plan' && <Pressable style={[st.fightBtn, hi('fight') && st.tutHiBtn]} onPress={startBattle}><Text style={st.fightTxt}>Bắt đầu đấu</Text><Text style={st.fightSub}>{isArena ? enemyForRound().label : mode==='campaign' ? stageDef(stageId).name : mode==='waves' ? 'Sóng '+wave : 'Đội luyện tập'}</Text></Pressable>}
         </View>)}
         <Pressable style={st.homeLink} onPress={() => router.back()}><Text style={st.dim}>Về trang chủ</Text></Pressable>
-        {/* ===== VONG TRON BAN TUONG o 2 goc duoi (chi khi dang chon 1 tuong, phase chuan bi) ===== */}
-        {phase==='plan' && selUnit && (<React.Fragment>
-          <Pressable style={[st.sellCircle, { left: -74, bottom: -80 }]} onPress={sellSelected}>
-            <View style={{ position:'absolute', right: 20, top: 24, alignItems:'center', gap: 1 }}>
-              <Svg width={24} height={24} viewBox="0 0 24 24"><Rect x="5" y="7" width="14" height="13" rx="2" fill="#aab4d4" /><Rect x="3.5" y="4.5" width="17" height="3" rx="1.5" fill="#e8ecff" /><Rect x="9.5" y="2" width="5" height="3" rx="1.4" fill="#e8ecff" /><Rect x="8.6" y="10" width="2.2" height="7" fill="#232c4c" /><Rect x="13.2" y="10" width="2.2" height="7" fill="#232c4c" /></Svg>
-              <Text style={st.sellGold}>{sellValue(selUnit.defId, selUnit.star)} vàng</Text>
-              <Text style={st.sellLbl}>Bán {champById(selUnit.defId).name}</Text>
-            </View>
-          </Pressable>
-          <Pressable style={[st.sellCircle, { right: -74, bottom: -80 }]} onPress={sellSelected}>
-            <View style={{ position:'absolute', left: 20, top: 24, alignItems:'center', gap: 1 }}>
-              <Svg width={24} height={24} viewBox="0 0 24 24"><Rect x="5" y="7" width="14" height="13" rx="2" fill="#aab4d4" /><Rect x="3.5" y="4.5" width="17" height="3" rx="1.5" fill="#e8ecff" /><Rect x="9.5" y="2" width="5" height="3" rx="1.4" fill="#e8ecff" /><Rect x="8.6" y="10" width="2.2" height="7" fill="#232c4c" /><Rect x="13.2" y="10" width="2.2" height="7" fill="#232c4c" /></Svg>
-              <Text style={st.sellGold}>{sellValue(selUnit.defId, selUnit.star)} vàng</Text>
-              <Text style={st.sellLbl}>Bán {champById(selUnit.defId).name}</Text>
-            </View>
-          </Pressable>
-        </React.Fragment>)}
         {/* ===== OVERLAYS ===== */}
         {isTut && tutStep && (
           <View style={st.coach}>
@@ -661,20 +727,22 @@ const st = StyleSheet.create({
   dot:{ width:22, height:22, borderRadius:11, backgroundColor:'#2a3454', alignItems:'center', justifyContent:'center', borderWidth:1, borderColor:'#46538a' }, dotCur:{ backgroundColor:'#f5c542', borderColor:'#f5c542', transform:[{scale:1.2}] }, dotPve:{ backgroundColor:'#8a5a13' }, dotCar:{ backgroundColor:'#5a189a' }, dotTxt:{ fontSize:11, fontWeight:'800', color:'#eef1ff' },
   timerRow:{ flexDirection:'row', alignItems:'center', gap:7 }, timerBar:{ height:7, backgroundColor:'rgba(255,255,255,0.14)', borderRadius:4, overflow:'hidden' }, timerFill:{ height:7, borderRadius:4 },
   timerPill:{ backgroundColor:'rgba(8,12,26,0.85)', borderRadius:999, borderWidth:1, borderColor:'#46538a', paddingHorizontal:10, paddingVertical:2.5 }, timerPillTxt:{ fontWeight:'800', color:'#eef1ff', fontSize:11.5 }, timerTxt:{ fontWeight:'800', color:'#eef1ff', fontSize:12 }, sumTxt:{ fontSize:11, color:'#aab4d4', fontWeight:'600' },
-  sellCircle:{ position:'absolute', width:156, height:156, borderRadius:78, backgroundColor:'rgba(9,12,25,0.93)', borderWidth:2.5, borderColor:'#c9a227', zIndex:45, shadowColor:'#000', shadowOpacity:0.5, shadowRadius:10, elevation:8 },
-  sellGold:{ fontSize:15, fontWeight:'900', color:'#ffd60a' }, sellLbl:{ fontSize:10, fontWeight:'700', color:'#aab4d4', maxWidth:78, textAlign:'center' },
+  stageWrap:{ flex:1, position:'relative', borderRadius:16, overflow:'hidden', backgroundColor:'#274435', minHeight:0 },
+  sellZone:{ position:'absolute', bottom:-38, width:142, height:142, borderRadius:71, backgroundColor:'rgba(96,12,30,0.85)', borderWidth:2.5, borderStyle:'dashed', borderColor:'#ff8fab', alignItems:'center', justifyContent:'center', zIndex:170 },
+  sellZoneHot:{ backgroundColor:'rgba(186,26,54,0.96)', borderColor:'#ffd60a', transform:[{ scale:1.07 }] },
+  sellZoneGold:{ fontSize:14, fontWeight:'900', color:'#ffd60a' }, sellZoneLbl:{ fontSize:9.5, fontWeight:'800', color:'#ffd6e0' },
   rewardBox:{ backgroundColor:'#141b33', borderWidth:1, borderColor:'#c9a227', borderRadius:12, paddingHorizontal:12, paddingVertical:8, alignItems:'center', gap:4, alignSelf:'stretch' },
   rewardXp:{ fontSize:13.5, fontWeight:'900', color:'#7fb3ff' }, rewardLp:{ fontSize:13, fontWeight:'900' }, rewardNote:{ fontSize:11, color:'#aab4d4', fontWeight:'600' },
   topBtns:{ flexDirection:'row', gap:6 }, tBtn:{ backgroundColor:'#2f6db3', borderRadius:999, paddingHorizontal:10, paddingVertical:6, borderTopWidth:1, borderTopColor:'#8fc1f5', borderBottomWidth:4, borderBottomColor:'#1c4472' }, tBtnTxt:{ color:'#fff', fontWeight:'700', fontSize:11 },
-  middle:{ flex:1, flexDirection:'row', gap:8, minHeight:0 },
-  leftPanel:{ width:172, backgroundColor:'rgba(26,35,64,0.96)', borderRadius:14, padding:8, borderWidth:1.5, borderColor:'#c9a227' },
-  rightPanel:{ width:196, backgroundColor:'rgba(26,35,64,0.96)', borderRadius:14, padding:8, borderWidth:1.5, borderColor:'#c9a227' },
+  middle:{ flex:1, flexDirection:'row', gap:8, minHeight:0, padding:6 },
+  leftPanel:{ width:172, backgroundColor:'rgba(15,21,42,0.84)', borderRadius:14, padding:8, borderWidth:1, borderColor:'rgba(201,162,39,0.5)' },
+  rightPanel:{ width:196, backgroundColor:'rgba(15,21,42,0.84)', borderRadius:14, padding:8, borderWidth:1, borderColor:'rgba(201,162,39,0.5)' },
   panelTitle:{ fontWeight:'900', color:'#f5d67b', marginBottom:4 },
   traitRow:{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', backgroundColor:'#242f52', borderRadius:9, paddingHorizontal:8, paddingVertical:4, marginBottom:4, borderWidth:1, borderColor:'transparent' }, traitHl:{ borderColor:'#ffb703', borderWidth:2 }, traitName:{ fontWeight:'700', fontSize:12, color:'#eef1ff' }, traitCnt:{ fontSize:12, color:'#aab4d4', fontWeight:'700' },
   augChip:{ backgroundColor:'#4a3a10', borderRadius:9, paddingHorizontal:8, paddingVertical:4, marginBottom:4 }, augTxt:{ fontSize:11, fontWeight:'700', color:'#ffd60a' },
   invWrap:{ flexDirection:'row', flexWrap:'wrap', gap:6 }, invCell:{ backgroundColor:'#232d4f', borderRadius:10, padding:4, alignItems:'center', width:74, borderWidth:1, borderColor:'#46538a' }, invTxt:{ fontSize:9, textAlign:'center', fontWeight:'600', color:'#e8ecff' },
   selMini:{ marginTop:8, backgroundColor:'#232d4f', borderRadius:10, padding:7 }, selName:{ fontWeight:'800', fontSize:12, color:'#eef1ff' }, miniBtn:{ backgroundColor:'#2f6db3', borderRadius:999, paddingHorizontal:9, paddingVertical:4, borderTopWidth:1, borderTopColor:'#8fc1f5', borderBottomWidth:3, borderBottomColor:'#1c4472' }, miniTxt:{ color:'#fff', fontWeight:'700', fontSize:10 },
-  arena:{ flex:1, backgroundColor:'#1d3a2a', borderRadius:16, borderWidth:2, borderColor:'#c9a227', position:'relative', overflow:'hidden', alignItems:'center' },
+  arena:{ flex:1, position:'relative', overflow:'hidden', alignItems:'center' },
   selRing:{ position:'absolute', borderWidth:3, borderColor:'#ffb703', borderRadius:999, backgroundColor:'#ffb70333' },
   hpBar:{ width:'92%', height:5, backgroundColor:'rgba(6,8,20,0.5)', borderRadius:3, overflow:'hidden' }, hpFill:{ height:5, backgroundColor:'#38b000' }, manaBar:{ width:'92%', height:4, backgroundColor:'rgba(6,8,20,0.5)', borderRadius:3, overflow:'hidden', marginTop:1 }, manaFill:{ height:4, backgroundColor:'#4dabff' },
   legend:{ position:'absolute', left:7, top:'33%', alignItems:'center', gap:3, zIndex:30 }, legendName:{ fontWeight:'900', fontSize:12, color:'#fff', textShadowColor:'rgba(0,0,0,0.8)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:3 }, legendBadge:{ backgroundColor:'#f5c542', borderRadius:5, paddingHorizontal:6, paddingVertical:1, borderWidth:1, borderColor:'#a86e00' }, legendBadgeTxt:{ fontSize:9.5, fontWeight:'900', color:'#23180a' }, legendHp:{ fontSize:10, color:'#e8ecff', fontWeight:'700', textShadowColor:'rgba(0,0,0,0.8)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:3 },
@@ -684,7 +752,7 @@ const st = StyleSheet.create({
   pRow:{ flexDirection:'row', gap:7, alignItems:'center', backgroundColor:'#232d4f', borderRadius:11, padding:6, marginBottom:5, borderWidth:2, borderColor:'transparent' }, pDead:{ opacity:0.5, backgroundColor:'#171f38' }, pOpp:{ borderColor:'#ffb703', backgroundColor:'#2a3358' }, pName:{ fontWeight:'800', fontSize:10.5, color:'#eef1ff' }, pHpBar:{ height:5, backgroundColor:'rgba(255,255,255,0.14)', borderRadius:3, overflow:'hidden' }, pHpFill:{ height:5 }, pHp:{ fontSize:9.5, color:'#aab4d4', fontWeight:'600' }, pHpBig:{ fontSize:18, fontWeight:'900', lineHeight:20 }, pAvatar:{ width:38, height:38, borderRadius:19, overflow:'hidden', borderWidth:2, borderColor:'#46538a', backgroundColor:'#141b33', position:'relative' }, pAvatarOpp:{ borderColor:'#ffb703' },
   dRow:{ flexDirection:'row', alignItems:'center', gap:6, marginBottom:5 }, dName:{ width:86, fontSize:11, fontWeight:'700' }, dBar:{ flex:1, backgroundColor:'rgba(255,255,255,0.12)', borderRadius:5 }, dVal:{ width:38, fontSize:11, fontWeight:'800', textAlign:'right', color:'#eef1ff' },
   infoLine:{ fontWeight:'800', color:'#f5d67b' },
-  benchRow:{ flexDirection:'row', gap:5, alignItems:'center', backgroundColor:'rgba(22,25,34,0.94)', borderRadius:10, padding:6, borderWidth:1.5, borderColor:'#6e5a1e', marginTop:-11, zIndex:25, shadowColor:'#000', shadowOpacity:0.35, shadowRadius:6, shadowOffset:{ width:0, height:-2 } }, benchLbl:{ fontWeight:'900', color:'#f5d67b', fontSize:12, marginRight:2 }, benchCell:{ width:50, height:50, backgroundColor:'#454e61', borderRadius:7, alignItems:'center', justifyContent:'center', borderWidth:1, borderColor:'#79839b', borderTopWidth:2.5, borderTopColor:'#aeb8c4', borderBottomWidth:3.5, borderBottomColor:'#22262f' }, cellSel:{ borderWidth:3, borderColor:'#ffb703' }, cellDot:{ color:'#98a2b8', fontSize:18 }, logMini:{ flex:1, gap:1 },
+  benchRow:{ flexDirection:'row', gap:5, alignItems:'center', paddingHorizontal:8, paddingBottom:6, paddingTop:2, zIndex:25 }, benchLbl:{ fontWeight:'900', color:'#fff6d8', fontSize:12, marginRight:2, textShadowColor:'rgba(0,0,0,0.75)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:3 }, benchHex:{ width:54, height:50, alignItems:'center', justifyContent:'center' }, cellSel:{ borderWidth:3, borderColor:'#ffb703' }, cellDot:{ color:'rgba(240,248,230,0.75)', fontSize:18 }, logMini:{ flex:1, gap:1, backgroundColor:'rgba(10,14,30,0.55)', borderRadius:8, paddingHorizontal:6, paddingVertical:3 },
   shopRow:{ flexDirection:'row', gap:8, backgroundColor:'rgba(26,35,64,0.96)', borderRadius:14, padding:8, borderWidth:1.5, borderColor:'#c9a227', alignItems:'stretch' },
   shopLeft:{ width:206, gap:6 }, lvlCard:{ backgroundColor:'#232d4f', borderRadius:10, padding:7 }, lvlBig:{ fontWeight:'900', fontSize:16, color:'#f5d67b' }, xpBar:{ height:7, backgroundColor:'rgba(255,255,255,0.14)', borderRadius:4, overflow:'hidden', marginVertical:3 },
   shopBtn:{ flex:1, backgroundColor:'#2f6db3', borderRadius:10, paddingVertical:7, alignItems:'center', borderTopWidth:1, borderTopColor:'#8fc1f5', borderBottomWidth:4, borderBottomColor:'#1c4472' }, shopBtnTxt:{ color:'#fff', fontWeight:'800', fontSize:10 },

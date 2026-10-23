@@ -221,14 +221,15 @@ export default function OnlineGameScreen({ mode, joinCode, playerName }: Props) 
       <View style={st.players}>{players.map(p => (<View key={p.seat} style={[st.playerChip, !p.alive && st.dead]}><Text style={st.playerTxt}>{p.name}{p.id === myIdRef.current ? ' (bạn)' : ''}: {p.hp} máu{p.alive ? '' : ' (loại)'}{!p.isBot && !p.connected ? ' (AI thay)' : ''}</Text></View>))}</View>
       {!!synergies.length && (<View style={st.synRow}>{synergies.map(s => (<Text key={s.traitId} style={[st.synChip, s.active && st.synActive]}>{traitName(s.traitId)}: {s.count}{s.active ? ' (kích hoạt bậc ' + s.tier + ')' : ''}</Text>))}</View>)}
       <Text style={st.section}>{phase === 'battle' ? ('Đang đấu: ' + battleLabel) : phase === 'plan' ? 'Bàn cờ — hết giờ chuẩn bị, đội hình tự gửi lên phòng' : 'Đang chờ kết quả từ phòng...'}</Text>
-      <View style={{ alignSelf: 'center', width: cell * 7 + 12, height: Math.round((cell * 7 + 12) * 0.34), borderRadius: 10, overflow: 'hidden' }}><SceneArtImage id="arena" width={cell * 7 + 12} height={Math.round((cell * 7 + 12) * 0.34)} /></View>
       <View style={[st.board, { width: cell * 7 + 12, height: (phase === 'battle' ? cell * 7 : cell * 4) + 12 }]}>
+        <SceneArtImage id="arena" width={cell * 7 + 12} height={(phase === 'battle' ? cell * 7 : cell * 4) + 12} />
         {phase !== 'battle' && Array.from({ length: 4 }).map((_, y) => Array.from({ length: 7 }).map((_, x) => { const u = board.find(v => v.x === x && v.y === y); return (
           <Pressable key={x + '-' + y} onPress={() => tapBoardCell(x, y)} style={[st.cell, { left: 6 + x * cell, top: 6 + y * cell, width: cell - 4, height: cell - 4 }, selUid && u?.uid === selUid && st.cellSel]}>
-            {u ? <SpriteUnit spec={champById(u.defId)} size={(cell - 4) * rowDepth(y, 4).scale} star={u.star} state='idle' /> : <Text style={st.cellDot}>·</Text>}
+            {u ? (<React.Fragment><View style={{ position: 'absolute', bottom: 3, width: '58%', height: 7, borderRadius: 999, backgroundColor: 'rgba(8,26,14,0.30)' }} /><SpriteUnit spec={champById(u.defId)} size={(cell - 4) * rowDepth(y, 4).scale} star={u.star} state='idle' /></React.Fragment>) : <Text style={st.cellDot}>·</Text>}
           </Pressable>); }))}
         {phase === 'battle' && frame && renderUnitsForFrame(frame).map(u => { const prev = result && frameIdx > 0 ? result.frames[frameIdx - 1].units.find(v => v.uid === u.uid) : undefined; const evs = result ? result.events.filter(e => Math.abs(e.t - frame.t) < 0.3) : []; const animState = stateForUnit({ alive: u.alive, moved: !!prev && (prev.x !== u.x || prev.y !== u.y), castAtFrame: evs.some(e => e.uid === u.uid && e.text.includes('kỹ năng')), attackedAtFrame: evs.some(e => e.text.startsWith(u.name + ' đánh')), hurtAtFrame: evs.some(e => e.uid === u.uid && !!e.amount), battleOver: frameIdx >= (result?.frames.length ?? 1) - 1, won: result?.winner === u.team }); const dep = rowDepth(u.y, 7); return (
           <View key={u.uid} style={[st.battleUnit, { left: 6 + u.x * cell, top: 6 + u.y * cell, width: cell - 2, height: cell - 2, zIndex: dep.zIndex }]}>
+            <View style={{ position: 'absolute', bottom: 9, left: '19%', width: '62%', height: 9, borderRadius: 999, backgroundColor: 'rgba(8,26,14,0.32)' }} />
             <SpriteUnit spec={u.art} size={(cell - 6) * dep.scale + 8} star={u.star} state={animState} flip={u.team === 1} />
             <View style={st.hpBar}><View style={[st.hpFill, { width: Math.max(0, Math.min(100, u.hp / u.maxHp * 100)) + '%' }]} /></View>
             <View style={st.manaBar}><View style={[st.manaFill, { width: Math.min(100, u.mana / u.maxMana * 100) + '%' }]} /></View>
@@ -237,7 +238,7 @@ export default function OnlineGameScreen({ mode, joinCode, playerName }: Props) 
       </View>
       <Text style={st.section}>Hàng chờ</Text>
       <View style={st.benchRow}>{Array.from({ length: 9 }).map((_, i) => { const u = bench[i]; return (
-        <Pressable key={i} onPress={() => u && tapBench(u)} style={[st.benchCell, u && selUid === u.uid && st.cellSel]}>{u ? <SpriteUnit spec={champById(u.defId)} size={42} star={u.star} state='idle' /> : <Text style={st.cellDot}>·</Text>}</Pressable>); })}
+        <Pressable key={u ? 'b-' + u.uid : 'e-' + i} onPress={() => u && tapBench(u)} style={[st.benchCell, u && selUid === u.uid && st.cellSel]}>{u ? <SpriteUnit key={u.uid} spec={champById(u.defId)} size={42} star={u.star} state='idle' /> : <Text style={st.cellDot}>·</Text>}</Pressable>); })}
       </View>
       {selUid && (() => { const u = allUnits.find(v => v.uid === selUid); if (!u) return null; const d = champById(u.defId); return (
         <View style={st.selBox}><SpriteUnit spec={d} size={64} star={u.star} state='idle' /><View style={{ flex: 1 }}><Text style={st.selName}>{d.name} {STAR_TXT(u.star)} - {d.skill.name}</Text><Text style={st.selDesc}>{d.skill.desc} | Đồ: {u.items.map(i => itemById(i)?.name).filter(Boolean).join(', ') || 'chưa có'}</Text></View>
@@ -275,11 +276,11 @@ const st = StyleSheet.create({
   players:{ flexDirection:'row', flexWrap:'wrap', gap:6 }, playerChip:{ backgroundColor:'#e7f9ee', borderRadius:999, paddingHorizontal:9, paddingVertical:4 }, dead:{ backgroundColor:'#e9ecef', opacity:0.6 }, playerTxt:{ fontSize:12, fontWeight:'600' },
   synRow:{ flexDirection:'row', flexWrap:'wrap', gap:6 }, synChip:{ backgroundColor:'#eef2ff', borderRadius:999, paddingHorizontal:9, paddingVertical:4, fontSize:12 }, synActive:{ backgroundColor:'#ffe08a', fontWeight:'800' },
   section:{ fontWeight:'800', color:'#5b3a29', marginTop:4 },
-  board:{ backgroundColor:'#d8f3dc', borderRadius:18, alignSelf:'center', borderWidth:3, borderColor:'#95d5b2', position:'relative' },
-  cell:{ position:'absolute', backgroundColor:'#ffffffaa', borderRadius:12, alignItems:'center', justifyContent:'center' }, cellSel:{ borderWidth:3, borderColor:'#ff70a6' }, cellDot:{ color:'#95d5b2', fontSize:20 },
+  board:{ backgroundColor:'#33523c', borderRadius:18, alignSelf:'center', borderWidth:3, borderColor:'#5c6b57', position:'relative', overflow:'hidden' },
+  cell:{ position:'absolute', backgroundColor:'rgba(255,255,255,0.20)', borderRadius:12, alignItems:'center', justifyContent:'center' }, cellSel:{ borderWidth:3, borderColor:'#ff70a6' }, cellDot:{ color:'rgba(240,248,230,0.85)', fontSize:20 },
   battleUnit:{ position:'absolute', alignItems:'center' }, hpBar:{ width:'92%', height:5, backgroundColor:'#0003', borderRadius:3, overflow:'hidden' }, hpFill:{ height:5, backgroundColor:'#38b000' }, manaBar:{ width:'92%', height:4, backgroundColor:'#0003', borderRadius:3, overflow:'hidden', marginTop:1 }, manaFill:{ height:4, backgroundColor:'#4361ee' },
   battleCtrls:{ position:'absolute', right:8, bottom:8, flexDirection:'row', gap:6 },
-  benchRow:{ flexDirection:'row', gap:6, flexWrap:'wrap' }, benchCell:{ width:48, height:48, backgroundColor:'#fff', borderRadius:12, alignItems:'center', justifyContent:'center', borderWidth:1, borderColor:'#ffd6e0' },
+  benchRow:{ flexDirection:'row', gap:6, flexWrap:'wrap' }, benchCell:{ width:48, height:48, backgroundColor:'#5c6b57', borderRadius:12, alignItems:'center', justifyContent:'center', borderWidth:1.5, borderColor:'#8fa383' },
   selBox:{ flexDirection:'row', gap:10, backgroundColor:'#fff', borderRadius:14, padding:10, alignItems:'center' }, selName:{ fontWeight:'800' }, selDesc:{ fontSize:12, color:'#555' },
   invRow:{ flexDirection:'row', gap:8, flexWrap:'wrap' }, invCell:{ backgroundColor:'#fff', borderRadius:12, padding:6, alignItems:'center', width:86 }, invTxt:{ fontSize:11, textAlign:'center', fontWeight:'600' },
   shopHead:{ flexDirection:'row', gap:8, alignItems:'center', flexWrap:'wrap' }, shopRow:{ flexDirection:'row', gap:8, flexWrap:'wrap' },
