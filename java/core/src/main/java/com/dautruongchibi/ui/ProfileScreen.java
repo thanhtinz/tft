@@ -21,6 +21,7 @@ public class ProfileScreen extends ScreenAdapter {
     public void show() {
         stage = new Stage(new FitViewport(1280, 720));
         Gdx.input.setInputProcessor(stage);
+        game.sound().playBgm("home");
         Assets a = game.assets;
         Table root = new Table();
         root.setFillParent(true);

@@ -7,9 +7,9 @@ java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaV
 // Chi duoc include vao settings.gradle khi build web; cac module khac khong phu thuoc vao no.
 dependencies {
     implementation project(':core')
-    implementation 'com.github.xpenatan.gdx-teavm:backend-teavm:1.2.4'
-    implementation 'com.github.xpenatan.gdx-teavm:gdx-freetype-teavm:1.2.4'
-    implementation 'com.github.xpenatan.gdx-teavm:asset-loader:1.2.4'
+    implementation 'com.github.xpenatan.gdx-teavm:backend-teavm:1.4.0'
+    implementation 'com.github.xpenatan.gdx-teavm:gdx-freetype-teavm:1.4.0'
+    implementation 'com.github.xpenatan.gdx-teavm:asset-loader:1.4.0'
 }
 
 // Bien dich TeaVM: chay class BuildWeb tren JVM, xuat JS + tai nguyen vao web/build/webapp

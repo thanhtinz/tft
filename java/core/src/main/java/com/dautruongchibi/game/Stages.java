@@ -112,7 +112,7 @@ public final class Stages {
         }
         int chapter = chapterOf(id);
         ThemeDef theme = THEMES[themeIndexOf(chapter)];
-        Rng rng = new Rng(Integer.toUnsignedLong(hash32(id)));
+        Rng rng = new Rng(hash32(id)); // Rng chi giu 32 bit thap, toUnsignedLong roi ep int la thua
         double scale = difficultyScale(id);
         int count = regularCount(id);
         List<Engine.MonsterPick> picks = new ArrayList<>();

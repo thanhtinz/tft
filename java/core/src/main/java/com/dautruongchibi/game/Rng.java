@@ -12,7 +12,7 @@ public final class Rng {
         int t = (a ^ (a >>> 15)) * (1 | a);
         t = (t + ((t ^ (t >>> 7)) * (61 | t))) ^ t;
         t = t ^ (t >>> 14);
-        return Integer.toUnsignedLong(t) / 4294967296.0;
+        return (t & 0xFFFFFFFFL) / 4294967296.0; // = Integer.toUnsignedLong(t), nhung TeaVM chua co ham do
     }
 
     public int nextInt(int bound) {

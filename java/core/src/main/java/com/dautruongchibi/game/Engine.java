@@ -80,7 +80,7 @@ public final class Engine {
         for (PlacedUnit u : units) {
             if (u.isMonster || seen.contains(u.defId)) continue;
             seen.add(u.defId);
-            for (String t : defOf(u).traits) counts.merge(t, 1, Integer::sum);
+            for (String t : defOf(u).traits) counts.put(t, counts.getOrDefault(t, 0) + 1); // khong dung Integer::sum (TeaVM chua co)
         }
         List<SynergyInfo> out = new ArrayList<>();
         for (GameData.TraitDef t : GameData.TRAITS) {

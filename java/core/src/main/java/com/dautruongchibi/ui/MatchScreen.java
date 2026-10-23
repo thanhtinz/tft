@@ -100,27 +100,28 @@ public class MatchScreen extends ScreenAdapter {
 
         // Top bar
         Table top = new Table();
-        top.setPosition(10, 676);
-        top.setSize(1260, 40);
+        top.setPosition(10, 670);
+        top.setSize(1260, 46);
         top.left();
         roundLabel = Ui.labelBig(a, "", Color.WHITE);
         goldLabel = Ui.labelBig(a, "", Ui.GOLD);
         msgLabel = Ui.label(a, "", Color.WHITE);
+        msgLabel.setWrap(true);
         timerLabel = Ui.label(a, "", Ui.TEXT_DIM);
         top.add(roundLabel).padRight(18);
         top.add(goldLabel).padRight(18);
         top.add(timerLabel).padRight(18);
-        top.add(msgLabel);
+        top.add(msgLabel).width(420);
         stage.addActor(top);
 
-        // Left panel: synergy + inventory + traps + log
+        // Left panel: synergy + inventory + traps + log (keo dai gan het chieu cao de khong tran)
         Table left = new Table();
-        left.setPosition(6, 120);
-        left.setSize(238, 540);
+        left.setPosition(6, 8);
+        left.setSize(238, 652);
         left.top().align(com.badlogic.gdx.utils.Align.left);
         left.background(Ui.bg(a, Ui.PANEL));
         left.pad(8);
-        left.add(Ui.labelBig(a, "TỘC / HỆ", Ui.GOLD)).align(com.badlogic.gdx.utils.Align.left).row();
+        left.add(Ui.labelBig(a, "TỘC / HỆ", Ui.GOLD)).align(com.badlogic.gdx.utils.Align.left).padTop(4).padBottom(5).row();
         synergyLabel = Ui.labelSmall(a, "", Color.WHITE);
         synergyLabel.setWrap(true);
         left.add(synergyLabel).width(222).align(com.badlogic.gdx.utils.Align.left).row();
@@ -143,8 +144,8 @@ public class MatchScreen extends ScreenAdapter {
 
         // Right panel: players / info + actions
         Table right = new Table();
-        right.setPosition(1036, 120);
-        right.setSize(238, 540);
+        right.setPosition(1036, 8);
+        right.setSize(238, 652);
         right.top().align(com.badlogic.gdx.utils.Align.left);
         right.background(Ui.bg(a, Ui.PANEL));
         right.pad(8);
@@ -156,16 +157,16 @@ public class MatchScreen extends ScreenAdapter {
         fightBtn.addListener(changed(() -> startBattle()));
         right.add(fightBtn).width(222).padTop(10).row();
         TextButton rerollBtn = Ui.button(a, "Làm mới shop (2 vàng)");
-        rerollBtn.addListener(changed(() -> { if (phase == Phase.PLANNING) toast(match.reroll()); refreshPlanning(); }));
+        rerollBtn.addListener(changed(() -> { if (phase == Phase.PLANNING) { int g0 = match.human().gold; toast(match.reroll()); if (match.human().gold < g0) game.sound().sfx("reroll"); } refreshPlanning(); }));
         right.add(rerollBtn).width(222).padTop(6).row();
         TextButton xpBtn = Ui.button(a, "Mua XP (4 vàng)");
-        xpBtn.addListener(changed(() -> { if (phase == Phase.PLANNING) toast(match.buyXp()); refreshPlanning(); }));
+        xpBtn.addListener(changed(() -> { if (phase == Phase.PLANNING) { int g0 = match.human().gold, lv0 = match.human().level; toast(match.buyXp()); if (match.human().level > lv0) game.sound().sfx("levelup"); else if (match.human().gold < g0) game.sound().sfx("coin"); } refreshPlanning(); }));
         right.add(xpBtn).width(222).padTop(6).row();
         TextButton sellBtn = Ui.button(a, "Bán tướng đã chọn");
-        sellBtn.addListener(changed(() -> { if (phase == Phase.PLANNING && selUid != null) { toast(match.sell(selUid)); selUid = null; refreshPlanning(); } }));
+        sellBtn.addListener(changed(() -> { if (phase == Phase.PLANNING && selUid != null) { int g0 = match.human().gold; toast(match.sell(selUid)); if (match.human().gold > g0) game.sound().sfx("sell"); selUid = null; refreshPlanning(); } }));
         right.add(sellBtn).width(222).padTop(6).row();
         TextButton benchBtn = Ui.button(a, "Cất về bench");
-        benchBtn.addListener(changed(() -> { if (phase == Phase.PLANNING && selUid != null && !selFromBench) { toast(match.moveToBench(selUid)); selUid = null; refreshPlanning(); } }));
+        benchBtn.addListener(changed(() -> { if (phase == Phase.PLANNING && selUid != null && !selFromBench) { int b0 = match.human().board.size(); toast(match.moveToBench(selUid)); if (match.human().board.size() < b0) game.sound().sfx("place"); selUid = null; refreshPlanning(); } }));
         right.add(benchBtn).width(222).padTop(6).row();
         speedBtn = Ui.button(a, "Tốc độ: x1");
         speedBtn.addListener(changed(() -> { speed = speed == 1 ? 2 : 1; speedBtn.setText("Tốc độ: x" + (int) speed); }));
@@ -179,6 +180,7 @@ public class MatchScreen extends ScreenAdapter {
         mux.addProcessor(stage);
         mux.addProcessor(new BoardInput());
         Gdx.input.setInputProcessor(mux);
+        game.sound().playBgm("battle");
 
         if (match.draftPending) enterDraft();
         else if (match.augmentPending) phase = Phase.AUGMENT;
@@ -213,14 +215,14 @@ public class MatchScreen extends ScreenAdapter {
         }
         roundLabel.setText(modeName + (match.isPvp() ? " — Vòng " + Engine.roundLabel(match.round) : ""));
         goldLabel.setText("Vàng: " + h.gold + "  •  Cấp " + h.level + " (" + h.xp + "/" + Engine.xpToNext(h.level) + " XP)  •  LP: " + h.lp);
-        // Synergy
+        // Synergy (ghep 1 dong, label tu xuong dong — tranh tran panel khi nhieu he)
         List<Engine.SynergyInfo> syns = Engine.computeSynergies(h.board);
         StringBuilder sb = new StringBuilder();
         if (syns.isEmpty()) sb.append("Chưa có tướng trên bàn.");
         for (Engine.SynergyInfo s : syns) {
+            if (sb.length() > 0) sb.append(" • ");
             sb.append(GameData.traitName(s.traitId)).append(" ").append(s.count);
-            if (s.active) sb.append(" — kích hoạt bậc ").append(s.tier);
-            sb.append("\n");
+            if (s.active) sb.append(" (bậc ").append(s.tier).append(")");
         }
         synergyLabel.setText(sb.toString());
         // Players / info
@@ -242,7 +244,7 @@ public class MatchScreen extends ScreenAdapter {
         // Log
         List<String> lg = match.log;
         StringBuilder lb = new StringBuilder();
-        for (int i = Math.max(0, lg.size() - 6); i < lg.size(); i++) lb.append(lg.get(i)).append("\n");
+        for (int i = Math.max(0, lg.size() - 4); i < lg.size(); i++) lb.append(lg.get(i)).append("\n");
         logLabel.setText(lb.toString());
         rebuildInvBox();
         rebuildTrapButtons();
@@ -251,7 +253,18 @@ public class MatchScreen extends ScreenAdapter {
 
     private String nextOpponentText() {
         if (Engine.isPveStageRound(match.round)) return "Quái PvE (" + Engine.pveEnemiesForRound(match.round).size() + " con)";
-        return "một đối thủ bot (đội hình ẩn)";
+        // Do tham: hien ten + toan bo doi hinh bot se gap (bay cua bot van an)
+        Match.PlayerState bot = match.peekNextOpponent();
+        List<Engine.PlacedUnit> team = match.peekNextOpponentTeam();
+        if (bot == null || team == null) return "một đối thủ bot (đội hình ẩn)";
+        StringBuilder sb = new StringBuilder(bot.name).append(" — đội hình: ");
+        for (int i = 0; i < team.size(); i++) {
+            Engine.PlacedUnit u = team.get(i);
+            if (i > 0) sb.append(", ");
+            sb.append(GameData.champById(u.defId).name);
+            if (u.star > 1) sb.append(" ").append(u.star).append("★");
+        }
+        return sb.toString();
     }
 
     private void rebuildInvBox() {
@@ -259,14 +272,16 @@ public class MatchScreen extends ScreenAdapter {
         Match.PlayerState h = match.human();
         if (h.inventory.isEmpty()) { invBox.add(Ui.labelSmall(game.assets, "Kho trống.", Ui.TEXT_DIM)).align(com.badlogic.gdx.utils.Align.left).row(); return; }
         Map<String, Integer> counts = new HashMap<>();
-        for (String id : h.inventory) counts.merge(id, 1, Integer::sum);
+        for (String id : h.inventory) counts.put(id, counts.getOrDefault(id, 0) + 1); // khong dung Integer::sum (TeaVM chua co)
         for (Map.Entry<String, Integer> e : counts.entrySet()) {
             String id = e.getKey();
             TextButton b = Ui.button(game.assets, GameData.itemById(id).name + " x" + e.getValue(), armedItem != null && armedItem.equals(id) ? Ui.GREEN : Ui.BTN);
             b.addListener(changed(() -> { armedItem = id.equals(armedItem) ? null : id; rebuildInvBox(); }));
             invBox.add(b).width(222).padBottom(3).row();
         }
-        invBox.add(Ui.labelSmall(game.assets, armedItem != null ? "Đang cầm đồ: chạm 1 tướng để đeo." : "Chạm 1 món đồ rồi chạm tướng để đeo.", Ui.TEXT_DIM)).align(com.badlogic.gdx.utils.Align.left).row();
+        Label hint = Ui.labelSmall(game.assets, armedItem != null ? "Đang cầm đồ: chạm 1 tướng để đeo." : "Chạm 1 món đồ rồi chạm tướng để đeo.", Ui.TEXT_DIM);
+        hint.setWrap(true);
+        invBox.add(hint).width(222).align(com.badlogic.gdx.utils.Align.left).row();
     }
 
     private void rebuildTrapButtons() {
@@ -286,7 +301,9 @@ public class MatchScreen extends ScreenAdapter {
                 rebuildTrapButtons();
             }));
             trapButtonsBox.add(b).width(222).padBottom(3).row();
-            trapButtonsBox.add(Ui.labelSmall(game.assets, t.desc, Ui.TEXT_DIM)).width(210).align(com.badlogic.gdx.utils.Align.left).row();
+            Label desc = Ui.labelSmall(game.assets, t.desc, Ui.TEXT_DIM);
+            desc.setWrap(true); // bat buoc: khong wrap la chu chay dai tran khoi panel
+            trapButtonsBox.add(desc).width(210).align(com.badlogic.gdx.utils.Align.left).padBottom(4).row();
         }
     }
 
@@ -314,7 +331,7 @@ public class MatchScreen extends ScreenAdapter {
         float now = com.badlogic.gdx.utils.TimeUtils.nanoTime() / 1e9f;
         // --- Cap nhat trang thai ---
         if (toastT > 0) { toastT -= delta; msgLabel.setText(toast); }
-        else if (phase == Phase.PLANNING) msgLabel.setText("Chạm tướng bench → chạm ô để đặt. Cầm đồ: chạm món đồ rồi chạm tướng.");
+        else if (phase == Phase.PLANNING) msgLabel.setText("Chạm tướng bench → chạm ô để đặt.");
         else if (phase == Phase.BATTLE) msgLabel.setText("Đang giao tranh với " + (outcome != null ? outcome.opponentName : "") + "...");
         if (trapBannerT > 0) trapBannerT -= delta;
         if (phase == Phase.PLANNING) {
@@ -336,7 +353,10 @@ public class MatchScreen extends ScreenAdapter {
             fireEvents();
             for (int i = floatTexts.size() - 1; i >= 0; i--) { FloatText ft = floatTexts.get(i); ft.ttl += delta; ft.y += 30 * delta; if (ft.ttl > ft.maxTtl) floatTexts.remove(i); }
             for (int i = glows.size() - 1; i >= 0; i--) { Glow g = glows.get(i); g.ttl += delta; if (g.ttl > 0.45f) glows.remove(i); }
-            if (playT >= outcome.result.duration + 1.0f) phase = Phase.RESULT;
+            if (playT >= outcome.result.duration + 1.0f) {
+                phase = Phase.RESULT;
+                game.sound().sfx(outcome.humanWon ? "win" : "lose");
+            }
         }
 
         Gdx.gl.glClearColor(0.05f, 0.04f, 0.1f, 1);
@@ -345,7 +365,7 @@ public class MatchScreen extends ScreenAdapter {
         // --- Nen + ban co ---
         batch.begin();
         batch.draw(a.arenaFor(arenaKey()), 0, 0, 1280, 720);
-        batch.setColor(0, 0, 0, 0.25f);
+        batch.setColor(0, 0, 0, 0.20f);
         batch.draw(a.whiteTex(), 0, 0, 1280, 720);
         batch.setColor(Color.WHITE);
         batch.end();
@@ -400,11 +420,12 @@ public class MatchScreen extends ScreenAdapter {
         Gdx.gl.glEnable(GL20.GL_BLEND);
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         shapes.begin(ShapeRenderer.ShapeType.Filled);
-        shapes.setColor(0.05f, 0.04f, 0.12f, 0.55f);
+        shapes.setColor(0.05f, 0.04f, 0.12f, 0.30f);
         shapes.rect(BX - 6, BY - 6, 7 * CELL + 12, 7 * CELL + 12);
         for (int y = 0; y < 7; y++) for (int x = 0; x < 7; x++) {
-            if (y < 4) shapes.setColor(0.25f, 0.45f, 0.95f, (x + y) % 2 == 0 ? 0.16f : 0.10f);
-            else shapes.setColor(0.95f, 0.3f, 0.3f, (x + y) % 2 == 0 ? 0.16f : 0.10f);
+            // Luoi o rat nhe: chi du nhan biet o, khong che tranh san
+            if (y < 4) shapes.setColor(0.35f, 0.55f, 1f, (x + y) % 2 == 0 ? 0.10f : 0.05f);
+            else shapes.setColor(1f, 0.4f, 0.4f, (x + y) % 2 == 0 ? 0.10f : 0.05f);
             shapes.rect(BX + x * CELL + 1, BY + y * CELL + 1, CELL - 2, CELL - 2);
         }
         shapes.end();
@@ -433,7 +454,7 @@ public class MatchScreen extends ScreenAdapter {
 
     private void drawBars(float cx, float cy, double hpFrac, double manaFrac, double shieldFrac, int team, int star, boolean stunned) {
         Assets a = game.assets;
-        float w = 46, x = cx - w / 2, y = cy + 30;
+        float w = 46, x = cx - w / 2, y = cy + 38;
         batch.setColor(0, 0, 0, 0.7f); batch.draw(a.whiteTex(), x - 1, y - 1, w + 2, 8);
         batch.setColor(team == 0 ? new Color(0.2f, 0.85f, 0.45f, 1) : new Color(0.95f, 0.3f, 0.3f, 1));
         batch.draw(a.whiteTex(), x, y, w * (float) Math.max(0, hpFrac), 6);
@@ -455,17 +476,18 @@ public class MatchScreen extends ScreenAdapter {
         if (match.mode == Match.Mode.CAMPAIGN) preview = Stages.buildStageTeam(match.campaignStageId);
         else if (match.mode == Match.Mode.WAVES) preview = match.waveTeam(match.wave);
         else if (Engine.isPveStageRound(match.round)) preview = Engine.pveEnemiesForRound(match.round);
+        else if (match.isPvp()) preview = match.peekNextOpponentTeam(); // do tham PvP: xem truoc doi hinh bot
         if (preview != null) for (Engine.PlacedUnit u : preview) {
             float[] p = cellCenter(u.x, 6 - u.y);
             String art = u.isMonster && u.monster != null ? u.monster.id : u.defId;
-            drawUnitSprite(art, p[0], p[1], 50, u.star, true, 0.8f, 0, null);
+            drawUnitSprite(art, p[0], p[1], 58, u.star, true, 0.8f, 0, null);
             drawBars(p[0], p[1], 1, 0, 0, 1, u.star, false);
         }
         int i = 0;
         for (Engine.PlacedUnit u : h.board) {
             float[] p = cellCenter(u.x, u.y);
             float bob = (float) Math.sin(now * 3 + (i++) * 1.7) * 2;
-            drawUnitSprite(u.defId, p[0], p[1] + bob, 52, u.star, false, 1, 0, null);
+            drawUnitSprite(u.defId, p[0], p[1] + bob, 63, u.star, false, 1, 0, null);
             drawBars(p[0], p[1], 1, 0, 0, 0, u.star, false);
         }
     }
@@ -494,7 +516,7 @@ public class MatchScreen extends ScreenAdapter {
         if (sel != null) {
             ChampDef d = GameData.champById(sel.defId);
             String items = sel.items.isEmpty() ? "chưa có đồ" : sel.items.size() + " món đồ";
-            drawCentered(a.font, "Đã chọn: " + d.name + " " + sel.star + " sao — " + items + (armedItem != null ? " — chạm tướng để đeo đồ đang cầm" : ""), 640, BENCH_Y - 8, Color.WHITE);
+            drawCentered(a.font, "Đã chọn: " + d.name + " " + sel.star + " sao — " + items + (armedItem != null ? " — chạm tướng để đeo đồ đang cầm" : ""), 640, 168, Color.WHITE);
         }
     }
 
@@ -520,7 +542,7 @@ public class MatchScreen extends ScreenAdapter {
             a.font.draw(batch, d.cost + " vàng", x + 68, y + 20);
             a.font.setColor(Color.WHITE);
         }
-        drawCentered(a.fontSmall, "SHOP — chạm thẻ để mua", SHOP_X + 4, SHOP_Y + CARD_H + 14, Ui.TEXT_DIM);
+        drawCentered(a.fontSmall, "SHOP — chạm thẻ để mua", 636, 12, Ui.TEXT_DIM);
     }
 
     private void drawTrapBacks() {
@@ -619,8 +641,10 @@ public class MatchScreen extends ScreenAdapter {
             Engine.FightUnit base = u2 != null ? u2 : u1;
             boolean alive1 = u1 != null && u1.alive, alive2 = u2 != null && u2.alive;
             if (!alive1 && !alive2) continue;
-            double gx = u1 == null ? u2.x : u2 == null ? u1.x : u1.x + (u2.x - u1.x) * al;
-            double gy = u1 == null ? u2.y : u2 == null ? u1.y : u1.y + (u2.y - u1.y) * al;
+            // Vi tri noi suy muot (smoothstep) giua 2 khung 0,5s; mau/mana giu tuyen tinh
+            double alPos = al * al * (3 - 2 * al);
+            double gx = u1 == null ? u2.x : u2 == null ? u1.x : u1.x + (u2.x - u1.x) * alPos;
+            double gy = u1 == null ? u2.y : u2 == null ? u1.y : u1.y + (u2.y - u1.y) * alPos;
             double hp = u1 == null ? u2.hp : u2 == null ? u1.hp : u1.hp + (u2.hp - u1.hp) * al;
             double mana = u1 == null ? u2.mana : u2 == null ? u1.mana : u1.mana + (u2.mana - u1.mana) * al;
             double shield = u1 == null ? u2.shield : u2 == null ? u1.shield : u1.shield + (u2.shield - u1.shield) * al;
@@ -646,7 +670,7 @@ public class MatchScreen extends ScreenAdapter {
             Color tint = null;
             Float lh = lastHitAt.get(uid);
             if (lh != null && playT - lh < 0.15f) tint = new Color(1, 0.5f, 0.5f, 1);
-            drawUnitSprite(base.artId, cx, cy, 52, base.star, base.team == 1, alpha, rotation, tint);
+            drawUnitSprite(base.artId, cx, cy, 63, base.star, base.team == 1, alpha, rotation, tint);
             lastScreenPos.put(uid, new float[]{cx, cy});
             if (!dying) drawBars(cx, cy, hp / Math.max(1, base.maxHp), mana / Math.max(1, base.maxMana), shield / Math.max(1, base.maxHp), base.team, base.star, base.stun > 0);
         }
@@ -656,16 +680,18 @@ public class MatchScreen extends ScreenAdapter {
     private void drawTrapBanner() {
         Assets a = game.assets;
         batch.begin();
+        // Banner nam gon giua 2 panel (panel trai ket thuc x=244, phai bat dau x=1036,
+        // dinh panel y=660) — khong de len panel nhu truoc.
         batch.setColor(0.05f, 0.03f, 0.12f, 0.88f);
-        batch.draw(a.whiteTex(), 190, 596, 900, 64);
+        batch.draw(a.whiteTex(), 252, 602, 776, 56);
         batch.setColor(Color.WHITE);
         // La bay lat mo: lung the thu hep theo duong cong lat, sau do nhap nhay vien vang
         float prog = Math.min(1, (2.2f - trapBannerT) / 0.45f);
         float sx = Math.abs((float) Math.cos(prog * Math.PI));
-        float cw = 34 * Math.max(0.1f, sx);
-        batch.draw(a.cardBack, 226 - cw / 2, 604, cw, 48);
-        if (prog >= 0.5f) drawBorder(209, 604, 34, 48, Ui.GOLD, 2);
-        drawCentered(a.fontBig, trapBanner, 660, 640, Ui.GOLD);
+        float cw = 30 * Math.max(0.1f, sx);
+        batch.draw(a.cardBack, 282 - cw / 2, 606, cw, 44);
+        if (prog >= 0.5f) drawBorder(267, 606, 30, 44, Ui.GOLD, 2);
+        drawCentered(a.fontBig, trapBanner, 640, 640, Ui.GOLD);
         batch.end();
     }
 
@@ -799,6 +825,7 @@ public class MatchScreen extends ScreenAdapter {
         lastAttackAt.clear(); lastAttackTarget.clear(); lastHitAt.clear(); lastScreenPos.clear();
         selUid = null; armedItem = null;
         if (outcome == null || outcome.result == null) { phase = Phase.RESULT; return; }
+        game.sound().sfx("start");
         phase = Phase.BATTLE;
     }
 
@@ -860,7 +887,7 @@ public class MatchScreen extends ScreenAdapter {
                 case DRAFT: {
                     if (draftChosen >= 0) return true;
                     for (int i = 0; i < match.draftOptions.size() && i < 8; i++) {
-                        if (draftRect(i).contains(x, y)) { draftChosen = i; draftElapsed = 0; return true; }
+                        if (draftRect(i).contains(x, y)) { draftChosen = i; draftElapsed = 0; game.sound().sfx("sparkle"); return true; }
                     }
                     return true;
                 }
@@ -868,6 +895,7 @@ public class MatchScreen extends ScreenAdapter {
                     if (match.augmentOptions != null) for (int i = 0; i < match.augmentOptions.size(); i++) {
                         if (augmentRect(i).contains(x, y)) {
                             toast(match.pickAugment(i));
+                            game.sound().sfx("levelup");
                             phase = Phase.PLANNING; planTimeLeft = 90; chosenTraps.clear(); refreshPlanning();
                             return true;
                         }
@@ -891,7 +919,7 @@ public class MatchScreen extends ScreenAdapter {
         // Shop
         for (int i = 0; i < 5; i++) {
             Rectangle r = new Rectangle(SHOP_X + i * (CARD_W + 8), SHOP_Y, CARD_W, CARD_H);
-            if (r.contains(x, y)) { toast(match.buy(i)); refreshPlanning(); return true; }
+            if (r.contains(x, y)) { toast(match.buy(i)); if (match.shop.get(i) == null) game.sound().sfx("coin"); refreshPlanning(); return true; }
         }
         Match.PlayerState h = match.human();
         // Bench
@@ -900,7 +928,7 @@ public class MatchScreen extends ScreenAdapter {
             if (r.contains(x, y)) {
                 if (i < h.bench.size()) {
                     Engine.PlacedUnit u = h.bench.get(i);
-                    if (armedItem != null) { toast(match.equipItem(u.uid, armedItem)); armedItem = null; }
+                    if (armedItem != null) { int inv0 = h.inventory.size(); toast(match.equipItem(u.uid, armedItem)); if (h.inventory.size() < inv0) game.sound().sfx("equip"); armedItem = null; }
                     else { selUid = u.uid; selFromBench = true; toast("Đã chọn " + GameData.champById(u.defId).name + " (bench) — chạm ô bàn cờ để đặt."); }
                     refreshPlanning();
                 }
@@ -912,9 +940,17 @@ public class MatchScreen extends ScreenAdapter {
         if (cx >= 0 && cx < 7 && cy >= 0 && cy < 4) {
             Engine.PlacedUnit at = null;
             for (Engine.PlacedUnit u : h.board) if (u.x == cx && u.y == cy) at = u;
-            if (armedItem != null && at != null) { toast(match.equipItem(at.uid, armedItem)); armedItem = null; }
+            if (armedItem != null && at != null) { int inv0 = h.inventory.size(); toast(match.equipItem(at.uid, armedItem)); if (h.inventory.size() < inv0) game.sound().sfx("equip"); armedItem = null; }
             else if (selUid != null) {
-                toast(selFromBench ? match.moveToBoard(selUid, cx, cy) : match.moveOnBoard(selUid, cx, cy));
+                boolean wasBench = selFromBench;
+                int bs0 = h.board.size();
+                Engine.PlacedUnit selU = null;
+                for (Engine.PlacedUnit u2 : h.board) if (u2.uid.equals(selUid)) selU = u2;
+                int px0 = selU != null ? selU.x : -1, py0 = selU != null ? selU.y : -1;
+                toast(wasBench ? match.moveToBoard(selUid, cx, cy) : match.moveOnBoard(selUid, cx, cy));
+                Engine.PlacedUnit afterU = null;
+                for (Engine.PlacedUnit u2 : h.board) if (u2.uid.equals(selUid)) afterU = u2;
+                if ((wasBench && h.board.size() > bs0) || (!wasBench && afterU != null && (afterU.x != px0 || afterU.y != py0))) game.sound().sfx("place");
                 selUid = null;
             } else if (at != null) {
                 selUid = at.uid; selFromBench = false;

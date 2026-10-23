@@ -58,7 +58,17 @@ public class MenuScreen extends ScreenAdapter {
                 if (n.length() >= 2) { game.profile.name = n; game.saveProfile(); }
             }
         });
-        profileBox.add(saveName).padBottom(10).row();
+        profileBox.add(saveName).padBottom(6).row();
+        TextButton soundBtn = Ui.button(a, game.sound().isEnabled() ? "Âm thanh: Bật" : "Âm thanh: Tắt");
+        soundBtn.addListener(new com.badlogic.gdx.scenes.scene2d.utils.ChangeListener() {
+            @Override public void changed(ChangeEvent e, com.badlogic.gdx.scenes.scene2d.Actor actor) {
+                boolean on = !game.sound().isEnabled();
+                game.sound().setEnabled(on);
+                soundBtn.setText(on ? "Âm thanh: Bật" : "Âm thanh: Tắt");
+                if (on) { game.sound().playBgm("home"); game.sound().sfx("click"); }
+            }
+        });
+        profileBox.add(soundBtn).padBottom(10).row();
         Label info = Ui.label(a, profileText(), Color.WHITE);
         profileBox.add(info).row();
         root.add(profileBox).width(360).align(com.badlogic.gdx.utils.Align.topLeft).padRight(18);
@@ -77,6 +87,7 @@ public class MenuScreen extends ScreenAdapter {
         modes.add(modeBtn(a, "Học Chơi", "Luật chơi, LP 8000, bẫy úp, lật thẻ", () -> game.setScreen(new GuideScreen(game)))).padTop(10).row();
         modes.add(modeBtn(a, "Hồ Sơ & Thống Kê", "Hạng, LP, lịch sử phong độ", () -> game.setScreen(new ProfileScreen(game)))).row();
         root.add(modes).align(com.badlogic.gdx.utils.Align.topLeft).expandX();
+        game.sound().playBgm("home");
     }
 
     private String profileText() {
@@ -91,7 +102,7 @@ public class MenuScreen extends ScreenAdapter {
         Table t = new Table();
         TextButton b = Ui.button(a, title);
         b.addListener(new com.badlogic.gdx.scenes.scene2d.utils.ChangeListener() {
-            @Override public void changed(ChangeEvent e, com.badlogic.gdx.scenes.scene2d.Actor actor) { action.run(); }
+            @Override public void changed(ChangeEvent e, com.badlogic.gdx.scenes.scene2d.Actor actor) { game.sound().sfx("click"); action.run(); }
         });
         t.add(b).width(330).align(com.badlogic.gdx.utils.Align.left);
         t.add(Ui.labelSmall(a, desc, Ui.TEXT_DIM)).align(com.badlogic.gdx.utils.Align.left).padLeft(10);

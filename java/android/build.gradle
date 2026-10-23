@@ -1,28 +1,41 @@
-// Module Android — KHAI BÁO SẴN, chưa kích hoạt trong settings.gradle đợt này.
-// Ly do: ban desktop (LWJGL3) la muc tieu bat buoc cua dot Java+pixel dau tien; ban web dang thu bang TeaVM.
-// Khi muon dung APK: them "include 'android'" vao settings.gradle, cai Android SDK + AGP tuong thich Gradle 8.10,
-// roi chay: ./gradlew :android:assembleRelease (can keystore de ky ban phat hanh).
+// Module Android — settings.gradle tu kich hoat module nay khi may build co Android SDK
+// (local.properties voi sdk.dir hoac bien ANDROID_HOME). Build APK debug:
+//   ./gradlew :android:assembleDebug  -> android/build/outputs/apk/debug/android-debug.apk
+// Ban phat hanh dung :android:assembleRelease (can keystore de ky).
 buildscript {
-    repositories { google(); mavenCentral() }
+    repositories {
+        // Kho Maven cuc bo (offline) neu co — cung quy uoc voi root build.gradle
+        if (new File(rootDir, 'local-maven').isDirectory()) {
+            maven { url new File(rootDir, 'local-maven') }
+        }
+        google(); mavenCentral()
+    }
     dependencies { classpath 'com.android.tools.build:gradle:8.5.2' }
 }
 apply plugin: 'com.android.application'
 
 android {
     namespace 'com.dautruongchibi'
-    compileSdk 34
+    compileSdk 35
     defaultConfig {
         applicationId 'com.dautruongchibi'
         minSdk 24
-        targetSdk 34
+        targetSdk 35
         versionCode 1
         versionName '1.0'
     }
     buildTypes { release { minifyEnabled false } }
     sourceSets { main { assets.srcDirs = ['../assets'] } }
+    compileOptions {
+        // Core dung List.of (Java 9+) — desugar de chay tren minSdk 24
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
 }
 
 dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.3'
     implementation project(':core')
     implementation "com.badlogicgames.gdx:gdx-backend-android:$gdxVersion"
     implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi-v7a"

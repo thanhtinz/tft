@@ -217,7 +217,7 @@ public final class Match {
             changed = false;
             for (int star = 1; star <= 2 && !changed; star++) {
                 Map<String, Integer> cnt = new HashMap<>();
-                for (Engine.PlacedUnit u : work) if (u.star == star) cnt.merge(u.defId, 1, Integer::sum);
+                for (Engine.PlacedUnit u : work) if (u.star == star) cnt.put(u.defId, cnt.getOrDefault(u.defId, 0) + 1); // khong dung Integer::sum (TeaVM chua co)
                 for (Map.Entry<String, Integer> e : cnt.entrySet()) {
                     if (e.getValue() >= 3) {
                         int removed = 0;
@@ -354,6 +354,26 @@ public final class Match {
     private Engine.PlacedUnit occupied(PlayerState p, int x, int y) {
         for (Engine.PlacedUnit u : p.board) if (u.x == x && u.y == y) return u;
         return null;
+    }
+
+    // ---------- Do tham doi thu (PvP) ----------
+    // Doi thu vong toi duoc chon round-robin tat dinh (opponentCursor) va doi hinh sinh
+    // tat dinh tu seed bang Engine.makeAiTeam — nen xem truoc duoc DUNG doi hinh se gap.
+    // Bay cua doi thu van an (sinh bang rng trang thai, khong peek duoc).
+    public PlayerState peekNextOpponent() {
+        if (!isPvp() || Engine.isPveStageRound(round)) return null;
+        List<PlayerState> aliveBots = new ArrayList<>();
+        for (PlayerState p : players) if (!p.human && p.alive) aliveBots.add(p);
+        if (aliveBots.isEmpty()) return null;
+        return aliveBots.get(opponentCursor % aliveBots.size());
+    }
+
+    public List<Engine.PlacedUnit> peekNextOpponentTeam() {
+        PlayerState bot = peekNextOpponent();
+        if (bot == null) return null;
+        int botIdx = players.indexOf(bot);
+        int effRound = mode == Mode.PVP_PRACTICE ? Math.max(1, round - 4) : round;
+        return Engine.makeAiTeam(effRound, seed + botIdx * 131L);
     }
 
     // ---------- Phan giai tran ----------

@@ -76,8 +76,22 @@ public class ScreenshotMain {
                     mb.invoke(matchScreen);
                     battleStarted = true;
                 }
-                int captureAt = ("battle".equals(mode) || "battle4".equals(mode)) ? 300 : 100;
-                if (!captured && frames >= captureAt) {
+                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode);
+                boolean due;
+                if (battleMode && battleStarted) {
+                    // Chup GIUA tran (khong cho theo so frame vi fps Xvfb khong on dinh):
+                    // doi phase == BATTLE va playT >= 1.6s (bay/su kien da kich hoat); phong ngu o frame 1500.
+                    java.lang.reflect.Field fp = MatchScreen.class.getDeclaredField("phase");
+                    fp.setAccessible(true);
+                    java.lang.reflect.Field ft = MatchScreen.class.getDeclaredField("playT");
+                    ft.setAccessible(true);
+                    boolean inBattle = "BATTLE".equals(String.valueOf(fp.get(matchScreen)));
+                    float pt = ft.getFloat(matchScreen);
+                    due = (inBattle && pt >= 1.6f) || frames >= 1500;
+                } else {
+                    due = frames >= 100;
+                }
+                if (!captured && due) {
                     captured = true;
                     capture(outPath);
                     Gdx.app.exit();

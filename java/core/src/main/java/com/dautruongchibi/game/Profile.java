@@ -1,9 +1,12 @@
 package com.dautruongchibi.game;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 // Ho so nguoi choi luu local dang JSON (port tu storage.ts/accounts.ts ban RN):
 // ten, cap do + XP, hang + LP (rank), thong ke tran, tien do chien dich, ky luc song quai.
@@ -135,24 +138,37 @@ public final class Profile {
         return p;
     }
 
-    public void save(Path file) {
+    // Luu/doc bang java.io (khong dung java.nio.file) de tuong thich TeaVM ban web.
+    public void save(File file) {
         try {
-            if (file.getParent() != null) Files.createDirectories(file.getParent());
-            Files.writeString(file, toJson(), StandardCharsets.UTF_8);
-        } catch (IOException ignored) {
+            File parent = file.getParentFile();
+            if (parent != null) parent.mkdirs();
+            byte[] bytes = toJson().getBytes("UTF-8");
+            try (OutputStream out = new FileOutputStream(file)) {
+                out.write(bytes);
+            }
+        } catch (IOException | RuntimeException ignored) {
             // Khong luu duoc ho so khong duoc lam crash game
         }
     }
 
-    public static Profile load(Path file) {
+    public static Profile load(File file) {
         try {
-            if (Files.exists(file)) return fromJson(Files.readString(file, StandardCharsets.UTF_8));
-        } catch (IOException ignored) {}
+            if (file != null && file.isFile()) {
+                ByteArrayOutputStream buf = new ByteArrayOutputStream();
+                try (InputStream in = new FileInputStream(file)) {
+                    byte[] chunk = new byte[4096];
+                    int n;
+                    while ((n = in.read(chunk)) >= 0) buf.write(chunk, 0, n);
+                }
+                return fromJson(buf.toString("UTF-8"));
+            }
+        } catch (IOException | RuntimeException ignored) {}
         return new Profile();
     }
 
-    public static Path defaultPath() {
+    public static File defaultPath() {
         String home = System.getProperty("user.home");
-        return Path.of(home, ".dau-truong-chibi", "profile.json");
+        return new File(new File(home, ".dau-truong-chibi"), "profile.json");
     }
 }

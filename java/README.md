@@ -1,7 +1,9 @@
 # Đấu Trường Chibi — Bản Java + Pixel 2D (LibGDX)
 
 Bản chuyển đổi của game "Đấu Trường Chibi" từ React Native sang **Java + LibGDX** với đồ họa **pixel 2D**,
-theo quyết định của chủ dự án (đợt 1, 2026-10-23).
+theo quyết định của chủ dự án (đợt 1, 2026-10-23). **Đợt hoàn thiện (cùng ngày):** nâng LibGDX 1.14.0 +
+bản web TeaVM dựng thành công, trau chuốt giao diện desktop, nối âm thanh đầy đủ, do thám đội hình đối thủ,
+nội suy vị trí mượt (smoothstep), module Android đã nối sẵn (xem mục Android về giới hạn build trong sandbox).
 
 > **Quan trọng:** Bản React Native ở thư mục gốc của repo **vẫn giữ nguyên** và demo Vercel
 > (https://dau-truong-chibi.vercel.app) vẫn chạy bản RN. Bản Java này nằm trong thư mục `java/`
@@ -13,15 +15,17 @@ theo quyết định của chủ dự án (đợt 1, 2026-10-23).
 |---|---|
 | JDK | Temurin **17.0.20.1** (chạy được với mọi JDK 17+) |
 | Gradle | **8.10.2** (qua Gradle Wrapper trong repo — `./gradlew`) |
-| LibGDX | **1.13.1** |
+| LibGDX | **1.14.0** |
 | Backend desktop | LWJGL3 (LWJGL 3.3.3) |
+| Backend web | **backend-teavm 1.4.0** (TeaVM 0.13) — build ra HTML/JS hoàn chỉnh |
+| Backend Android | AGP **8.5.2**, compileSdk/targetSdk **35**, minSdk 24 |
 | Font tiếng Việt | DejaVu Sans qua FreeType (gdx-freetype) — đủ dấu tiếng Việt |
 
 ## Cấu trúc project
 
 ```
 java/
-├── settings.gradle          # include 'core', 'desktop' (web/android chua kich hoat)
+├── settings.gradle          # include 'core', 'desktop', 'web'; 'android' tu kich hoat khi co Android SDK
 ├── build.gradle             # repositories dung chung (+ kho Maven cuc bo neu co)
 ├── core/                    # toan bo game (khong phu thuoc nen tang)
 │   └── src/main/java/com/dautruongchibi/
@@ -30,11 +34,11 @@ java/
 │       │                        # Traps (6 la bay up), Rank (10 bac + bang LP), Stages (5.200 man),
 │       │                        # Profile (luu JSON local), Rng (mulberry32 giong ban RN)
 │       ├── headless/HeadlessMain.java  # bo kiem tra khong giao dien (19 muc)
-│       └── ui/                  # MenuScreen, CampaignScreen, MatchScreen, GuideScreen, ProfileScreen
+│       └── ui/                  # MenuScreen, CampaignScreen, MatchScreen, GuideScreen, ProfileScreen, Sound (am thanh)
 ├── desktop/                 # DesktopLauncher (LWJGL3 1280x720) + ScreenshotMain (cong cu kiem chung GUI)
-├── android/                 # KHAI BAO SAN (build.gradle + Manifest + launcher) — chua build APK dot nay
-├── web/                     # Thi nghiem TeaVM — chua dung duoc, xem muc rieng o duoi
-├── assets/                  # units/ (35 sprite pixel), scenes/ (arena, lobby, card-back...), fonts/
+├── android/                 # Module Android day du (AGP 8.5.2, SDK 35) — xem muc Android ve gioi han build APK
+├── web/                     # Backend TeaVM 1.4.0 — build thanh cong ra web/build/webapp (index.html + game.js + assets)
+├── assets/                  # units/ (35 sprite pixel), scenes/ (arena, lobby, card-back...), fonts/, audio/ (22 file WAV)
 └── tools/
     ├── pixelize.py          # pipeline chuyen tranh goc -> sprite pixel (chay lai duoc)
     ├── preview-sheet.png    # bang xem truoc toan bo sprite (phong to nearest-neighbor)
@@ -87,6 +91,10 @@ Máy có mạng bình thường (Gradle tự tải dependency từ Maven Central
 cd java
 ./gradlew :desktop:run            # chay ban desktop
 ./gradlew :desktop:verifyHeadless # chay bo kiem tra logic (phai dat 19 PASS / 0 FAIL)
+./gradlew :web:buildWeb           # dung ban web TeaVM -> web/build/webapp (index.html + game.js + assets)
+./gradlew :android:assembleDebug  # build APK debug (can Android SDK; module chi kich hoat khi co
+                                  # local.properties chua sdk.dir hoac bien ANDROID_HOME)
+                                  # -> android/build/outputs/apk/debug/android-debug.apk
 ```
 
 Chụp ảnh kiểm chứng GUI (cần Xvfb, không cần người bấm — công cụ tự vào trận, tự đánh):
@@ -122,6 +130,19 @@ Kết quả: 35 sprite tướng/quái + arena 4 biến thể (cỏ/hoàng hôn/s
 Xem trước: `tools/preview-sheet.png`. Nhận xét chất lượng: sprite nhận diện rõ, alpha sạch không quầng;
 riêng mimi/nana/queen hơi nhạt do tranh gốc vốn bán trong suốt (vào game trên nền arena tối sẽ rõ hơn).
 
+## Android — module đã nối, APK chưa build được TRONG SANDBOX này
+
+- Module `android/` đã hoàn chỉnh: AGP 8.5.2, compileSdk/targetSdk **35**, minSdk 24, bật core-library-desugaring
+  (core dùng `List.of()` của Java 9+), assets trỏ về `../assets`, AndroidLauncher + Manifest (landscape, exported).
+- `settings.gradle` tự kích hoạt module khi máy build có Android SDK (`local.properties` với `sdk.dir` hoặc biến `ANDROID_HOME`)
+  để không làm hỏng build desktop/web trên máy chưa cài SDK.
+- **Điểm kẹt (chỉ trong sandbox Muse):** sandbox chặn TCP trực tiếp của tiến trình Java nên Gradle không tự tải được dependency;
+  cây phụ thuộc của AGP 8.5.2 (hàng trăm module: builder, lint/PMD, AndroidX...) được tải bằng curl vào `local-maven/`
+  đã đạt ~1,1GB và 288+ module nhưng vẫn chưa đủ khép kín để `:android:assembleDebug --offline` chạy qua —
+  mỗi lần chạy Gradle lại lộ thêm một lớp module thiếu (40+ → 26 → 18 → 9...). Đã dừng theo kỷ luật thời lượng của đợt.
+- **Trên máy có mạng bình thường, APK build thẳng được:** repositories đã khai `google()` + `mavenCentral()` (+ kho cục bộ nếu có),
+  Gradle tự tải AGP và toàn bộ phụ thuộc: `cd java && ./gradlew :android:assembleDebug`.
+
 ## Kiểm chứng đã làm (đợt này)
 
 - `./gradlew :desktop:compileJava` — **BUILD SUCCESSFUL** (core + desktop).
@@ -131,31 +152,43 @@ riêng mimi/nana/queen hơi nhạt do tranh gốc vốn bán trong suốt (vào 
   PvE chiến dịch; Sóng Quái (tới sóng 10); hồ sơ JSON lưu/đọc vòng lặp.
 - GUI thật dưới Xvfb: chụp 4 màn hình (menu, lật thẻ úp, pha chuẩn bị, giao tranh vòng 4 có banner bẫy kích hoạt,
   số sát thương, LP đối thủ giảm theo vòng) — xem `tools/shot-*.png`.
+- **Đợt hoàn thiện:** sau khi nâng LibGDX 1.14.0, hồi quy đầy đủ vẫn **19 PASS / 0 FAIL** và `:web:buildWeb` thành công
+  (chi tiết ở mục Bản web). Giao diện desktop được trau chuốt lại (panel kéo dài, hết tràn/chồng chữ ở mục bẫy + nhật ký,
+  lưới bàn cờ mờ hẳn, sprite trong trận to hơn 52→63px, banner bẫy thu vào giữa 2 panel) và chụp lại 4 màn cuối —
+  công cụ chụp (`desktop/ScreenshotMain`) cũng được sửa để bắt đúng khoảnh khắc giữa trận (theo `playT`) thay vì đếm frame.
+  Âm thanh: game khởi động và chạy trọn vòng menu → trận → kết quả dưới Xvfb với lớp `Sound` đã nạp 22 file WAV không lỗi
+  (sandbox không có card tiếng nên chỉ kiểm chứng được mức nạp/khởi tạo, không nghe được tiếng thật).
 
 ## Đơn giản hóa & giới hạn đã biết
 
-- **Do thám đối thủ:** bản RN xem được đội hình bot; bản Java hiện chỉ hiện tên/loại đối thủ vòng này (đội hình ẩn) — sẽ bổ sung khi có thời gian.
-- **Phát lại giao tranh:** engine xuất khung hình mỗi 0,5s; GUI nội suy tuyến tính vị trí/máu/mana giữa 2 khung — mượt ở mức sprite, không phải mô phỏng 60fps.
+- **Do thám đối thủ (đã bổ sung đợt hoàn thiện):** pha chuẩn bị hiện tên bot + **toàn bộ đội hình** của đối thủ vòng này
+  (tất định theo seed/cursor vòng — `Match.peekNextOpponentTeam()`), và vẽ trước đội hình bot lên nửa trên bàn cờ ở vòng PvP thường.
+  Bẫy của bot vẫn ẩn (sinh từ RNG trạng thái, chỉ biết số lá qua thông báo sau trận).
+- **Phát lại giao tranh:** engine xuất khung hình mỗi 0,5s; GUI nội suy giữa 2 khung — vị trí dùng **smoothstep** (mượt ở đầu/cuối bước di chuyển),
+  máu/mana/khiên nội suy tuyến tính. Vẫn là phát lại ở mức sprite, không phải mô phỏng 60fps.
 - **Pha chuẩn bị** có đếm ngược 90 giây, hết giờ tự vào trận (bản RN cũng tự bắt đầu theo đồng hồ vòng).
-- **Chưa có âm thanh** trong đợt Java này (bản RN có nhạc/SFX tổng hợp; sẽ port sau).
+- **Âm thanh (đã nối đợt hoàn thiện):** tái sử dụng nguyên dàn WAV tổng hợp của bản RN — 22 file trong `assets/audio/`
+  (2 nhạc nền: menu + trong trận, phát lặp; 20 SFX). Đã nối: bấm nút (click), mua tướng (coin), bán (sell), đặt/dời tướng (place),
+  làm mới shop (reroll), gắn đồ (equip), lên cấp (levelup), lật thẻ mở trận (sparkle), chọn cường hóa (levelup),
+  bắt đầu trận (start), **bẫy kích hoạt (cast)**, thắng/thua vòng (win/lose). Có **nút "Âm thanh: Bật/Tắt" ở menu**,
+  trạng thái lưu bằng Preferences. Mọi lỗi nạp file/thiết bị đều được nuốt im lặng để không bao giờ crash game.
 - `autoPlan()` trong `Match.java` là bot điều khiển phục vụ kiểm tra headless — chơi đơn giản (không reroll/xp chủ động) nên thường xếp hạng thấp khi tự đánh trọn trận; đó là giới hạn của bot kiểm tra, không phải lỗi engine.
-- **Android:** module đã khai báo sẵn (build.gradle + AndroidManifest + AndroidLauncher) nhưng **chưa build APK** đợt này — cần thêm `include 'android'` vào settings.gradle + Android SDK/AGP trên máy build.
 
-## Bản web (TeaVM) — CHƯA dựng được, điểm kẹt cụ thể
+## Bản web (TeaVM) — ĐÃ DỰNG ĐƯỢC (đợt hoàn thiện)
 
-Đã thử nghiêm túc (không bỏ qua): backend **gdx-teavm 1.2.4** (đi với LibGDX 1.13.5 — cùng dòng 1.13 với project)
-+ **TeaVM 0.12.3** + **gdx-freetype-teavm 1.2.4**. Dependency resolve offline thành công, TeaVM bắt đầu biên dịch
-nhưng dừng ở 12 lỗi phân tích:
+Nâng cấp theo đúng hướng đã ghi ở đợt 1: **LibGDX 1.14.0 + backend-teavm 1.4.0 (TeaVM 0.13)**.
+Các lỗi classlib của đợt 1 được sửa tận gốc:
 
-1. `java.nio.file.Path / Files / LinkOption was not found` (×6) — **TeaVM 0.12.3 chưa có java.nio.file**;
-   `game/Profile.java` đang dùng NIO để lưu hồ sơ. *Sửa được:* chuyển Profile sang `java.io.File` (đợt sau).
-2. `java.lang.Integer.sum / toUnsignedLong was not found` (×5) — thiếu trong classlib TeaVM 0.12.3, phát sinh từ
-   mã thư viện (không phải mã game) — **không sửa được ở tầng game**.
-3. `Field PixmapPacker$PixmapPackerRectangle.x was not found` (×1) — lỗi phân giải field trong đường
-   đóng gói glyph của FreeTypeFontGenerator trên TeaVM 0.12.3.
+1. `Profile` chuyển hẳn từ `java.nio.file` sang `java.io` (File/FileInputStream/FileOutputStream, charset "UTF-8").
+2. `Rng`: bỏ `Integer.toUnsignedLong` → `(t & 0xFFFFFFFFL)`; `Stages`: bỏ `Integer.sum` → cộng tay.
+3. Ba chỗ `Map.merge(k, 1, Integer::sum)` (Engine/Match/MatchScreen) → `put(k, getOrDefault(k, 0) + 1)`.
+4. `WebLauncher`: bỏ field `config.preloadAssets` (không còn trong backend 1.4.0).
 
-**Hướng đi đợt sau:** nâng LibGDX lên **1.14.0** + backend-teavm **1.4.0** (TeaVM **0.13**) trong một đợt riêng
-(kèm chuyển Profile sang java.io), vì bản 1.4.0/0.13 mới là dòng đang được bảo trì. Mã nguồn thử nghiệm giữ ở
-thư mục `web/` (WebLauncher + BuildWeb + build.gradle) nhưng module **không** nằm trong `settings.gradle`
-để không ảnh hưởng build desktop. Khi dựng được, output sẽ ở `web/build/webapp/` (index.html + game.js + assets) —
-đó cũng là điều kiện để thay hẳn bản RN trên Vercel theo kế hoạch của chủ dự án.
+Kết quả: `./gradlew :web:buildWeb` — **BUILD SUCCESSFUL**. Output tại `web/build/webapp/`:
+`index.html` + `game.js` (~889KB, qua kiểm tra cú pháp `node --check`) + thư mục `assets/` đủ **68/68 file**
+(46 file đồ họa/font + 22 file WAV). Module `web` đã nằm trong `settings.gradle`.
+
+**Giới hạn trung thực:** mới dừng ở mức *build thành công* — **chưa chạy kiểm chứng runtime trong trình duyệt được**
+vì Chromium của sandbox bị treo ngay cả với trang trống (không phải lỗi của game). Cần mở `web/build/webapp/index.html`
+bằng một máy chủ tĩnh (ví dụ `python3 -m http.server`) trên máy thường để chơi thử trước khi cân nhắc thay demo RN trên Vercel
+(quyết định thay demo thuộc về chủ dự án; đợt này **không** đụng vào cấu hình Vercel).

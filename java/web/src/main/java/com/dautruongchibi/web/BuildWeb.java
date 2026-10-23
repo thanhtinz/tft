@@ -44,9 +44,16 @@ public class BuildWeb {
         } catch (Exception e) { System.out.println("[BuildWeb] khong set duoc classloader: " + e); }
         tool.generate(); // TeaVM 0.12: generate() tra void, chi tiet loi nam trong ProblemProvider
         for (org.teavm.diagnostics.Problem p : tool.getProblemProvider().getProblems()) {
+            Object loc = p.getLocation();
+            String locStr = String.valueOf(loc);
+            if (loc instanceof org.teavm.model.CallLocation) {
+                org.teavm.model.CallLocation cl = (org.teavm.model.CallLocation) loc;
+                locStr = "caller=" + cl.getMethod().getClassName() + "." + cl.getMethod().getName()
+                    + " src=" + String.valueOf(cl.getSourceLocation());
+            }
             System.out.println("[TeaVM-problem] " + p.getSeverity() + ": " + p.getText()
                 + " params=" + java.util.Arrays.toString(p.getParams())
-                + " @ " + String.valueOf(p.getLocation()));
+                + " @ " + locStr);
         }
         File gameJs = new File(outDir, "game.js");
         if (!gameJs.isFile() || gameJs.length() < 10000) throw new IllegalStateException("TeaVM khong sinh duoc game.js hop le — xem log [TeaVM] o tren.");

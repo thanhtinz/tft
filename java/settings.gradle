@@ -1,2 +1,7 @@
 rootProject.name = 'dau-truong-chibi'
-include 'core', 'desktop'
+include 'core', 'desktop', 'web'
+// Android: chi kich hoat khi may build co Android SDK (local.properties voi sdk.dir
+// hoac bien moi truong ANDROID_HOME) — tranh lam hong build desktop/web tren may chua cai SDK.
+if (System.getenv('ANDROID_HOME') != null || new File(rootDir, 'local.properties').exists()) {
+    include 'android'
+}
