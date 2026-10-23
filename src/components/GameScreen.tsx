@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import Svg, { Ellipse, G, Polygon, Rect } from 'react-native-svg';
+import Svg, { Defs, Ellipse, G, LinearGradient, Polygon, Rect, Stop } from 'react-native-svg';
 import { router } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { ItemArt } from './ChibiArt';
@@ -29,6 +29,45 @@ export function hexMetrics(w: number, h: number, rows: number) { const size = Ma
 export function hexCenter(m: ReturnType<typeof hexMetrics>, x: number, y: number) { return { cx: m.ox + m.hw / 2 + x * m.hw + (y % 2 ? m.hw / 2 : 0), cy: m.oy + m.size + y * 1.5 * m.size }; }
 function hexPoints(cx: number, cy: number, size: number) { const pts: string[] = []; for (let i = 0; i < 6; i++) { const a = (Math.PI / 180) * (60 * i - 30); pts.push((cx + size * 0.94 * Math.cos(a)).toFixed(1) + ',' + (cy + size * 0.94 * Math.sin(a)).toFixed(1)); } return pts.join(' '); }
 interface PInfo { name: string; hp: number; alive: boolean; lvl: number; rank: number; }
+// ===== NEN TAN VIEN dung chung cho moi chip/panel noi tren san =====
+// Gradient SVG phu kin phan tu cha (cha phai position:relative/absolute nhu binh
+// thuong): 'h' = dam o mep trai, tan dan sang phai ve trong suot; 'hR' = chieu
+// nguoc lai (cho cot phai); 'v' = nhat o tren, dam dan xuong day (dai shop);
+// 'vTop' = dam o mep tren, tan dan xuong (thanh stage tren cung).
+let fadeSeq = 0;
+export function FadeBg({ dir = 'h', color = '10,15,32', peak = 0.62, radius = 0 }: { dir?: 'h' | 'hR' | 'v' | 'vTop'; color?: string; peak?: number; radius?: number }) {
+  const idRef = useRef(''); if (!idRef.current) idRef.current = 'fade' + (++fadeSeq);
+  const gid = idRef.current;
+  const horiz = dir === 'h' || dir === 'hR';
+  const flip = dir === 'hR';
+  const c = `rgb(${color})`;
+  const stops = dir === 'vTop'
+    ? [<Stop key="0" offset="0" stopColor={c} stopOpacity={peak} />, <Stop key="1" offset="0.55" stopColor={c} stopOpacity={peak * 0.45} />, <Stop key="2" offset="1" stopColor={c} stopOpacity={0} />]
+    : [<Stop key="0" offset="0" stopColor={c} stopOpacity={flip ? 0 : peak} />, <Stop key="1" offset="0.45" stopColor={c} stopOpacity={peak * (flip ? 0.55 : 0.8)} />, <Stop key="2" offset="0.8" stopColor={c} stopOpacity={peak * (flip ? 0.85 : 0.3)} />, <Stop key="3" offset="1" stopColor={c} stopOpacity={flip ? peak : 0} />];
+  return (<Svg style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 } as any} width="100%" height="100%" pointerEvents="none">
+    <Defs><LinearGradient id={gid} x1="0" y1="0" x2={horiz ? '1' : '0'} y2={horiz ? '0' : '1'}>{stops}</LinearGradient></Defs>
+    <Rect x="0" y="0" width="100%" height="100%" rx={radius} fill={`url(#${gid})`} />
+  </Svg>);
+}
+// Cau mau (orb) noi o goc phai: so mau lon + vong trong dam dan ra ngoai, khong hop bao
+export function HpOrb({ hp, size = 64 }: { hp: number; size?: number }) {
+  const col = hp > 50 ? '#43c62f' : hp > 25 ? '#e0a800' : '#ef476f';
+  return (<View style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(8,20,14,0.35)', shadowColor: '#000', shadowOpacity: 0.45, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 5 }}>
+    <View style={{ position: 'absolute', left: 3, top: 3, right: 3, bottom: 3, borderRadius: 999, backgroundColor: 'rgba(10,16,34,0.55)' }} />
+    <View style={{ position: 'absolute', left: size * 0.17, top: size * 0.17, right: size * 0.17, bottom: size * 0.17, borderRadius: 999, backgroundColor: col, opacity: 0.92 }} />
+    <View style={{ position: 'absolute', left: size * 0.24, top: size * 0.13, width: size * 0.3, height: size * 0.2, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.5)' }} />
+    <Text style={{ fontWeight: '900', fontSize: size * 0.34, color: '#fff', textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }}>{hp}</Text>
+  </View>);
+}
+// Icon kiem cheo nho (doi thu hien tai) dung SVG
+export function SwordBadge({ size = 22 }: { size?: number }) {
+  return (<View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: 'rgba(120,16,38,0.88)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,180,200,0.65)' }}>
+    <Svg width={size * 0.72} height={size * 0.72} viewBox="0 0 24 24">
+      <Polygon points="3.5,3 5.6,3 12,10.4 20.5,20.5 18.4,20.5 9.9,12" fill="#ffd6e0" />
+      <Polygon points="20.5,3 18.4,3 12,10.4 3.5,20.5 5.6,20.5 14.1,12" fill="#ff8fab" />
+    </Svg>
+  </View>);
+}
 // ===== Lop trinh bay phu: banner / hieu ung giao tranh / o phat sang (chi hien thi, khong chua logic game) =====
 type FxKind = 'dmg' | 'heal' | 'proj' | 'burst' | 'soul' | 'stun';
 interface FxItem { id: number; kind: FxKind; x: number; y: number; x2?: number; y2?: number; text?: string; crit?: boolean; color?: string; radius?: number; born: number; }
@@ -166,6 +205,8 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   const [gold, setGold] = useState(isArena?5:isTut?30:40);
   const [xp, setXp] = useState(isTut?6:0); const [level, setLevel] = useState(isArena?1:isTut?3:5);
   const [hp, setHp] = useState(100); const [round, setRound] = useState(1);
+  const [gems, setGems] = useState(0);
+  useEffect(() => { loadMeta().then(m => setGems(m.gems)); }, []);
   const [bench, setBench] = useState<PlacedUnit[]>([]); const [board, setBoard] = useState<PlacedUnit[]>([]);
   const [shop, setShop] = useState<string[]>(() => isTut ? ['mimi','mimi','mimi','bobi','lulu'] : rollShop(isArena?1:5));
   const [locked, setLocked] = useState(false); const [inventory, setInventory] = useState<string[]>(mode==='campaign'||isTut?['kiem']:[]);
@@ -271,11 +312,32 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   function sellUnitByUid(uid: string) { const u = allUnits.find(x => x.uid===uid); if (!u) return; setGold(g => g + sellValue(u.defId, u.star)); setBoard(b => b.filter(x => x.uid!==uid)); setBench(b => b.filter(x => x.uid!==uid)); if (selUid===uid) setSelUid(null); audio.playSfx('sell'); say('Đã bán '+champById(u.defId).name); }
   function sellSelected() { if (selUid) sellUnitByUid(selUid); }
   // ===== KEO TUONG TREN SAN: tha vao vung ban 2 goc duoi = ban, tha vao o hex = di chuyen/hoan doi =====
-  const SELL_ZONE_R = 124;
+  // GIA CO sau kiem chung live a7fa080b:
+  // (a) Hit-test tha tinh theo TOA DO THA THAT (pageX/pageY cua su kien nha) doi chieu
+  //     hinh chu nhat vung ban (do bang onLayout cua chinh View vung ban, du phong bang
+  //     hinh hoc giai tich tu arenaSize), noi them 16px quanh vung cho de trung.
+  // (b) PanResponder duoc TAO 1 LAN cho moi uid (cache trong panCacheRef) va doc gia
+  //     tri moi nhat qua ref — ban cu tao moi PanResponder moi lan render nen giua
+  //     chung phien keo handler bi thay, chuot web bat keo luc duoc luc khong.
+  const SELL_ZONE_R = 140;
   function sellZoneAt(px: number, py: number): 'left' | 'right' | null {
-    if (py < arenaSize.h - SELL_ZONE_R) return null;
-    if (px < SELL_ZONE_R) return 'left';
-    if (px > arenaSize.w - SELL_ZONE_R) return 'right';
+    if (py < arenaSize.h - SELL_ZONE_R + 20) return null;
+    if (px < SELL_ZONE_R - 18) return 'left';
+    if (px > arenaSize.w - SELL_ZONE_R + 18) return 'right';
+    return null;
+  }
+  const zoneRectsRef = useRef<{ left?: { x: number; y: number; w: number; h: number }; right?: { x: number; y: number; w: number; h: number } }>({});
+  const arenaPageRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const arenaViewRef = useRef<any>(null);
+  function measureArenaPage() { const n = arenaViewRef.current; if (n && typeof n.measure === 'function') n.measure((_x: number, _y: number, _w: number, _h: number, px: number, py: number) => { arenaPageRef.current = { x: px, y: py }; }); }
+  function zoneRect(side: 'left' | 'right') {
+    const m = zoneRectsRef.current[side]; if (m) return m;
+    const w = 142, h = 142; const y = arenaSize.h - 104;
+    return side === 'left' ? { x: -36, y, w, h } : { x: arenaSize.w - 106, y, w, h };
+  }
+  // Diem tha (toa do arena) -> vung ban neu nam trong rect (da noi 16px)
+  function sellZoneForPoint(ax: number, ay: number): 'left' | 'right' | null {
+    for (const side of ['left', 'right'] as const) { const r = zoneRect(side); if (ax >= r.x - 16 && ax <= r.x + r.w + 16 && ay >= r.y - 16 && ay <= r.y + r.h + 16) return side; }
     return null;
   }
   function cellAtPoint(px: number, py: number): { x: number; y: number } | null {
@@ -290,24 +352,47 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
     else setBoard(prev => prev.map(v => v.uid===uid ? {...v, x, y} : v));
     audio.playSfx('place'); setSelUid(null);
   }
-  // PanResponder cho 1 tuong tren san: di chuyen < 8px khi nha = BAM (di qua tapBoardCell
-  // nhu lop o cham Pressable), vuot nguong = KEO that (tuong di theo con tro/ngon tay)
-  function makeUnitPan(u: PlacedUnit, cx: number, cy: number) {
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => phase==='plan',
-      onMoveShouldSetPanResponder: () => phase==='plan',
+  // Ref song: handler keo (tao 1 lan) luon doc phase/hanh dong/vi tri tuong MOI NHAT qua ref nay
+  const liveRef = useRef<any>(null);
+  liveRef.current = { phase, sellUnitByUid, tapBoardCell, dropDragOnCell };
+  const unitInfoRef = useRef(new Map<string, { x: number; y: number; cx: number; cy: number }>());
+  const panCacheRef = useRef(new Map<string, ReturnType<typeof PanResponder.create>>());
+  function getUnitPan(uid: string) {
+    const cached = panCacheRef.current.get(uid); if (cached) return cached;
+    const pr = PanResponder.create({
+      onStartShouldSetPanResponderCapture: () => liveRef.current.phase==='plan',
+      onStartShouldSetPanResponder: () => liveRef.current.phase==='plan',
+      onMoveShouldSetPanResponderCapture: () => liveRef.current.phase==='plan',
+      onMoveShouldSetPanResponder: () => liveRef.current.phase==='plan',
       onPanResponderTerminationRequest: () => !(dragRef.current && dragRef.current.active),
-      onPanResponderGrant: () => { dragRef.current = { uid: u.uid, active: false }; },
-      onPanResponderMove: (_, g) => { const d = dragRef.current; if (!d || d.uid!==u.uid) return;
+      onPanResponderGrant: () => { dragRef.current = { uid, active: false }; measureArenaPage(); },
+      onPanResponderMove: (e, g) => { const d = dragRef.current; if (!d || d.uid!==uid) return;
         if (!d.active && Math.hypot(g.dx, g.dy) > 8) d.active = true;
-        if (d.active) setDrag({ uid: u.uid, dx: g.dx, dy: g.dy, over: sellZoneAt(cx + g.dx, cy + g.dy) }); },
-      onPanResponderRelease: (_, g) => { const d = dragRef.current; dragRef.current = null; if (!d) return;
-        if (!d.active) { tapBoardCell(u.x, u.y); return; }
-        const over = sellZoneAt(cx + g.dx, cy + g.dy); setDrag(null);
-        if (over) { sellUnitByUid(u.uid); return; }
-        const cell = cellAtPoint(cx + g.dx, cy + g.dy); if (cell) dropDragOnCell(u.uid, cell.x, cell.y); },
+        if (!d.active) return;
+        const info = unitInfoRef.current.get(uid);
+        const ne: any = (e as any)?.nativeEvent ?? {};
+        let over: 'left' | 'right' | null = null;
+        if (typeof ne.pageX === 'number' && typeof ne.pageY === 'number') over = sellZoneForPoint(ne.pageX - arenaPageRef.current.x, ne.pageY - arenaPageRef.current.y);
+        else if (info) over = sellZoneAt(info.cx + g.dx, info.cy + g.dy);
+        setDrag({ uid, dx: g.dx, dy: g.dy, over }); },
+      onPanResponderRelease: (e, g) => { const d = dragRef.current; dragRef.current = null; if (!d || d.uid!==uid) return;
+        const info = unitInfoRef.current.get(uid); const L = liveRef.current;
+        if (!d.active) { if (info) L.tapBoardCell(info.x, info.y); return; }
+        setDrag(null);
+        // Hit-test bang toa do tha THAT; thieu pageX/pageY moi lui ve dx/dy nhu cu
+        const ne: any = (e as any)?.nativeEvent ?? {};
+        let ax: number | null = null, ay: number | null = null;
+        if (typeof ne.pageX === 'number' && typeof ne.pageY === 'number') { ax = ne.pageX - arenaPageRef.current.x; ay = ne.pageY - arenaPageRef.current.y; }
+        else if (info) { ax = info.cx + g.dx; ay = info.cy + g.dy; }
+        if (ax !== null && ay !== null) {
+          const over = sellZoneForPoint(ax, ay) ?? sellZoneAt(ax, ay);
+          if (over) { L.sellUnitByUid(uid); return; }
+          const cell = cellAtPoint(ax, ay); if (cell) L.dropDragOnCell(uid, cell.x, cell.y);
+        } },
       onPanResponderTerminate: () => { dragRef.current = null; setDrag(null); },
     });
+    panCacheRef.current.set(uid, pr);
+    return pr;
   }
   function tapBoardCell(x: number, y: number) {
     if (phase!=='plan') return; const occupant = board.find(u => u.x===x && u.y===y);
@@ -383,7 +468,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
     if (evs.some(e => e.crit && (e.amount ?? 0) >= 120)) { setShake(true); if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current); shakeTimerRef.current = setTimeout(() => setShake(false), 320); }
   }, [frameIdx, phase, result, arenaSize]);
   useEffect(() => { if (phase==='battle' && result && frameIdx >= result.frames.length-1 && !resolvedRef.current) { resolvedRef.current = true; const tm = setTimeout(() => resolveBattle(), 650); return () => clearTimeout(tm); } }, [frameIdx, phase, result]);
-  async function addGems(n: number) { const m = await loadMeta(); m.gems += n; if (mode==='waves') m.bestWave = Math.max(m.bestWave, wave); await saveMeta(m); }
+  async function addGems(n: number) { const m = await loadMeta(); m.gems += n; if (mode==='waves') m.bestWave = Math.max(m.bestWave, wave); await saveMeta(m); setGems(m.gems); }
   function computeDmg(res: BattleResult) { const map = new Map<string, { name: string; dmg: number; team: number }>(); const myNames = new Map(board.map(u => [champById(u.defId).name, 0])); for (const e of res.events) { if (!e.amount) continue; const m = e.text.match(/^(.*?) đánh /); if (!m) continue; const name = m[1]; const team = myNames.has(name) ? 0 : 1; const cur = map.get(name) ?? { name, dmg: 0, team }; cur.dmg += e.amount; map.set(name, cur); } const arr = [...map.values()].sort((a,b) => b.dmg - a.dmg); setDmgStats(arr); return arr; }
   function resolveBattle() {
     if (!result) return; const win = result.winner===0; setPhase('done'); audio.playSfx(win ? 'win' : 'lose');
@@ -436,26 +521,34 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   const odds = SHOP_ODDS[level] ?? SHOP_ODDS[1];
   const maxDmg = Math.max(1, ...dmgStats.map(d => d.dmg));
   const rows = phase==='battle' ? 7 : 4;
+  // Bien the MOBILE: khung san khau hep (< 900px) dung bo cuc dien thoai ngang
+  // (nut tron lon 2 goc duoi, cot noi gon); khung rong dung bo cuc PC. Chung logic.
+  const compact = stageSize.w > 0 && stageSize.w < 900;
   const hm = hexMetrics(arenaSize.w, arenaSize.h, rows);
   const scoutTeam = scout !== null ? (scout === 0 ? board : makeAiTeam(round, scout*3+round)) : [];
   return (
     <View style={st.root}>
       <View style={[st.frame, { width: frameW, height: frameH }]}>
-        {/* ===== TOP BAR: o cuong hoa trai, cum stage giua, nut phai ===== */}
-        <View style={st.topbar}>
+        {/* ===== SAN KHAU TOAN MAN: tranh arena phu kin khung 16:9, MOI UI la lop noi tren san ===== */}
+        <View style={st.stageWrap} onLayout={e => setStageSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
+          <SceneArtImage id="arena" width={stageSize.w} height={stageSize.h}/>
+        {/* ===== THANH TREN NOI TREN MEP SAN: o cuong hoa trai, cum stage giua, chip tron phai ===== */}
+        <View style={st.topFloat}>
+          <FadeBg dir="vTop" peak={0.55} />
           <Pressable style={st.augSquare} onPress={() => { if (augments.length) setAugView(true); else say('Chưa có cường hóa — cường hóa xuất hiện ở các mốc 2-1, 3-2, 4-2.'); }}>
             <Svg width={24} height={24} viewBox="0 0 24 24"><Polygon points="12,1.5 22.5,12 12,22.5 1.5,12" fill={augments.length ? '#2b3a67' : '#232c4c'} stroke={augments.length ? '#ffd60a' : '#5b6a94'} strokeWidth="1.6" /><Polygon points={starPoints(12, 12, 5.5)} fill={augments.length ? '#ffd60a' : '#5b6a94'} /></Svg>
             {!!augments.length && (<View style={st.augCount}><Text style={st.augCountTxt}>{augments.length}</Text></View>)}
           </Pressable>
           <View style={st.stageCluster}>
             <View style={st.stagePlaque}>
-              <Text style={st.stageBig}>{isArena ? roundLabel(round) : mode==='campaign' ? stageDef(stageId).name : mode==='waves' ? 'Sóng '+wave : 'Luyện tập'}</Text>
+              <FadeBg dir="v" peak={0.45} radius={12} />
+              <Text style={[st.stageBig, compact && { fontSize: 15 }]}>{isArena ? roundLabel(round) : mode==='campaign' ? stageDef(stageId).name : mode==='waves' ? 'Sóng '+wave : 'Luyện tập'}</Text>
             </View>
             {isArena && (<View style={st.stageDots}>
               {stageRounds.map(r => { const ss = stageSub(r); const kind = r===round ? 'cur' : isPveStageRound(r) ? 'pve' : isCarouselRound(r) ? 'car' : 'pvp'; return (<View key={r} style={[st.dot, kind==='cur' && st.dotCur, kind==='pve' && st.dotPve, kind==='car' && st.dotCar]}><Text style={[st.dotTxt, kind==='cur' && { color: '#23180a' }]}>{ss.sub}</Text></View>); })}
             </View>)}
             {phase==='battle' ? <View style={st.timerPill}><Text style={st.timerPillTxt}>Đang giao tranh: {enemyLabel}</Text></View>
-            : isArena ? (<View style={st.timerRow}><View style={[st.timerBar, { width: 120 }]}><View style={[st.timerFill, { width: (planLeft/planMax*100)+'%', backgroundColor: planLeft<=5 ? '#ef476f' : '#f5c542' }]} /></View><View style={st.timerPill}><Text style={[st.timerPillTxt, planLeft<=5 && { color: '#ef476f' }]}>{paused ? 'Tạm dừng' : planLeft + 's'}</Text></View></View>)
+            : isArena ? (<View style={st.timerRow}><View style={[st.timerBar, { width: compact ? 72 : 120 }]}><View style={[st.timerFill, { width: (planLeft/planMax*100)+'%', backgroundColor: planLeft<=5 ? '#ef476f' : '#f5c542' }]} /></View><View style={st.timerPill}><Text style={[st.timerPillTxt, planLeft<=5 && { color: '#ef476f' }]}>{paused ? 'Tạm dừng' : planLeft + 's'}</Text></View></View>)
             : <View style={st.timerPill}><Text style={st.timerPillTxt}>{mode==='campaign' ? ('Độ khó: '+stageDef(stageId).power+' — Thưởng: '+stageReward(stageId)+' Ngọc') : 'Chuẩn bị tự do'}</Text></View>}
             {summary && phase!=='battle' && <Text style={st.sumTxt}>{summary.win ? 'Thắng' : 'Thua'} — Gây {summary.dealt} / Nhận {summary.taken} sát thương (đánh thường)</Text>}
           </View>
@@ -466,33 +559,42 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             <Pressable style={st.tBtn} onPress={() => toggleAudio('sfx')}><Text style={st.tBtnTxt}>Tiếng {sfxOn?'Bật':'Tắt'}</Text></Pressable>
           </View>
         </View>
-        {/* ===== SAN KHAU TRAN VIEN: tranh arena phu kin ca vung giua + bench, panel noi tren tranh ===== */}
-        <View style={st.stageWrap} onLayout={e => setStageSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
-          <SceneArtImage id="arena" width={stageSize.w} height={stageSize.h}/>
-        {/* ===== MIDDLE ===== */}
+        {/* ===== MIDDLE: dau truong chiem toan bo; cot trai/phai la LOP NOI tuyet doi tren mep san ===== */}
         <View style={st.middle}>
           {/* LEFT: traits + augments + items */}
-          <View style={st.leftPanel}>
+          <View style={[st.leftPanel, compact && { width: 130, padding: 4 }]}>
+            {compact && (<View style={st.pillRow}>
+              <Pressable style={st.pillBtn} onPress={() => { if (augments.length) setAugView(true); else say('Chưa có cường hóa — cường hóa xuất hiện ở các mốc 2-1, 3-2, 4-2.'); }}>
+                <Svg width={17} height={17} viewBox="0 0 24 24"><Polygon points="12,2 21,7 21,17 12,22 3,17 3,7" fill="none" stroke="#7ee0c2" strokeWidth="2" /></Svg>
+                {!!augments.length && <Text style={st.pillCnt}>{augments.length}</Text>}
+              </Pressable>
+              <Pressable style={st.pillBtn} onPress={() => say('Khay trang bị nằm ngay dưới danh sách tộc/hệ — chạm 1 món rồi chạm tướng để gắn.')}>
+                <Svg width={17} height={17} viewBox="0 0 24 24"><Rect x="4" y="8" width="16" height="12" rx="2.5" fill="none" stroke="#7ee0c2" strokeWidth="2" /><Polygon points="9,8 9,5.5 15,5.5 15,8" fill="none" stroke="#7ee0c2" strokeWidth="2" /></Svg>
+                {!!inventory.length && <Text style={st.pillCnt}>{inventory.length}</Text>}
+              </Pressable>
+            </View>)}
             <Text style={st.panelTitle}>Tộc / Hệ</Text>
             <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
               {traitRows.map(r => { const hl = selUnit && champById(selUnit.defId).traits.includes(r.t.id); const tierColor = r.tier===1 ? '#cd8f52' : r.tier===2 ? '#a8b6c4' : r.tier>=3 ? '#f5c542' : undefined; return (
-                <View key={r.t.id} style={[st.traitRow, r.tier>0 && { backgroundColor: '#4a3a10', borderColor: tierColor }, hl && st.traitHl]}>
-                  <Text style={st.traitName}>{r.t.name}</Text>
-                  <Text style={[st.traitCnt, r.tier>0 && { color: '#ffd60a', fontWeight:'900' }]}>{r.c}{r.next ? '/'+r.next : ' (tối đa)'}</Text>
+                <View key={r.t.id} style={[st.traitRow, hl && st.traitHl]}>
+                  <FadeBg dir="h" peak={r.tier>0 ? 0.74 : 0.52} radius={9} color={r.tier>0 ? '72,54,12' : '10,15,32'} />
+                  {r.tier>0 && <View style={[st.traitBar, { backgroundColor: tierColor }]} />}
+                  <Text style={[st.traitName, r.tier>0 && { color: '#ffe9a8' }]}>{r.t.name}</Text>
+                  <Text style={[st.traitCnt, r.tier>0 && { color: '#ffd60a', fontWeight:'900' }]}>{r.c}{r.next ? '/'+r.next : compact ? '' : ' (tối đa)'}</Text>
                 </View> ); })}
               {!traitRows.length && <Text style={st.dim}>Chưa có tướng trên bàn</Text>}
               {!!augments.length && <><Text style={[st.panelTitle, { marginTop: 8 }]}>Cường hóa</Text>{augments.map(id => { const a = AUGMENTS.find(x => x.id===id); return a ? <View key={id} style={st.augChip}><Text style={st.augTxt}>{a.name}</Text></View> : null; })}</>}
               <Text style={[st.panelTitle, { marginTop: 8 }]}>Khay trang bị</Text>
               <View style={[st.invWrap, hi('item') && st.tutHi]}>
-                {inventory.map((iid, i) => { const it = itemById(iid); if (!it) return null; return (<Pressable key={i} onPress={() => setSelItem(selItem===iid?null:iid)} style={[st.invCell, selItem===iid && st.cellSel]}><ItemArt color={it.color} size={30}/><Text style={st.invTxt}>{it.name}</Text></Pressable>); })}
+                {inventory.map((iid, i) => { const it = itemById(iid); if (!it) return null; return (<Pressable key={i} onPress={() => setSelItem(selItem===iid?null:iid)} style={[st.invCell, compact && { width: 56, padding: 2 }, selItem===iid && st.cellSel]}><ItemArt color={it.color} size={compact ? 22 : 30}/>{!compact && <Text style={st.invTxt}>{it.name}</Text>}</Pressable>); })}
                 {!inventory.length && <Text style={st.dim}>Thắng round PvE để rơi trang bị</Text>}
               </View>
-              {selUnit && <View style={st.selMini}><Text style={st.selName}>{champById(selUnit.defId).name} {STAR_TXT(selUnit.star)}</Text><Text style={st.dim}>{champById(selUnit.defId).skill.name}: {champById(selUnit.defId).skill.desc}</Text>
+              {selUnit && <View style={st.selMini}><FadeBg dir="h" peak={0.68} radius={10} /><Text style={st.selName}>{champById(selUnit.defId).name} {STAR_TXT(selUnit.star)}</Text><Text style={st.dim}>{champById(selUnit.defId).skill.name}: {champById(selUnit.defId).skill.desc}</Text>
                 <View style={{ flexDirection:'row', gap:6, marginTop:4 }}><Pressable style={st.miniBtn} onPress={sellSelected}><Text style={st.miniTxt}>Bán +{sellValue(selUnit.defId, selUnit.star)}</Text></Pressable>{board.some(v => v.uid===selUid) && <Pressable style={st.miniBtn} onPress={moveToBench}><Text style={st.miniTxt}>Về bench</Text></Pressable>}</View></View>}
             </ScrollView>
           </View>
           {/* CENTER: arena (khong khung/vien rieng — tranh nen nam o stageWrap phia sau) */}
-          <View style={[st.arena, shake && { transform: [{ translateX: 5 }] }]} onLayout={e => setArenaSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
+          <View ref={arenaViewRef} style={[st.arena, shake && { transform: [{ translateX: 5 }] }]} onLayout={e => { setArenaSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height }); measureArenaPage(); }}>
             <View pointerEvents="none" style={StyleSheet.absoluteFill}><AmbientParticles width={arenaSize.w} height={arenaSize.h}/></View>
                         <Svg style={StyleSheet.absoluteFill} width={arenaSize.w} height={arenaSize.h}>
               {hexVis > 0.01 && Array.from({length: rows}).map((_, y) => Array.from({length: 7}).map((_, x) => { const { cx, cy } = hexCenter(hm, x, y); const occ = phase!=='battle' && board.some(u => u.x===x && u.y===y); const enemyHalf = phase==='battle' && y >= 4; return (
@@ -514,19 +616,19 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             {phase==='plan' && (<View pointerEvents="none" style={{ position:'absolute', left:0, right:0, top:0, bottom:0, alignItems:'center', justifyContent:'center', zIndex:1 }}>
               <Text style={{ fontSize: Math.min(120, arenaSize.w * 0.17), fontWeight:'900', color:'rgba(255,255,255,0.10)', letterSpacing: 4 }}>{board.length}/{level}</Text>
             </View>)}
-                        {phase!=='battle' && board.map(u => { const { cx, cy } = hexCenter(hm, u.x, u.y); const sz = hm.size * 2.05 * rowDepth(u.y, 4).scale * STAR_SCALE(u.star); const isSel = selUid===u.uid; const isDrag = !!drag && drag.uid===u.uid; const rig = (
+                        {phase!=='battle' && board.map(u => { const { cx, cy } = hexCenter(hm, u.x, u.y); const sz = hm.size * 1.82 * rowDepth(u.y, 4).scale * STAR_SCALE(u.star); unitInfoRef.current.set(u.uid, { x: u.x, y: u.y, cx, cy }); const isSel = selUid===u.uid; const isDrag = !!drag && drag.uid===u.uid; const rig = (
                 <View style={[{ width: sz, height: sz, alignItems:'center' }, u.star>=2 && { shadowColor: u.star>=3 ? '#ffb703' : '#d7dee8', shadowOpacity: 0.9, shadowRadius: u.star>=3 ? 12 : 7, shadowOffset: { width: 0, height: 0 }, elevation: 6 }]}>
                   <GroundShadow sz={sz}/>
                   <UnitPedestal sz={sz} team={0} star={u.star}/>
                   <SpriteUnit spec={champById(u.defId)} size={sz} star={u.star} state='idle'/>
                   {u.star>=3 && <StarSparkles sz={sz}/>}
                 </View>); return (
-              <View key={u.uid} {...makeUnitPan(u, cx, cy).panHandlers} style={{ position:'absolute', left: cx - sz/2, top: cy + hm.size*0.28 - sz*0.88, width: sz, height: sz, alignItems:'center', zIndex: isDrag ? 300 : 50 + rowDepth(u.y, 4).zIndex, transform: drag && drag.uid===u.uid ? [{ translateX: drag.dx }, { translateY: drag.dy }, { scale: 1.06 }] : undefined }}>
+              <View key={u.uid} {...getUnitPan(u.uid).panHandlers} style={{ position:'absolute', left: cx - sz/2, top: cy + hm.size*0.28 - sz*0.88, width: sz, height: sz, alignItems:'center', zIndex: isDrag ? 300 : 50 + rowDepth(u.y, 4).zIndex, transform: drag && drag.uid===u.uid ? [{ translateX: drag.dx }, { translateY: drag.dy }, { scale: 1.06 }] : undefined }}>
                 {isSel && !isDrag && <View style={[st.selRing, { width: sz*0.9, height: sz*0.3, bottom: -2 }]} />}
                 {isSel && !isDrag ? <SelBounce>{rig}</SelBounce> : rig}
                 <UnitBars sz={sz} star={u.star} hpFrac={1} manaFrac={0} items={u.items} />
               </View> ); })}
-            {phase==='battle' && frame && result && renderUnitsForFrame(frame).map(u => { const { cx, cy } = hexCenter(hm, Math.max(0, Math.min(6, u.x)), Math.max(0, Math.min(6, u.y))); const prev = frameIdx>0 ? result.frames[frameIdx-1].units.find(v => v.uid===u.uid) : undefined; const prevT = frameIdx>0 ? result.frames[frameIdx-1].t : frame.t - 0.5; const evs = eventsInWindow(result.events, prevT, frame.t); const isTarget = evs.some(e => (e.type==='attack' || e.type==='hit') && (e.targetUid ?? e.uid)===u.uid); const lungeEv = evs.find(e => e.type==='attack' && e.attackerUid===u.uid && !e.ranged); const lx = lungeEv && lungeEv.tx!==undefined ? Math.sign(lungeEv.tx - u.x)*12 : 0; const ly = lungeEv && lungeEv.ty!==undefined ? Math.sign(lungeEv.ty - u.y)*6 : 0; const animState = stateForUnit({ alive: u.alive, moved: !!prev && (prev.x!==u.x || prev.y!==u.y), castAtFrame: evs.some(e => e.type==='cast' && e.attackerUid===u.uid), attackedAtFrame: evs.some(e => e.type==='attack' && e.attackerUid===u.uid), hurtAtFrame: evs.some(e => (e.targetUid ?? e.uid)===u.uid && !!e.amount), battleOver: frameIdx >= result.frames.length-1, won: result.winner===u.team }); const dep = rowDepth(u.y, 7); const sz = hm.size * 2.05 * dep.scale * STAR_SCALE(u.star); const stunAngle = (frame.t * 120) % 360; return (
+            {phase==='battle' && frame && result && renderUnitsForFrame(frame).map(u => { const { cx, cy } = hexCenter(hm, Math.max(0, Math.min(6, u.x)), Math.max(0, Math.min(6, u.y))); const prev = frameIdx>0 ? result.frames[frameIdx-1].units.find(v => v.uid===u.uid) : undefined; const prevT = frameIdx>0 ? result.frames[frameIdx-1].t : frame.t - 0.5; const evs = eventsInWindow(result.events, prevT, frame.t); const isTarget = evs.some(e => (e.type==='attack' || e.type==='hit') && (e.targetUid ?? e.uid)===u.uid); const lungeEv = evs.find(e => e.type==='attack' && e.attackerUid===u.uid && !e.ranged); const lx = lungeEv && lungeEv.tx!==undefined ? Math.sign(lungeEv.tx - u.x)*12 : 0; const ly = lungeEv && lungeEv.ty!==undefined ? Math.sign(lungeEv.ty - u.y)*6 : 0; const animState = stateForUnit({ alive: u.alive, moved: !!prev && (prev.x!==u.x || prev.y!==u.y), castAtFrame: evs.some(e => e.type==='cast' && e.attackerUid===u.uid), attackedAtFrame: evs.some(e => e.type==='attack' && e.attackerUid===u.uid), hurtAtFrame: evs.some(e => (e.targetUid ?? e.uid)===u.uid && !!e.amount), battleOver: frameIdx >= result.frames.length-1, won: result.winner===u.team }); const dep = rowDepth(u.y, 7); const sz = hm.size * 1.82 * dep.scale * STAR_SCALE(u.star); const stunAngle = (frame.t * 120) % 360; return (
               <View key={u.uid} style={{ position:'absolute', left: cx - sz/2 + lx + (isTarget ? (frameIdx % 2 === 0 ? 3 : -3) : 0), top: cy + hm.size*0.28 - sz*0.88 + ly, width: sz, zIndex: dep.zIndex, alignItems:'center' }}>
                 <View style={[{ width: sz, height: sz, alignItems:'center', shadowColor:'#04170b', shadowOpacity: 0.5, shadowRadius: 5, shadowOffset: { width: 0, height: 3 } }, u.star>=2 && { shadowColor: u.star>=3 ? '#ffb703' : '#d7dee8', shadowOpacity: 0.9, shadowRadius: u.star>=3 ? 12 : 7, shadowOffset: { width: 0, height: 0 }, elevation: 6 }]}>
                   <GroundShadow sz={sz} team={u.team}/>
@@ -538,7 +640,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
                 </View>
                 <UnitBars sz={sz} star={u.star} hpFrac={u.hp / u.maxHp} manaFrac={u.maxMana ? u.mana / u.maxMana : 0} items={itemsByUid[u.uid] ?? []} />
               </View> ); })}
-<View style={st.legend} pointerEvents="none">
+<View style={[st.legend, { left: Math.max(4, hm.ox - 78) }]} pointerEvents="none">
               <FloatWrap amp={4}>
                 <SpriteUnit spec={champById('toto')} size={56} state={legendHurt ? 'hurt' : 'idle'}/>
               </FloatWrap>
@@ -558,7 +660,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             {/* ===== VUNG BAN KHI KEO: mac dinh AN, chi hien trong luc dang keo 1 tuong tren san ===== */}
             {drag && (() => { const du = board.find(u => u.uid===drag.uid); if (!du) return null; return (<React.Fragment>
               {(['left','right'] as const).map(side => (
-                <View key={side} pointerEvents="none" style={[st.sellZone, side==='left' ? { left: -36 } : { right: -36 }, drag.over===side && st.sellZoneHot]}>
+                <View key={side} pointerEvents="none" onLayout={e => { const l = e.nativeEvent.layout; zoneRectsRef.current[side] = { x: l.x, y: l.y, w: l.width, h: l.height }; }} style={[st.sellZone, side==='left' ? { left: -36 } : { right: -36 }, drag.over===side && st.sellZoneHot]}>
                   <View style={{ alignItems:'center', gap: 1, marginBottom: 26, marginLeft: side==='left' ? 26 : 0, marginRight: side==='right' ? 26 : 0 }}>
                     <Svg width={26} height={26} viewBox="0 0 24 24"><Rect x="5" y="7" width="14" height="13" rx="2" fill="#f3b8c6" /><Rect x="3.5" y="4.5" width="17" height="3" rx="1.5" fill="#ffe3ec" /><Rect x="9.5" y="2" width="5" height="3" rx="1.4" fill="#ffe3ec" /><Rect x="8.6" y="10" width="2.2" height="7" fill="#5c0f22" /><Rect x="13.2" y="10" width="2.2" height="7" fill="#5c0f22" /></Svg>
                     <Text style={st.sellZoneGold}>{sellValue(du.defId, du.star)} vàng</Text>
@@ -568,16 +670,27 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             </React.Fragment>); })()}
           </View>
           {/* RIGHT: scoreboard / damage */}
-          <View style={st.rightPanel}>
+          <View style={[st.rightPanel, compact && { width: 142, padding: 4 }]}>
             {isArena ? (<>
+              <View style={st.orbRow}>
+                <Pressable onPress={() => { setScout(phase!=='battle' ? peekOpponent().idx : oppIdx); audio.playSfx('click'); }} style={st.orbWrap}>
+                  <HpOrb hp={hp} size={compact ? 44 : 58} />
+                  <View style={st.orbSword}><SwordBadge size={compact ? 18 : 22} /></View>
+                </Pressable>
+                <View style={{ flex: 1, gap: 1 }}>
+                  <Text style={st.orbName} numberOfLines={1}>Đang đấu: {players[phase!=='battle' ? peekOpponent().idx : oppIdx]?.name ?? '—'}</Text>
+                  {!compact && <Text style={st.orbSub}>Cầu máu của bạn — bấm để xem bàn đối thủ</Text>}
+                </View>
+              </View>
               <View style={st.tabRow}><Pressable style={[st.tab, rightTab==='players' && st.tabOn]} onPress={() => setRightTab('players')}><Text style={[st.tabTxt, rightTab==='players' && st.tabTxtOn]}>Người chơi</Text></Pressable><Pressable style={[st.tab, rightTab==='dmg' && st.tabOn]} onPress={() => setRightTab('dmg')}><Text style={[st.tabTxt, rightTab==='dmg' && st.tabTxtOn]}>Sát thương</Text></Pressable></View>
               {rightTab==='players' ? (<ScrollView showsVerticalScrollIndicator={false}>{players.map((p, i) => { const isOpp = phase!=='battle' ? peekOpponent().idx===i : oppIdx===i; return (
                 <Pressable key={i} onPress={() => { setScout(i); audio.playSfx('click'); }} style={[st.pRow, !p.alive && st.pDead, isOpp && p.alive && st.pOpp]}>
+                  <FadeBg dir="hR" peak={isOpp && p.alive ? 0.66 : 0.5} radius={11} color={isOpp && p.alive ? '74,20,34' : '10,15,32'} />
                   <View style={{ flex: 1, gap: 1 }}>
                     <Text style={st.pName} numberOfLines={1}>{p.name}{i===0?' (bạn)':''} • Cấp {i===0 ? level : p.lvl}</Text>
                     <View style={{ flexDirection:'row', alignItems:'center', gap:7 }}>
                       <Text style={[st.pHpBig, { color: !p.alive ? '#8a93ad' : p.hp>50 ? '#7ee787' : p.hp>25 ? '#ffd60a' : '#ff8fab' }]}>{p.alive ? p.hp : (p.rank ? '#'+p.rank : '0')}</Text>
-                      <View style={[st.pHpBar, { flex: 1 }]}><View style={[st.pHpFill, { width: Math.max(0, p.hp)+'%', backgroundColor: p.hp>50 ? '#43c62f' : p.hp>25 ? '#e0a800' : '#ef476f' }]} /></View>
+                      {!compact && <View style={[st.pHpBar, { flex: 1 }]}><View style={[st.pHpFill, { width: Math.max(0, p.hp)+'%', backgroundColor: p.hp>50 ? '#43c62f' : p.hp>25 ? '#e0a800' : '#ef476f' }]} /></View>}
                     </View>
                     {i===0 && streak !== 0 && <Text style={st.pHp}>Chuỗi {streak>0 ? 'thắng ' : 'thua '}{Math.abs(streak)}</Text>}
                     {!p.alive && !!p.rank && <Text style={st.pHp}>Đã bị loại — Hạng {p.rank}</Text>}
@@ -616,24 +729,42 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
           <View style={st.logMini}>{log.slice(0,2).map((l,i) => <Text key={i} style={st.logTxt} numberOfLines={1}>{l}</Text>)}</View>
         </View>)}
         </View>
-        {/* ===== SHOP ===== */}
+        {/* ===== DAI SHOP: noi tren gradient toi mo dan len san, khong hop cung ===== */}
         {phase!=='battle' && (<View style={st.shopRow}>
-          <View style={st.shopLeft}>
+          <FadeBg dir="v" peak={0.92} color="9,13,28" />
+          {compact ? (<View style={st.shopLeftM}>
+            <Pressable style={[st.xpOrb, hi('xp') && st.tutHiBtn]} onPress={buyXp}>
+              <Text style={st.xpOrbLbl}>Mua XP</Text><Text style={st.xpOrbCost}>4 vàng</Text>
+              <View style={st.xpOrbLvl}><Text style={st.xpOrbLvlTxt}>{level}</Text></View>
+            </Pressable>
+            <Text style={st.xpMini}>{xp}/{xpToNext(level)} XP</Text>
+            <View style={{ flexDirection:'row', gap:5 }}>
+              <Pressable style={[st.miniChip, hi('reroll') && st.tutHiBtn]} onPress={reroll}><Text style={st.miniChipTxt}>Đổi lại (2)</Text></Pressable>
+              <Pressable style={[st.miniChip, locked && { backgroundColor:'rgba(160,20,50,0.8)' }]} onPress={() => setLocked(l => !l)}><Text style={st.miniChipTxt}>{locked ? 'Đã khóa' : 'Khóa'}</Text></Pressable>
+            </View>
+          </View>) : (<View style={st.shopLeft}>
             <View style={st.lvlCard}><Text style={st.lvlBig}>Cấp {level}</Text><View style={st.xpBar}><View style={{ height: 7, backgroundColor:'#4361ee', width: Math.min(100, xp/Math.max(1,xpToNext(level))*100)+'%' }} /></View><Text style={st.dim}>{level>=9 ? 'Cấp tối đa' : xp+'/'+xpToNext(level)+' XP'}</Text></View>
             <View style={{ flexDirection:'row', gap:6 }}>
               <Pressable style={[st.shopBtn, hi('xp') && st.tutHiBtn]} onPress={buyXp}><Text style={st.shopBtnTxt}>Mua XP (4) [F]</Text></Pressable>
               <Pressable style={[st.shopBtn, { backgroundColor:'#38b000' }, hi('reroll') && st.tutHiBtn]} onPress={reroll}><Text style={st.shopBtnTxt}>Làm mới (2) [D]</Text></Pressable>
               <Pressable style={[st.shopBtn, { backgroundColor: locked ? '#ef476f' : '#6c757d' }]} onPress={() => setLocked(l => !l)}><Text style={st.shopBtnTxt}>{locked ? 'Đã khóa' : 'Khóa shop'}</Text></Pressable>
             </View>
-            <View style={[st.goldBox, hi('gold') && st.tutHi]}><Text style={st.goldTxt}>{gold} vàng</Text><Text style={st.dim}>Lãi sắp nhận: +{interestOf(gold)}{streak!==0 ? ' — Chuỗi '+(streak>0?'thắng ':'thua ')+Math.abs(streak) : ''}</Text></View>
-          </View>
+          </View>)}
           <View style={{ flex: 1 }}>
-            <View style={st.oddsRow}><Text style={st.dim}>Tỉ lệ shop cấp {level}:</Text>{odds.map((o, i) => (<View key={i} style={[st.oddChip, { backgroundColor: COST_COLORS[i+1] }]}><Text style={st.oddTxt}>{i+1} vàng: {o}%</Text></View>))}</View>
+            <View style={st.oddsRow}>{!compact && <Text style={st.dim}>Tỉ lệ shop cấp {level}:</Text>}{!compact && odds.map((o, i) => (<View key={i} style={[st.oddChip, { backgroundColor: COST_COLORS[i+1] }]}><Text style={st.oddTxt}>{i+1} vàng: {o}%</Text></View>))}
+              <View style={{ flex: 1 }} />
+              {!compact && (<View style={[st.goldChip, hi('gold') && st.tutHi]}>
+                {streak!==0 && <Text style={st.streakTxt}>{streak>0 ? 'Chuỗi thắng ' : 'Chuỗi thua '}{Math.abs(streak)}</Text>}
+                <Text style={st.goldTxt}>{gold} vàng</Text>
+                <Text style={st.goldSub}>Lãi sắp nhận: +{interestOf(gold)}</Text>
+              </View>)}
+              <View style={{ flex: 1 }} />
+            </View>
             <View style={[st.cardsRow, hi('shop') && st.tutHi]}>
                             {shop.map((id, i) => { const d = champById(id); const copies = copiesOf(id); const glow = copies >= 2; return (
                 <Pressable key={i} onPress={() => buy(i)} style={[st.shopCard, { borderColor: COST_COLORS[d.cost] }, glow && st.cardGlow]}>
                   <View style={[st.cardArt, { backgroundColor: COST_COLORS[d.cost] + '33' }]}>
-                    <SpriteUnit spec={d} size={84} state='idle'/>
+                    <SpriteUnit spec={d} size={compact ? 60 : 84} state='idle'/>
                     <View style={st.costBadge}><Text style={st.costBadgeTxt}>{d.cost}</Text></View>
                     {glow && <Text style={st.glowTag}>Sắp lên sao</Text>}
                   </View>
@@ -644,7 +775,16 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
                 </Pressable> ); })}
             </View>
           </View>
-          {phase==='plan' && <Pressable style={[st.fightBtn, hi('fight') && st.tutHiBtn]} onPress={startBattle}><Text style={st.fightTxt}>Bắt đầu đấu</Text><Text style={st.fightSub}>{isArena ? enemyForRound().label : mode==='campaign' ? stageDef(stageId).name : mode==='waves' ? 'Sóng '+wave : 'Đội luyện tập'}</Text></Pressable>}
+          <View style={st.shopRight}>
+            {compact ? (<React.Fragment>
+              {streak!==0 && <View style={st.streakFlame}><Text style={st.streakFlameTxt}>{Math.abs(streak)} {streak>0 ? 'thắng' : 'thua'}</Text></View>}
+              <View style={[st.goldOrb, hi('gold') && st.tutHi]}><Text style={st.goldOrbTxt}>{gold}</Text><Text style={st.goldOrbLbl}>vàng</Text></View>
+            </React.Fragment>) : (<React.Fragment>
+              <HpOrb hp={hp} size={52} />
+              <Text style={st.gemTxt}>{gems} Ngọc</Text>
+            </React.Fragment>)}
+            {phase==='plan' && <Pressable style={[st.fightBtn, compact && { width: 96, padding: 6 }, hi('fight') && st.tutHiBtn]} onPress={startBattle}><Text style={[st.fightTxt, compact && { fontSize: 13 }]}>Bắt đầu đấu</Text>{!compact && <Text style={st.fightSub}>{isArena ? enemyForRound().label : mode==='campaign' ? stageDef(stageId).name : mode==='waves' ? 'Sóng '+wave : 'Đội luyện tập'}</Text>}</Pressable>}
+          </View>
         </View>)}
         <Pressable style={st.homeLink} onPress={() => router.back()}><Text style={st.dim}>Về trang chủ</Text></Pressable>
         {/* ===== OVERLAYS ===== */}
@@ -715,58 +855,66 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
 }
 const st = StyleSheet.create({
   root:{ flex:1, backgroundColor:'#14101f', alignItems:'center', justifyContent:'center' },
-  frame:{ backgroundColor:'#10182e', borderRadius:16, borderWidth:2, borderColor:'#c9a227', padding:8, gap:6, overflow:'hidden', maxWidth:'100%', maxHeight:'100%' },
-  topbar:{ flexDirection:'row', gap:10, alignItems:'flex-start', backgroundColor:'#1a2340', borderRadius:12, borderWidth:1, borderColor:'#c9a227', paddingHorizontal:10, paddingVertical:6 },
-  augSquare:{ width:46, height:46, borderRadius:9, backgroundColor:'#10182e', borderWidth:2, borderColor:'#c9a227', alignItems:'center', justifyContent:'center', position:'relative', marginTop:2 },
+  frame:{ backgroundColor:'#10182e', borderRadius:16, padding:6, gap:4, overflow:'hidden', maxWidth:'100%', maxHeight:'100%' },
+  topFloat:{ position:'absolute', left:0, right:0, top:0, zIndex:60, flexDirection:'row', gap:10, alignItems:'flex-start', paddingHorizontal:8, paddingTop:5, paddingBottom:16 },
+  augSquare:{ width:44, height:44, borderRadius:12, backgroundColor:'rgba(10,15,32,0.55)', alignItems:'center', justifyContent:'center', position:'relative', marginTop:2, shadowColor:'#000', shadowOpacity:0.35, shadowRadius:5, shadowOffset:{ width:0, height:2 }, elevation:4 },
   augCount:{ position:'absolute', right:-6, top:-6, minWidth:18, height:18, borderRadius:9, backgroundColor:'#ffd60a', borderWidth:1, borderColor:'#a86e00', alignItems:'center', justifyContent:'center', paddingHorizontal:4 }, augCountTxt:{ fontSize:10.5, fontWeight:'900', color:'#23180a' },
   augViewRow:{ flexDirection:'row', gap:9, alignItems:'center', backgroundColor:'#232d4f', borderRadius:11, padding:8, borderWidth:1, borderColor:'#46538a' },
   stageCluster:{ flex:1, alignItems:'center', gap:3 },
-  stagePlaque:{ backgroundColor:'#0d1526', borderWidth:1.5, borderColor:'#c9a227', borderRadius:10, paddingHorizontal:16, paddingVertical:1, shadowColor:'#000', shadowOpacity:0.4, shadowRadius:5, shadowOffset:{ width:0, height:2 } },
+  stagePlaque:{ position:'relative', overflow:'hidden', backgroundColor:'rgba(8,12,26,0.5)', borderRadius:12, paddingHorizontal:18, paddingVertical:2, shadowColor:'#000', shadowOpacity:0.35, shadowRadius:5, shadowOffset:{ width:0, height:2 } },
   stageBig:{ fontWeight:'900', fontSize:20, color:'#f5d67b', letterSpacing:1 },
   stageDots:{ flexDirection:'row', gap:4, alignItems:'center' },
-  dot:{ width:22, height:22, borderRadius:11, backgroundColor:'#2a3454', alignItems:'center', justifyContent:'center', borderWidth:1, borderColor:'#46538a' }, dotCur:{ backgroundColor:'#f5c542', borderColor:'#f5c542', transform:[{scale:1.2}] }, dotPve:{ backgroundColor:'#8a5a13' }, dotCar:{ backgroundColor:'#5a189a' }, dotTxt:{ fontSize:11, fontWeight:'800', color:'#eef1ff' },
-  timerRow:{ flexDirection:'row', alignItems:'center', gap:7 }, timerBar:{ height:7, backgroundColor:'rgba(255,255,255,0.14)', borderRadius:4, overflow:'hidden' }, timerFill:{ height:7, borderRadius:4 },
-  timerPill:{ backgroundColor:'rgba(8,12,26,0.85)', borderRadius:999, borderWidth:1, borderColor:'#46538a', paddingHorizontal:10, paddingVertical:2.5 }, timerPillTxt:{ fontWeight:'800', color:'#eef1ff', fontSize:11.5 }, timerTxt:{ fontWeight:'800', color:'#eef1ff', fontSize:12 }, sumTxt:{ fontSize:11, color:'#aab4d4', fontWeight:'600' },
-  stageWrap:{ flex:1, position:'relative', borderRadius:16, overflow:'hidden', backgroundColor:'#274435', minHeight:0 },
+  dot:{ width:22, height:22, borderRadius:11, backgroundColor:'rgba(16,22,44,0.55)', alignItems:'center', justifyContent:'center', borderWidth:1, borderColor:'rgba(255,255,255,0.18)' }, dotCur:{ backgroundColor:'#f5c542', borderColor:'#f5c542', transform:[{scale:1.2}] }, dotPve:{ backgroundColor:'rgba(138,90,19,0.75)' }, dotCar:{ backgroundColor:'rgba(90,24,154,0.75)' }, dotTxt:{ fontSize:11, fontWeight:'800', color:'#eef1ff' },
+  timerRow:{ flexDirection:'row', alignItems:'center', gap:7 }, timerBar:{ height:7, backgroundColor:'rgba(6,10,22,0.45)', borderRadius:4, overflow:'hidden' }, timerFill:{ height:7, borderRadius:4 },
+  timerPill:{ backgroundColor:'rgba(8,12,26,0.55)', borderRadius:999, paddingHorizontal:10, paddingVertical:2.5 }, timerPillTxt:{ fontWeight:'800', color:'#eef1ff', fontSize:11.5 }, timerTxt:{ fontWeight:'800', color:'#eef1ff', fontSize:12 }, sumTxt:{ fontSize:11, color:'#dfe6ff', fontWeight:'700', textShadowColor:'rgba(0,0,0,0.7)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:2 },
+  stageWrap:{ flex:1, position:'relative', overflow:'hidden', minHeight:0 },
   sellZone:{ position:'absolute', bottom:-38, width:142, height:142, borderRadius:71, backgroundColor:'rgba(96,12,30,0.85)', borderWidth:2.5, borderStyle:'dashed', borderColor:'#ff8fab', alignItems:'center', justifyContent:'center', zIndex:170 },
   sellZoneHot:{ backgroundColor:'rgba(186,26,54,0.96)', borderColor:'#ffd60a', transform:[{ scale:1.07 }] },
   sellZoneGold:{ fontSize:14, fontWeight:'900', color:'#ffd60a' }, sellZoneLbl:{ fontSize:9.5, fontWeight:'800', color:'#ffd6e0' },
   rewardBox:{ backgroundColor:'#141b33', borderWidth:1, borderColor:'#c9a227', borderRadius:12, paddingHorizontal:12, paddingVertical:8, alignItems:'center', gap:4, alignSelf:'stretch' },
   rewardXp:{ fontSize:13.5, fontWeight:'900', color:'#7fb3ff' }, rewardLp:{ fontSize:13, fontWeight:'900' }, rewardNote:{ fontSize:11, color:'#aab4d4', fontWeight:'600' },
-  topBtns:{ flexDirection:'row', gap:6 }, tBtn:{ backgroundColor:'#2f6db3', borderRadius:999, paddingHorizontal:10, paddingVertical:6, borderTopWidth:1, borderTopColor:'#8fc1f5', borderBottomWidth:4, borderBottomColor:'#1c4472' }, tBtnTxt:{ color:'#fff', fontWeight:'700', fontSize:11 },
-  middle:{ flex:1, flexDirection:'row', gap:8, minHeight:0, padding:6 },
-  leftPanel:{ width:172, backgroundColor:'rgba(15,21,42,0.84)', borderRadius:14, padding:8, borderWidth:1, borderColor:'rgba(201,162,39,0.5)' },
-  rightPanel:{ width:196, backgroundColor:'rgba(15,21,42,0.84)', borderRadius:14, padding:8, borderWidth:1, borderColor:'rgba(201,162,39,0.5)' },
-  panelTitle:{ fontWeight:'900', color:'#f5d67b', marginBottom:4 },
-  traitRow:{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', backgroundColor:'#242f52', borderRadius:9, paddingHorizontal:8, paddingVertical:4, marginBottom:4, borderWidth:1, borderColor:'transparent' }, traitHl:{ borderColor:'#ffb703', borderWidth:2 }, traitName:{ fontWeight:'700', fontSize:12, color:'#eef1ff' }, traitCnt:{ fontSize:12, color:'#aab4d4', fontWeight:'700' },
-  augChip:{ backgroundColor:'#4a3a10', borderRadius:9, paddingHorizontal:8, paddingVertical:4, marginBottom:4 }, augTxt:{ fontSize:11, fontWeight:'700', color:'#ffd60a' },
-  invWrap:{ flexDirection:'row', flexWrap:'wrap', gap:6 }, invCell:{ backgroundColor:'#232d4f', borderRadius:10, padding:4, alignItems:'center', width:74, borderWidth:1, borderColor:'#46538a' }, invTxt:{ fontSize:9, textAlign:'center', fontWeight:'600', color:'#e8ecff' },
-  selMini:{ marginTop:8, backgroundColor:'#232d4f', borderRadius:10, padding:7 }, selName:{ fontWeight:'800', fontSize:12, color:'#eef1ff' }, miniBtn:{ backgroundColor:'#2f6db3', borderRadius:999, paddingHorizontal:9, paddingVertical:4, borderTopWidth:1, borderTopColor:'#8fc1f5', borderBottomWidth:3, borderBottomColor:'#1c4472' }, miniTxt:{ color:'#fff', fontWeight:'700', fontSize:10 },
+  topBtns:{ flexDirection:'row', gap:6 }, tBtn:{ backgroundColor:'rgba(16,24,48,0.55)', borderRadius:999, paddingHorizontal:10, paddingVertical:6, shadowColor:'#000', shadowOpacity:0.3, shadowRadius:4, shadowOffset:{ width:0, height:2 }, elevation:3 }, tBtnTxt:{ color:'#fff', fontWeight:'700', fontSize:11 },
+  middle:{ flex:1, flexDirection:'row', minHeight:0, position:'relative', marginTop:46 },
+  leftPanel:{ position:'absolute', left:0, top:0, bottom:0, width:178, padding:6, zIndex:30 },
+  rightPanel:{ position:'absolute', right:0, top:0, bottom:0, width:202, padding:6, zIndex:30 },
+  pillRow:{ flexDirection:'row', gap:6, marginBottom:6 }, pillBtn:{ width:38, height:38, borderRadius:19, backgroundColor:'rgba(10,15,32,0.55)', alignItems:'center', justifyContent:'center', shadowColor:'#000', shadowOpacity:0.35, shadowRadius:4, shadowOffset:{ width:0, height:2 }, elevation:3 }, pillCnt:{ position:'absolute', right:-3, top:-3, minWidth:15, height:15, borderRadius:8, backgroundColor:'#ffd60a', color:'#23180a', fontSize:9, fontWeight:'900', textAlign:'center', overflow:'hidden', paddingHorizontal:3 },
+  panelTitle:{ fontWeight:'900', color:'#ffe9a8', marginBottom:4, fontSize:12.5, textShadowColor:'rgba(0,0,0,0.8)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:3 },
+  traitRow:{ position:'relative', overflow:'hidden', flexDirection:'row', justifyContent:'space-between', alignItems:'center', borderRadius:9, paddingHorizontal:8, paddingVertical:4, marginBottom:4 }, traitHl:{ borderColor:'rgba(255,183,3,0.85)', borderWidth:1.5 }, traitBar:{ position:'absolute', left:0, top:0, bottom:0, width:3 }, traitName:{ fontWeight:'700', fontSize:12, color:'#eef1ff', textShadowColor:'rgba(0,0,0,0.65)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:2 }, traitCnt:{ fontSize:12, color:'#c6cfe8', fontWeight:'700' },
+  augChip:{ backgroundColor:'rgba(74,58,16,0.55)', borderRadius:9, paddingHorizontal:8, paddingVertical:4, marginBottom:4 }, augTxt:{ fontSize:11, fontWeight:'700', color:'#ffd60a' },
+  invWrap:{ flexDirection:'row', flexWrap:'wrap', gap:6 }, invCell:{ backgroundColor:'rgba(14,20,42,0.55)', borderRadius:10, padding:4, alignItems:'center', width:74 }, invTxt:{ fontSize:9, textAlign:'center', fontWeight:'600', color:'#e8ecff' },
+  selMini:{ position:'relative', overflow:'hidden', marginTop:8, borderRadius:10, padding:7, shadowColor:'#000', shadowOpacity:0.35, shadowRadius:6, shadowOffset:{ width:0, height:2 } }, selName:{ fontWeight:'800', fontSize:12, color:'#eef1ff' }, miniBtn:{ backgroundColor:'rgba(38,84,150,0.85)', borderRadius:999, paddingHorizontal:9, paddingVertical:4 }, miniTxt:{ color:'#fff', fontWeight:'700', fontSize:10 },
   arena:{ flex:1, position:'relative', overflow:'hidden', alignItems:'center' },
   selRing:{ position:'absolute', borderWidth:3, borderColor:'#ffb703', borderRadius:999, backgroundColor:'#ffb70333' },
   hpBar:{ width:'92%', height:5, backgroundColor:'rgba(6,8,20,0.5)', borderRadius:3, overflow:'hidden' }, hpFill:{ height:5, backgroundColor:'#38b000' }, manaBar:{ width:'92%', height:4, backgroundColor:'rgba(6,8,20,0.5)', borderRadius:3, overflow:'hidden', marginTop:1 }, manaFill:{ height:4, backgroundColor:'#4dabff' },
   legend:{ position:'absolute', left:7, top:'33%', alignItems:'center', gap:3, zIndex:30 }, legendName:{ fontWeight:'900', fontSize:12, color:'#fff', textShadowColor:'rgba(0,0,0,0.8)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:3 }, legendBadge:{ backgroundColor:'#f5c542', borderRadius:5, paddingHorizontal:6, paddingVertical:1, borderWidth:1, borderColor:'#a86e00' }, legendBadgeTxt:{ fontSize:9.5, fontWeight:'900', color:'#23180a' }, legendHp:{ fontSize:10, color:'#e8ecff', fontWeight:'700', textShadowColor:'rgba(0,0,0,0.8)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:3 },
   battleCtrls:{ position:'absolute', right:8, bottom:8, flexDirection:'row', gap:6 },
   logFloat:{ position:'absolute', left:8, top:8, backgroundColor:'rgba(10,14,30,0.82)', borderRadius:10, padding:7, maxWidth:300 }, logTxt:{ fontSize:11, color:'#ffe9a8' },
-  tabRow:{ flexDirection:'row', gap:6, marginBottom:6 }, tab:{ flex:1, backgroundColor:'#242f52', borderRadius:999, paddingVertical:5, alignItems:'center' }, tabOn:{ backgroundColor:'#f5c542' }, tabTxt:{ fontWeight:'800', fontSize:11, color:'#eef1ff' }, tabTxtOn:{ color:'#23180a' },
-  pRow:{ flexDirection:'row', gap:7, alignItems:'center', backgroundColor:'#232d4f', borderRadius:11, padding:6, marginBottom:5, borderWidth:2, borderColor:'transparent' }, pDead:{ opacity:0.5, backgroundColor:'#171f38' }, pOpp:{ borderColor:'#ffb703', backgroundColor:'#2a3358' }, pName:{ fontWeight:'800', fontSize:10.5, color:'#eef1ff' }, pHpBar:{ height:5, backgroundColor:'rgba(255,255,255,0.14)', borderRadius:3, overflow:'hidden' }, pHpFill:{ height:5 }, pHp:{ fontSize:9.5, color:'#aab4d4', fontWeight:'600' }, pHpBig:{ fontSize:18, fontWeight:'900', lineHeight:20 }, pAvatar:{ width:38, height:38, borderRadius:19, overflow:'hidden', borderWidth:2, borderColor:'#46538a', backgroundColor:'#141b33', position:'relative' }, pAvatarOpp:{ borderColor:'#ffb703' },
-  dRow:{ flexDirection:'row', alignItems:'center', gap:6, marginBottom:5 }, dName:{ width:86, fontSize:11, fontWeight:'700' }, dBar:{ flex:1, backgroundColor:'rgba(255,255,255,0.12)', borderRadius:5 }, dVal:{ width:38, fontSize:11, fontWeight:'800', textAlign:'right', color:'#eef1ff' },
+  orbRow:{ flexDirection:'row', gap:7, alignItems:'center', marginBottom:7 }, orbWrap:{ position:'relative' }, orbSword:{ position:'absolute', right:-5, bottom:-3 }, orbName:{ fontWeight:'800', fontSize:11, color:'#fff', textShadowColor:'rgba(0,0,0,0.8)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:3 }, orbSub:{ fontSize:9, color:'#d7def5', fontWeight:'600', lineHeight:12, textShadowColor:'rgba(0,0,0,0.8)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:2 },
+  tabRow:{ flexDirection:'row', gap:6, marginBottom:6 }, tab:{ flex:1, backgroundColor:'rgba(14,20,42,0.5)', borderRadius:999, paddingVertical:5, alignItems:'center' }, tabOn:{ backgroundColor:'rgba(245,197,66,0.92)' }, tabTxt:{ fontWeight:'800', fontSize:11, color:'#eef1ff' }, tabTxtOn:{ color:'#23180a' },
+  pRow:{ position:'relative', overflow:'hidden', flexDirection:'row', gap:7, alignItems:'center', borderRadius:11, padding:6, marginBottom:5, borderWidth:1.5, borderColor:'transparent' }, pDead:{ opacity:0.55 }, pOpp:{ borderColor:'rgba(255,90,90,0.8)' }, pName:{ fontWeight:'800', fontSize:10.5, color:'#eef1ff', textShadowColor:'rgba(0,0,0,0.6)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:2 }, pHpBar:{ height:5, backgroundColor:'rgba(6,10,22,0.5)', borderRadius:3, overflow:'hidden' }, pHpFill:{ height:5 }, pHp:{ fontSize:9.5, color:'#c6cfe8', fontWeight:'600' }, pHpBig:{ fontSize:18, fontWeight:'900', lineHeight:20 }, pAvatar:{ width:38, height:38, borderRadius:19, overflow:'hidden', borderWidth:2, borderColor:'rgba(255,255,255,0.35)', backgroundColor:'rgba(10,14,30,0.5)', position:'relative' }, pAvatarOpp:{ borderColor:'rgba(255,90,90,0.85)' },
+  dRow:{ flexDirection:'row', alignItems:'center', gap:6, marginBottom:5, backgroundColor:'rgba(10,15,32,0.4)', borderRadius:8, paddingHorizontal:6, paddingVertical:3 }, dName:{ width:86, fontSize:11, fontWeight:'700' }, dBar:{ flex:1, backgroundColor:'rgba(6,10,22,0.45)', borderRadius:5 }, dVal:{ width:38, fontSize:11, fontWeight:'800', textAlign:'right', color:'#eef1ff' },
   infoLine:{ fontWeight:'800', color:'#f5d67b' },
   benchRow:{ flexDirection:'row', gap:5, alignItems:'center', paddingHorizontal:8, paddingBottom:6, paddingTop:2, zIndex:25 }, benchLbl:{ fontWeight:'900', color:'#fff6d8', fontSize:12, marginRight:2, textShadowColor:'rgba(0,0,0,0.75)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:3 }, benchHex:{ width:54, height:50, alignItems:'center', justifyContent:'center' }, cellSel:{ borderWidth:3, borderColor:'#ffb703' }, cellDot:{ color:'rgba(240,248,230,0.75)', fontSize:18 }, logMini:{ flex:1, gap:1, backgroundColor:'rgba(10,14,30,0.55)', borderRadius:8, paddingHorizontal:6, paddingVertical:3 },
-  shopRow:{ flexDirection:'row', gap:8, backgroundColor:'rgba(26,35,64,0.96)', borderRadius:14, padding:8, borderWidth:1.5, borderColor:'#c9a227', alignItems:'stretch' },
-  shopLeft:{ width:206, gap:6 }, lvlCard:{ backgroundColor:'#232d4f', borderRadius:10, padding:7 }, lvlBig:{ fontWeight:'900', fontSize:16, color:'#f5d67b' }, xpBar:{ height:7, backgroundColor:'rgba(255,255,255,0.14)', borderRadius:4, overflow:'hidden', marginVertical:3 },
-  shopBtn:{ flex:1, backgroundColor:'#2f6db3', borderRadius:10, paddingVertical:7, alignItems:'center', borderTopWidth:1, borderTopColor:'#8fc1f5', borderBottomWidth:4, borderBottomColor:'#1c4472' }, shopBtnTxt:{ color:'#fff', fontWeight:'800', fontSize:10 },
-  goldBox:{ backgroundColor:'#4a3a10', borderRadius:10, padding:7, borderWidth:1.5, borderColor:'#c9a227' }, goldTxt:{ fontWeight:'900', fontSize:16, color:'#ffd60a' },
+  shopRow:{ position:'relative', overflow:'hidden', flexDirection:'row', gap:8, padding:8, paddingTop:14, alignItems:'stretch' },
+  shopLeft:{ width:206, gap:6 }, lvlCard:{ backgroundColor:'rgba(14,20,42,0.55)', borderRadius:10, padding:7 }, lvlBig:{ fontWeight:'900', fontSize:16, color:'#f5d67b' }, xpBar:{ height:7, backgroundColor:'rgba(6,10,22,0.5)', borderRadius:4, overflow:'hidden', marginVertical:3 },
+  shopBtn:{ flex:1, backgroundColor:'rgba(38,84,150,0.88)', borderRadius:10, paddingVertical:7, alignItems:'center' }, shopBtnTxt:{ color:'#fff', fontWeight:'800', fontSize:10 },
+  shopLeftM:{ width:104, gap:5, alignItems:'center', justifyContent:'center' },
+  xpOrb:{ width:74, height:74, borderRadius:37, backgroundColor:'rgba(24,52,110,0.92)', alignItems:'center', justifyContent:'center', borderWidth:2, borderColor:'rgba(140,190,255,0.65)', shadowColor:'#000', shadowOpacity:0.45, shadowRadius:7, shadowOffset:{ width:0, height:3 }, elevation:6 }, xpOrbLbl:{ color:'#fff', fontWeight:'900', fontSize:13.5 }, xpOrbCost:{ color:'#ffd60a', fontWeight:'800', fontSize:10.5 }, xpOrbLvl:{ position:'absolute', right:-4, bottom:-2, width:24, height:24, borderRadius:12, backgroundColor:'#10182e', borderWidth:1.5, borderColor:'#8fc1f5', alignItems:'center', justifyContent:'center' }, xpOrbLvlTxt:{ color:'#fff', fontWeight:'900', fontSize:11.5 },
+  xpMini:{ fontSize:9.5, color:'#d7def5', fontWeight:'700' }, miniChip:{ backgroundColor:'rgba(14,20,42,0.6)', borderRadius:999, paddingHorizontal:8, paddingVertical:4 }, miniChipTxt:{ color:'#fff', fontWeight:'700', fontSize:9.5 },
+  goldChip:{ flexDirection:'row', alignItems:'center', gap:7, backgroundColor:'rgba(50,38,8,0.55)', borderRadius:999, paddingHorizontal:12, paddingVertical:3 }, goldTxt:{ fontWeight:'900', fontSize:16, color:'#ffd60a' }, goldSub:{ fontSize:10, color:'#e8d9a0', fontWeight:'700' }, streakTxt:{ fontSize:10.5, color:'#ffb37e', fontWeight:'800' },
+  shopRight:{ width:118, alignItems:'center', justifyContent:'center', gap:4 }, gemTxt:{ fontSize:10.5, color:'#f3c6ff', fontWeight:'800', textShadowColor:'rgba(0,0,0,0.7)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:2 },
+  goldOrb:{ width:62, height:62, borderRadius:31, backgroundColor:'#e9b949', alignItems:'center', justifyContent:'center', borderWidth:2, borderColor:'rgba(255,240,190,0.8)', shadowColor:'#000', shadowOpacity:0.45, shadowRadius:7, shadowOffset:{ width:0, height:3 }, elevation:6 }, goldOrbTxt:{ fontWeight:'900', fontSize:19, color:'#3a2a04', lineHeight:21 }, goldOrbLbl:{ fontSize:9, fontWeight:'800', color:'#6b5200' },
+  streakFlame:{ backgroundColor:'rgba(150,40,10,0.85)', borderRadius:999, paddingHorizontal:8, paddingVertical:2 }, streakFlameTxt:{ color:'#ffd9a8', fontWeight:'900', fontSize:9.5 },
   oddsRow:{ flexDirection:'row', gap:5, alignItems:'center', marginBottom:5, flexWrap:'wrap' }, oddChip:{ borderRadius:999, paddingHorizontal:8, paddingVertical:2 }, oddTxt:{ color:'#fff', fontWeight:'800', fontSize:10 },
-  cardsRow:{ flexDirection:'row', gap:7 }, shopCard:{ flex:1, maxWidth:172, backgroundColor:'#1e2748', borderRadius:13, padding:6, alignItems:'center', borderWidth:2, gap:4 }, cardGlow:{ borderColor:'#ffb703', shadowColor:'#ffb703', shadowOpacity:0.95, shadowRadius:12, elevation:8, backgroundColor:'#2a2f57' },
-  cardArt:{ width:'100%', alignItems:'center', borderRadius:9, paddingVertical:2, position:'relative' }, cardInfo:{ width:'100%', backgroundColor:'#141b33', borderRadius:8, paddingHorizontal:6, paddingVertical:4, alignItems:'center', gap:1 },
+  cardsRow:{ flexDirection:'row', gap:7 }, shopCard:{ flex:1, maxWidth:172, backgroundColor:'rgba(16,22,44,0.72)', borderRadius:13, padding:6, alignItems:'center', borderWidth:1.5, gap:4 }, cardGlow:{ borderColor:'#ffb703', shadowColor:'#ffb703', shadowOpacity:0.95, shadowRadius:12, elevation:8, backgroundColor:'rgba(38,42,80,0.85)' },
+  cardArt:{ width:'100%', alignItems:'center', borderRadius:9, paddingVertical:2, position:'relative' }, cardInfo:{ width:'100%', backgroundColor:'rgba(8,12,26,0.55)', borderRadius:8, paddingHorizontal:6, paddingVertical:4, alignItems:'center', gap:1 },
   costBadge:{ position:'absolute', right:4, top:4, width:30, height:30, borderRadius:15, backgroundColor:'#ffb703', borderWidth:1, borderColor:'rgba(255,255,255,0.35)', alignItems:'center', justifyContent:'center' }, costBadgeTxt:{ color:'#23180a', fontWeight:'900', fontSize:14 },
   cardTrait:{ fontSize:9, color:'#aab4d4', fontWeight:'600', textAlign:'center' }, glowTag:{ position:'absolute', left:4, top:4, fontSize:9, fontWeight:'900', color:'#6b5200', backgroundColor:'#ffe08a', borderRadius:6, paddingHorizontal:4, paddingVertical:1 },
   shopName:{ fontWeight:'800', textAlign:'center', fontSize:12, color:'#eef1ff' },
   fightBtn:{ width:118, backgroundColor:'#c2255c', borderRadius:14, alignItems:'center', justifyContent:'center', padding:8, gap:2, borderBottomWidth:5, borderBottomColor:'#6d1434', borderTopWidth:1, borderTopColor:'#ff8fab' }, fightTxt:{ color:'#fff', fontWeight:'900', fontSize:16, textAlign:'center' }, fightSub:{ color:'#ffd6e7', fontWeight:'600', fontSize:10, textAlign:'center' },
   homeLink:{ alignSelf:'center', paddingVertical:1 },
   dim:{ fontSize:11, color:'#aab4d4', lineHeight:15 }, synRow:{ flexDirection:'row', flexWrap:'wrap', gap:6 }, synChip:{ backgroundColor:'#242f52', borderRadius:999, paddingHorizontal:9, paddingVertical:4, fontSize:12, color:'#e8ecff' }, synActive:{ backgroundColor:'#4a3a10', fontWeight:'800', color:'#ffd60a' },
-  coach:{ position:'absolute', top:52, alignSelf:'center', width:'92%', maxWidth:600, flexDirection:'row', gap:10, backgroundColor:'rgba(26,35,64,0.97)', borderRadius:16, padding:10, borderWidth:2, borderColor:'#c9a227', alignItems:'center', zIndex:60, shadowColor:'#000', shadowOpacity:0.25, shadowRadius:10, elevation:8 }, coachTitle:{ fontWeight:'900', color:'#f5d67b' }, coachTxt:{ color:'#e8ecff', lineHeight:18, fontSize:12 },
+  coach:{ position:'absolute', top:64, alignSelf:'center', width:'92%', maxWidth:600, flexDirection:'row', gap:10, backgroundColor:'rgba(26,35,64,0.97)', borderRadius:16, padding:10, borderWidth:2, borderColor:'#c9a227', alignItems:'center', zIndex:70, shadowColor:'#000', shadowOpacity:0.25, shadowRadius:10, elevation:8 }, coachTitle:{ fontWeight:'900', color:'#f5d67b' }, coachTxt:{ color:'#e8ecff', lineHeight:18, fontSize:12 },
   tutHi:{ borderWidth:3, borderColor:'#ffb703', borderRadius:12 }, tutHiBtn:{ borderWidth:3, borderColor:'#ffb703' },
   section:{ fontWeight:'800', color:'#f5d67b' }, shopTrait:{ fontSize:11, color:'#aab4d4', textAlign:'center' },
   smallBtn:{ backgroundColor:'#2f6db3', borderRadius:999, paddingHorizontal:12, paddingVertical:7, borderTopWidth:1, borderTopColor:'#8fc1f5', borderBottomWidth:4, borderBottomColor:'#1c4472' }, smallTxt:{ color:'#fff', fontWeight:'700', fontSize:12 },
