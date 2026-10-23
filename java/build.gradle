@@ -1,0 +1,12 @@
+allprojects {
+    repositories {
+        // Kho Maven cuc bo (neu da tai bang tools/fetch-deps.sh) — uu tien dung khi
+        // moi truong han che mang cua Java/offline. May co mang binh thuong: bo qua, dung Maven Central.
+        if (rootProject.file('local-maven').isDirectory()) {
+            maven { url rootProject.file('local-maven') }
+        }
+        mavenCentral()
+        maven { url 'https://oss.sonatype.org/content/repositories/snapshots/' }
+        google()
+    }
+}

@@ -1,0 +1,14 @@
+plugins { id 'java-library' }
+group = 'com.dautruongchibi'
+version = rootProject.findProperty('projectVersion') ?: '1.0.0'
+java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+dependencies {
+    api "com.badlogicgames.gdx:gdx:${gdxVersion}"
+    api "com.badlogicgames.gdx:gdx-freetype:${gdxVersion}"
+}
+sourceSets {
+    main {
+        java { srcDirs = ['src/main/java'] }
+        resources { srcDirs = ['../assets'] }
+    }
+}

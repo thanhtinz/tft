@@ -1,0 +1,25 @@
+plugins { id 'java' }
+group = 'com.dautruongchibi'
+version = rootProject.findProperty('projectVersion') ?: '1.0.0'
+java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+
+// Module web (TeaVM) — dang thu nghiem, xem README muc "Ban web (TeaVM)".
+// Chi duoc include vao settings.gradle khi build web; cac module khac khong phu thuoc vao no.
+dependencies {
+    implementation project(':core')
+    implementation 'com.github.xpenatan.gdx-teavm:backend-teavm:1.2.4'
+    implementation 'com.github.xpenatan.gdx-teavm:gdx-freetype-teavm:1.2.4'
+    implementation 'com.github.xpenatan.gdx-teavm:asset-loader:1.2.4'
+}
+
+// Bien dich TeaVM: chay class BuildWeb tren JVM, xuat JS + tai nguyen vao web/build/webapp
+tasks.register('buildWeb', JavaExec) {
+    group = 'build'
+    description = 'Bien dich ban web TeaVM ra web/build/webapp (index.html + game.js + assets)'
+    dependsOn tasks.named('classes'), project(':core').tasks.named('classes')
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.dautruongchibi.web.BuildWeb'
+    workingDir = rootProject.projectDir
+    args = [project.file('build/webapp').absolutePath]
+    jvmArgs = ['-Xmx1g']
+}

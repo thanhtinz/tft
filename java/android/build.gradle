@@ -1,0 +1,35 @@
+// Module Android — KHAI BÁO SẴN, chưa kích hoạt trong settings.gradle đợt này.
+// Ly do: ban desktop (LWJGL3) la muc tieu bat buoc cua dot Java+pixel dau tien; ban web dang thu bang TeaVM.
+// Khi muon dung APK: them "include 'android'" vao settings.gradle, cai Android SDK + AGP tuong thich Gradle 8.10,
+// roi chay: ./gradlew :android:assembleRelease (can keystore de ky ban phat hanh).
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies { classpath 'com.android.tools.build:gradle:8.5.2' }
+}
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'com.dautruongchibi'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'com.dautruongchibi'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+    }
+    buildTypes { release { minifyEnabled false } }
+    sourceSets { main { assets.srcDirs = ['../assets'] } }
+}
+
+dependencies {
+    implementation project(':core')
+    implementation "com.badlogicgames.gdx:gdx-backend-android:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi-v7a"
+    implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-arm64-v8a"
+    implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86_64"
+    implementation "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-armeabi-v7a"
+    implementation "com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-arm64-v8a"
+    implementation "com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-x86_64"
+}

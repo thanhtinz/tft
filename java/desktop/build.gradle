@@ -1,0 +1,28 @@
+plugins { id 'java'; id 'application' }
+group = 'com.dautruongchibi'
+version = rootProject.findProperty('projectVersion') ?: '1.0.0'
+java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+dependencies {
+    implementation project(':core')
+    implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:${gdxVersion}"
+    implementation "com.badlogicgames.gdx:gdx-platform:${gdxVersion}:natives-desktop"
+    implementation "com.badlogicgames.gdx:gdx-freetype-platform:${gdxVersion}:natives-desktop"
+}
+application { mainClass = 'com.dautruongchibi.desktop.DesktopLauncher' }
+run { workingDir = rootProject.projectDir }
+tasks.register('screenshot', JavaExec) {
+    group = 'verification'
+    description = 'Chup man hinh GUI duoi Xvfb (can xvfb-run): -PscreenshotMode=menu|draft|planning|battle -PscreenshotOut=duong/dan.png'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.dautruongchibi.desktop.ScreenshotMain'
+    workingDir = rootProject.projectDir
+    args = [project.findProperty('screenshotMode') ?: 'battle',
+            project.findProperty('screenshotOut') ?: 'tools/screenshot.png']
+}
+tasks.register('verifyHeadless', JavaExec) {
+    group = 'verification'
+    description = 'Chay mo phong headless: tran PvP tron ven, PvE, LP, ghep sao, bay up.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.dautruongchibi.headless.HeadlessMain'
+    workingDir = rootProject.projectDir
+}
