@@ -116,10 +116,24 @@ function GroundShadow({ sz, team = 0 }: { sz: number; team?: number }) {
     <View style={{ position: 'absolute', left: sz * 0.11, top: sz * 0.038, width: sz * 0.48, height: sz * 0.115, borderRadius: 999, backgroundColor: core }} />
   </View>);
 }
-function UnitPedestal({ sz, team, star }: { sz: number; team: number; star: number }) {
+// MOT vong dat duy nhat o chan tuong (thay khay pedestal + PulseRing + vong
+// choang rieng le truoc day): mong, khong fill dam, mau theo uu tien
+// chon (#ffb703, phong nhip) > choang (#ffe66d) > mana day (vang, phong nhip,
+// opacity tran 0.8) > sao (3 vang / 2 bac) > mac dinh mau phe.
+function GroundRing({ sz, team, star, stunned = false, manaFull = false, selected = false }: { sz: number; team: number; star: number; stunned?: boolean; manaFull?: boolean; selected?: boolean }) {
+  const pulsing = manaFull || selected;
+  const [on, setOn] = useState(false);
+  useEffect(() => { if (!pulsing) return; const iv = setInterval(() => setOn(o => !o), 300); return () => clearInterval(iv); }, [pulsing]);
   const w = sz * 0.62, h = sz * 0.17;
-  const border = star >= 3 ? '#ffb703' : star === 2 ? '#d7dee8' : team === 1 ? '#ff5d5d' : '#4dabff';
-  return (<View style={{ position: 'absolute', left: (sz - w) / 2, top: sz * 0.883 - h / 2, width: w, height: h, borderRadius: 999, borderWidth: 3, borderColor: border, backgroundColor: 'rgba(10,14,28,0.25)' }} />);
+  let color = team === 1 ? '#ff5d5d' : '#4dabff';
+  let fill = team === 1 ? 'rgba(255,93,93,0.06)' : 'rgba(77,171,255,0.06)';
+  let borderWidth = 1.2; let opacity = 0.5;
+  if (star >= 3) { color = '#ffb703'; fill = 'rgba(255,183,3,0.06)'; opacity = 0.65; }
+  else if (star === 2) { color = '#d7dee8'; fill = 'rgba(215,222,232,0.06)'; opacity = 0.55; }
+  if (manaFull) { color = '#ffd60a'; fill = 'rgba(255,214,10,0.06)'; borderWidth = 1.5; opacity = on ? 0.8 : 0.5; }
+  if (stunned) { color = '#ffe66d'; fill = 'rgba(255,230,109,0.06)'; borderWidth = 1.5; opacity = 0.8; }
+  if (selected) { color = '#ffb703'; fill = 'rgba(255,183,3,0.06)'; borderWidth = 1.5; opacity = on ? 0.8 : 0.55; }
+  return (<View pointerEvents="none" style={{ position: 'absolute', left: (sz - w) / 2, top: sz * 0.883 - h / 2, width: w, height: h, borderRadius: 999, borderWidth, borderColor: color, backgroundColor: fill, opacity, transform: [{ scale: pulsing && on ? 1.07 : 1 }] }} />);
 }
 function StarSparkles({ sz }: { sz: number }) {
   return (<Svg width={sz * 0.44} height={sz * 0.24} viewBox="0 0 52 28" style={{ position: 'absolute', right: 0, top: 0 } as any} pointerEvents="none">
@@ -132,10 +146,10 @@ function StarSparkles({ sz }: { sz: number }) {
 function SegmentBar({ frac, color, h, ghostFrac }: { frac: number; color: string; h: number; ghostFrac?: number }) {
   const f = Math.max(0, Math.min(1, frac));
   const gf = ghostFrac !== undefined ? Math.max(0, Math.min(1, ghostFrac)) : undefined;
-  return (<View style={{ height: h, backgroundColor: 'rgba(4,6,14,0.88)', borderWidth: 1, borderColor: '#04060e', borderRadius: 2, overflow: 'hidden', position: 'relative' }}>
+  return (<View style={{ height: h, backgroundColor: 'rgba(4,6,14,0.55)', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
     {gf !== undefined && <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: (gf * 100) + '%', backgroundColor: 'rgba(255,214,214,0.55)' }} />}
     <View style={{ height: '100%', width: (f * 100) + '%', backgroundColor: color }} />
-    {Array.from({ length: 9 }).map((_, i) => (<View key={i} style={{ position: 'absolute', top: 0, bottom: 0, left: ((i + 1) * 10) + '%', width: 1, backgroundColor: 'rgba(4,6,14,0.6)' }} />))}
+    {Array.from({ length: 9 }).map((_, i) => (<View key={i} style={{ position: 'absolute', top: 0, bottom: 0, left: ((i + 1) * 10) + '%', width: 1, backgroundColor: 'rgba(4,6,14,0.45)' }} />))}
   </View>);
 }
 function UnitBars({ sz, star, hpFrac, manaFrac, items, ghostFrac }: { sz: number; star: number; hpFrac: number; manaFrac: number; items: string[]; ghostFrac?: number }) {
@@ -145,17 +159,17 @@ function UnitBars({ sz, star, hpFrac, manaFrac, items, ghostFrac }: { sz: number
   useEffect(() => { const iv = setInterval(() => setTick(t => needPulse ? t + 1 : t), 260); return () => clearInterval(iv); }, [needPulse]);
   const pulseOn = tick % 2 === 0;
   return (<View pointerEvents="none" style={{ position: 'absolute', top: -sz * 0.17, left: (sz - bw) / 2, width: bw, zIndex: 60 }}>
-    <Text style={{ fontSize: Math.max(8, sz * 0.13), fontWeight: '900', color: star === 2 ? '#d7dde8' : '#ffd60a', lineHeight: Math.max(10, sz * 0.15), textShadowColor: 'rgba(0,0,0,0.85)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>{'★'.repeat(star)}</Text>
+    <Text style={{ fontSize: Math.max(7, sz * 0.11), fontWeight: '900', color: star === 2 ? '#d7dde8' : '#ffd60a', lineHeight: Math.max(9, sz * 0.13), textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 }}>{'★'.repeat(star)}</Text>
     <View style={{ position: 'relative' }}>
-      <SegmentBar frac={hpFrac} color="#43c62f" h={Math.max(5, sz * 0.062)} ghostFrac={ghostFrac} />
-      {hpLow && <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, borderRadius: 2, backgroundColor: 'rgba(239,71,111,' + (pulseOn ? 0.4 : 0) + ')' }} />}
+      <SegmentBar frac={hpFrac} color="#43c62f" h={Math.max(4, sz * 0.05)} ghostFrac={ghostFrac} />
+      {hpLow && <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, borderRadius: 4, backgroundColor: 'rgba(239,71,111,' + (pulseOn ? 0.4 : 0) + ')' }} />}
     </View>
-    <View style={{ position: 'relative', height: Math.max(2.5, sz * 0.032), marginTop: 1, backgroundColor: 'rgba(4,6,14,0.88)', borderWidth: 1, borderColor: '#04060e', borderRadius: 2, overflow: 'hidden' }}>
+    <View style={{ position: 'relative', height: Math.max(2, sz * 0.026), marginTop: 1, backgroundColor: 'rgba(4,6,14,0.55)', borderRadius: 3, overflow: 'hidden' }}>
       <View style={{ height: '100%', width: Math.max(0, Math.min(100, manaFrac * 100)) + '%', backgroundColor: manaFull ? '#8fd0ff' : '#3aa0ff' }} />
       {manaFull && <View style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: '#3aa0ff', opacity: pulseOn ? 0.42 : 0.18 }} />}
     </View>
     {!!items.length && (<View style={{ flexDirection: 'row', gap: 2, marginTop: 2 }}>
-      {items.slice(0, 3).map((iid, i) => { const it = itemById(iid); return (<View key={i} style={{ width: Math.max(11, sz * 0.15), height: Math.max(11, sz * 0.15), backgroundColor: 'rgba(6,9,20,0.9)', borderWidth: 1, borderColor: '#c9a227', borderRadius: 2, alignItems: 'center', justifyContent: 'center' }}>{it ? <ItemArt color={it.color} size={Math.max(9, sz * 0.12)} /> : null}</View>); })}
+      {items.slice(0, 3).map((iid, i) => { const it = itemById(iid); return (<View key={i} style={{ width: Math.max(11, sz * 0.15), height: Math.max(11, sz * 0.15), backgroundColor: 'rgba(6,9,20,0.55)', borderRadius: 4, alignItems: 'center', justifyContent: 'center' }}>{it ? <ItemArt color={it.color} size={Math.max(9, sz * 0.12)} /> : null}</View>); })}
     </View>)}
   </View>);
 }
@@ -179,12 +193,7 @@ function GhostBars({ uid, sz, star, hpFrac, manaFrac, items }: { uid: string; sz
   }, 60); return () => clearInterval(iv); }, []);
   return (<UnitBars sz={sz} star={star} hpFrac={hpFrac} manaFrac={manaFrac} items={items} ghostFrac={ghost} />);
 }
-// Vong ellipse phong nhip o chan tuong khi day mana (san sang tung chieu)
-function PulseRing({ sz }: { sz: number }) {
-  const [on, setOn] = useState(false);
-  useEffect(() => { const iv = setInterval(() => setOn(o => !o), 300); return () => clearInterval(iv); }, []);
-  return (<View pointerEvents="none" style={{ position: 'absolute', left: sz * 0.13, top: sz * 0.76, width: sz * 0.74, height: sz * 0.21, borderRadius: 999, borderWidth: 2, borderColor: '#ffd60a', opacity: on ? 0.95 : 0.55, transform: [{ scale: on ? 1.07 : 1 }] }} />);
-}
+// (PulseRing cu da gop vao GroundRing: mana day chi doi mau/do dam cua vong dat duy nhat)
 // Duoc lua o goc san: lua chay animation bang interval rieng
 function Torch({ x, y, s = 1, ph = 0 }: { x: number; y: number; s?: number; ph?: number }) {
   const [big, setBig] = useState(ph % 2 === 1);
@@ -870,13 +879,12 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
                         {phase!=='battle' && board.map(u => { const { cx, cy } = hexCenter(hm, u.x, u.y); const sz = hm.size * 1.82 * rowDepth(u.y, 4).scale * STAR_SCALE(u.star); unitInfoRef.current.set(u.uid, { x: u.x, y: u.y, cx, cy }); const isSel = selUid===u.uid; const isDrag = !!drag && drag.uid===u.uid; const rig = (
                 <View style={[{ width: sz, height: sz, alignItems:'center' }, u.star>=2 && { shadowColor: u.star>=3 ? '#ffb703' : '#d7dee8', shadowOpacity: 0.9, shadowRadius: u.star>=3 ? 12 : 7, shadowOffset: { width: 0, height: 0 }, elevation: 6 }]}>
                   <GroundShadow sz={sz}/>
-                  <UnitPedestal sz={sz} team={0} star={u.star}/>
+                  <GroundRing sz={sz} team={0} star={u.star} selected={isSel && !isDrag}/>
                   <SpriteUnit spec={champById(u.defId)} size={sz} star={u.star} state={combineFx && combineFx.uid === u.uid && Date.now() - combineFx.born < 700 ? 'victory' : 'idle'}/>
                   {combineFx && combineFx.uid === u.uid && Date.now() - combineFx.born < 700 && <StarBurstFx x={sz / 2} y={sz * 0.45} born={combineFx.born} size={sz}/>}
                   {u.star>=3 && <StarSparkles sz={sz}/>}
                 </View>); return (
               <View key={u.uid} {...getUnitPan(u.uid).panHandlers} style={{ position:'absolute', left: cx - sz/2, top: cy + hm.size*0.28 - sz*0.88, width: sz, height: sz, alignItems:'center', zIndex: isDrag ? 300 : 50 + rowDepth(u.y, 4).zIndex, transform: drag && drag.uid===u.uid ? [{ translateX: drag.dx }, { translateY: drag.dy }, { scale: 1.06 }] : undefined }}>
-                {isSel && !isDrag && <View style={[st.selRing, { width: sz*0.9, height: sz*0.3, bottom: -2 }]} />}
                 {isSel && !isDrag ? <SelBounce>{rig}</SelBounce> : rig}
                 <UnitBars sz={sz} star={u.star} hpFrac={1} manaFrac={0} items={u.items} />
               </View> ); })}
@@ -884,13 +892,12 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
               <View key={u.uid} style={{ position:'absolute', left: cx - sz/2 + lx + (isTarget ? (frameIdx % 2 === 0 ? 3 : -3) : 0), top: cy + hm.size*0.28 - sz*0.88 + ly, width: sz, zIndex: dep.zIndex, alignItems:'center' }}>
                 <View style={[{ width: sz, height: sz, alignItems:'center', shadowColor:'#04170b', shadowOpacity: 0.5, shadowRadius: 5, shadowOffset: { width: 0, height: 3 } }, u.star>=2 && { shadowColor: u.star>=3 ? '#ffb703' : '#d7dee8', shadowOpacity: 0.9, shadowRadius: u.star>=3 ? 12 : 7, shadowOffset: { width: 0, height: 0 }, elevation: 6 }]}>
                   <GroundShadow sz={sz} team={u.team}/>
-                  <UnitPedestal sz={sz} team={u.team} star={u.star}/>
+                  <GroundRing sz={sz} team={u.team} star={u.star} stunned={u.stun > 0} manaFull={u.alive && u.maxMana > 0 && u.mana >= u.maxMana}/>
                   <SpriteUnit spec={u.art} size={sz} star={u.star} state={animState} flip={u.team===1} heavyHurt={heavyUids.has(u.uid)}/>
                   {isTarget && <View style={{ position:'absolute', left: sz*0.16, top: sz*0.08, width: sz*0.68, height: sz*0.8, backgroundColor:'#ffffff', opacity:0.22, borderRadius: sz*0.34 }} pointerEvents="none"/>}
                   {u.star>=3 && <StarSparkles sz={sz}/>}
                   {u.stun > 0 && (<Svg width={sz*0.52} height={16} viewBox="0 0 62 16" style={{ position:'absolute', left: sz*0.24, top: -4, transform: [{ rotate: stunAngle + 'deg' }] } as any} pointerEvents="none"><Polygon points={starPoints(9, 8, 6)} fill="#ffd60a"/><Polygon points={starPoints(31, 8, 6)} fill="#ffd60a"/><Polygon points={starPoints(53, 8, 6)} fill="#ffd60a"/></Svg>)}
-                  {u.stun > 0 && <View pointerEvents="none" style={{ position: 'absolute', left: sz * 0.13, top: sz * 0.76, width: sz * 0.74, height: sz * 0.21, borderRadius: 999, borderWidth: 2, borderColor: '#ffe66d', opacity: 0.8 }} />}
-                  {u.alive && u.maxMana > 0 && u.mana >= u.maxMana && <PulseRing sz={sz} />}
+{/* vong choang + PulseRing cu da gop vao GroundRing o tren (uu tien choang > mana day) */}
                 </View>
                 <GhostBars uid={u.uid} sz={sz} star={u.star} hpFrac={u.hp / u.maxHp} manaFrac={u.maxMana ? u.mana / u.maxMana : 0} items={itemsByUid[u.uid] ?? []} />
               </View> ); })}
@@ -979,7 +986,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
         {phase!=='battle' && (<View style={[st.benchRow, hi('bench') && st.tutHi]} onLayout={e => { const l = e.nativeEvent.layout; benchRowPosRef.current = { x: l.x, y: l.y }; }}><Text style={st.benchLbl}>Bench</Text>{Array.from({length:9}).map((_,i) => { const u = bench[i]; const isSel = !!u && selUid===u.uid; return (
           <Pressable key={u ? 'b-' + u.uid : 'e-' + i} onPress={() => u && tapBench(u)} onLayout={e => { const l = e.nativeEvent.layout; benchCellPosRef.current.set(i, { x: l.x + l.width / 2, y: l.y + l.height / 2 }); }} style={st.benchHex}>
             <Svg width={54} height={50} style={{ position:'absolute', left:0, top:0 } as any} pointerEvents="none">
-              <Polygon points={hexPoints(27, 25, 23)} fill={u ? 'rgba(88,104,78,0.94)' : 'rgba(58,70,56,0.72)'} stroke={isSel ? '#ffb703' : '#93a487'} strokeWidth={isSel ? 3 : 1.6}/>
+              <Polygon points={hexPoints(27, 25, 23)} fill={u ? 'rgba(88,104,78,0.94)' : 'rgba(58,70,56,0.72)'} stroke={isSel ? '#ffb703' : '#93a487'} strokeWidth={isSel ? 1.5 : 1.6}/>
               <Polygon points={hexPoints(27, 22.5, 19.5)} fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth={1}/>
             </Svg>
             {u ? (<React.Fragment>
@@ -1137,7 +1144,6 @@ const st = StyleSheet.create({
   invWrap:{ flexDirection:'row', flexWrap:'wrap', gap:6 }, invCell:{ backgroundColor:'rgba(14,20,42,0.55)', borderRadius:10, padding:4, alignItems:'center', width:74 }, invTxt:{ fontSize:9, textAlign:'center', fontWeight:'600', color:'#e8ecff' },
   selMini:{ position:'relative', overflow:'hidden', marginTop:8, borderRadius:10, padding:7, shadowColor:'#000', shadowOpacity:0.35, shadowRadius:6, shadowOffset:{ width:0, height:2 } }, selName:{ fontWeight:'800', fontSize:12, color:'#eef1ff' }, miniBtn:{ backgroundColor:'rgba(38,84,150,0.85)', borderRadius:999, paddingHorizontal:9, paddingVertical:4 }, miniTxt:{ color:'#fff', fontWeight:'700', fontSize:10 },
   arena:{ flex:1, position:'relative', overflow:'hidden', alignItems:'center' },
-  selRing:{ position:'absolute', borderWidth:3, borderColor:'#ffb703', borderRadius:999, backgroundColor:'#ffb70333' },
   hpBar:{ width:'92%', height:5, backgroundColor:'rgba(6,8,20,0.5)', borderRadius:3, overflow:'hidden' }, hpFill:{ height:5, backgroundColor:'#38b000' }, manaBar:{ width:'92%', height:4, backgroundColor:'rgba(6,8,20,0.5)', borderRadius:3, overflow:'hidden', marginTop:1 }, manaFill:{ height:4, backgroundColor:'#4dabff' },
   legend:{ position:'absolute', left:7, top:'33%', alignItems:'center', gap:3, zIndex:30 }, legendName:{ fontWeight:'900', fontSize:12, color:'#fff', textShadowColor:'rgba(0,0,0,0.8)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:3 }, legendBadge:{ backgroundColor:'#f5c542', borderRadius:5, paddingHorizontal:6, paddingVertical:1, borderWidth:1, borderColor:'#a86e00' }, legendBadgeTxt:{ fontSize:9.5, fontWeight:'900', color:'#23180a' }, legendHp:{ fontSize:10, color:'#e8ecff', fontWeight:'700', textShadowColor:'rgba(0,0,0,0.8)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:3 },
   battleCtrls:{ position:'absolute', right:8, bottom:8, flexDirection:'row', gap:6 },
@@ -1147,7 +1153,7 @@ const st = StyleSheet.create({
   pRow:{ position:'relative', overflow:'hidden', flexDirection:'row', gap:7, alignItems:'center', borderRadius:11, padding:6, marginBottom:5, borderWidth:1.5, borderColor:'transparent' }, pDead:{ opacity:0.55 }, pOpp:{ borderColor:'rgba(255,90,90,0.8)' }, pName:{ fontWeight:'800', fontSize:10.5, color:'#eef1ff', textShadowColor:'rgba(0,0,0,0.6)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:2 }, pHpBar:{ height:5, backgroundColor:'rgba(6,10,22,0.5)', borderRadius:3, overflow:'hidden' }, pHpFill:{ height:5 }, pHp:{ fontSize:9.5, color:'#c6cfe8', fontWeight:'600' }, pHpBig:{ fontSize:18, fontWeight:'900', lineHeight:20 }, pAvatar:{ width:38, height:38, borderRadius:19, overflow:'hidden', borderWidth:2, borderColor:'rgba(255,255,255,0.35)', backgroundColor:'rgba(10,14,30,0.5)', position:'relative' }, pAvatarOpp:{ borderColor:'rgba(255,90,90,0.85)' },
   dRow:{ flexDirection:'row', alignItems:'center', gap:6, marginBottom:5, backgroundColor:'rgba(10,15,32,0.4)', borderRadius:8, paddingHorizontal:6, paddingVertical:3 }, dName:{ width:86, fontSize:11, fontWeight:'700' }, dBar:{ flex:1, backgroundColor:'rgba(6,10,22,0.45)', borderRadius:5 }, dVal:{ width:38, fontSize:11, fontWeight:'800', textAlign:'right', color:'#eef1ff' },
   infoLine:{ fontWeight:'800', color:'#f5d67b' },
-  benchRow:{ flexDirection:'row', gap:5, alignItems:'center', paddingHorizontal:8, paddingBottom:6, paddingTop:2, zIndex:25 }, benchLbl:{ fontWeight:'900', color:'#fff6d8', fontSize:12, marginRight:2, textShadowColor:'rgba(0,0,0,0.75)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:3 }, benchHex:{ width:54, height:50, alignItems:'center', justifyContent:'center' }, cellSel:{ borderWidth:3, borderColor:'#ffb703' }, cellDot:{ color:'rgba(240,248,230,0.75)', fontSize:18 }, logMini:{ flex:1, gap:1, backgroundColor:'rgba(10,14,30,0.55)', borderRadius:8, paddingHorizontal:6, paddingVertical:3 },
+  benchRow:{ flexDirection:'row', gap:5, alignItems:'center', paddingHorizontal:8, paddingBottom:6, paddingTop:2, zIndex:25 }, benchLbl:{ fontWeight:'900', color:'#fff6d8', fontSize:12, marginRight:2, textShadowColor:'rgba(0,0,0,0.75)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:3 }, benchHex:{ width:54, height:50, alignItems:'center', justifyContent:'center' }, cellSel:{ borderWidth:1.5, borderColor:'#ffb703', backgroundColor:'rgba(255,183,3,0.12)' }, cellDot:{ color:'rgba(240,248,230,0.75)', fontSize:18 }, logMini:{ flex:1, gap:1, backgroundColor:'rgba(10,14,30,0.55)', borderRadius:8, paddingHorizontal:6, paddingVertical:3 },
   shopRow:{ position:'relative', overflow:'hidden', flexDirection:'row', gap:8, padding:8, paddingTop:14, alignItems:'stretch' },
   shopTopStrip:{ position:'absolute', top:66, left:6, right:150, zIndex:45 },
   shopLeft:{ width:206, gap:6 }, lvlCard:{ backgroundColor:'rgba(14,20,42,0.55)', borderRadius:10, padding:7 }, lvlBig:{ fontWeight:'900', fontSize:16, color:'#f5d67b' }, xpBar:{ height:7, backgroundColor:'rgba(6,10,22,0.5)', borderRadius:4, overflow:'hidden', marginVertical:3 },
@@ -1160,7 +1166,7 @@ const st = StyleSheet.create({
   goldOrb:{ width:62, height:62, borderRadius:31, backgroundColor:'#e9b949', alignItems:'center', justifyContent:'center', borderWidth:2, borderColor:'rgba(255,240,190,0.8)', shadowColor:'#000', shadowOpacity:0.45, shadowRadius:7, shadowOffset:{ width:0, height:3 }, elevation:6 }, goldOrbTxt:{ fontWeight:'900', fontSize:19, color:'#3a2a04', lineHeight:21 }, goldOrbLbl:{ fontSize:9, fontWeight:'800', color:'#6b5200' },
   streakFlame:{ backgroundColor:'rgba(150,40,10,0.85)', borderRadius:999, paddingHorizontal:8, paddingVertical:2 }, streakFlameTxt:{ color:'#ffd9a8', fontWeight:'900', fontSize:9.5 },
   oddsRow:{ flexDirection:'row', gap:5, alignItems:'center', marginBottom:5, flexWrap:'wrap' }, oddChip:{ borderRadius:999, paddingHorizontal:8, paddingVertical:2 }, oddTxt:{ color:'#fff', fontWeight:'800', fontSize:10 },
-  cardsRow:{ flexDirection:'row', gap:7 }, shopCard:{ flex:1, maxWidth:172, backgroundColor:'rgba(16,22,44,0.72)', borderRadius:13, padding:6, alignItems:'center', borderWidth:1.5, gap:4 }, cardGlow:{ borderColor:'#ffb703', shadowColor:'#ffb703', shadowOpacity:0.95, shadowRadius:12, elevation:8, backgroundColor:'rgba(38,42,80,0.85)' },
+  cardsRow:{ flexDirection:'row', gap:7 }, shopCard:{ flex:1, maxWidth:172, backgroundColor:'rgba(16,22,44,0.6)', borderRadius:13, padding:6, alignItems:'center', borderWidth:1, gap:4 }, cardGlow:{ borderColor:'#ffb703', shadowColor:'#ffb703', shadowOpacity:0.95, shadowRadius:12, elevation:8, backgroundColor:'rgba(38,42,80,0.85)' },
   cardArt:{ width:'100%', alignItems:'center', borderRadius:9, paddingVertical:2, position:'relative' }, cardInfo:{ width:'100%', backgroundColor:'rgba(8,12,26,0.55)', borderRadius:8, paddingHorizontal:6, paddingVertical:4, alignItems:'center', gap:1 },
   costBadge:{ position:'absolute', right:4, top:4, width:30, height:30, borderRadius:15, backgroundColor:'#ffb703', borderWidth:1, borderColor:'rgba(255,255,255,0.35)', alignItems:'center', justifyContent:'center' }, costBadgeTxt:{ color:'#23180a', fontWeight:'900', fontSize:14 },
   cardTrait:{ fontSize:9, color:'#aab4d4', fontWeight:'600', textAlign:'center' }, glowTag:{ position:'absolute', left:4, top:4, fontSize:9, fontWeight:'900', color:'#6b5200', backgroundColor:'#ffe08a', borderRadius:6, paddingHorizontal:4, paddingVertical:1 },

@@ -277,7 +277,7 @@ const st = StyleSheet.create({
   synRow:{ flexDirection:'row', flexWrap:'wrap', gap:6 }, synChip:{ backgroundColor:'rgba(14,20,42,0.6)', borderRadius:999, paddingHorizontal:9, paddingVertical:4, fontSize:12, color:'#dbe4ff' }, synActive:{ backgroundColor:'rgba(84,64,14,0.75)', fontWeight:'800', color:'#ffd60a' },
   section:{ fontWeight:'800', color:'#f5d67b', marginTop:4 },
   board:{ backgroundColor:'#33523c', borderRadius:18, alignSelf:'center', position:'relative', overflow:'hidden' },
-  cell:{ position:'absolute', backgroundColor:'rgba(140,220,190,0.10)', borderRadius:12, alignItems:'center', justifyContent:'center' }, cellSel:{ borderWidth:3, borderColor:'#ffb703' }, cellDot:{ color:'rgba(240,248,230,0.85)', fontSize:20 },
+  cell:{ position:'absolute', backgroundColor:'rgba(140,220,190,0.10)', borderRadius:12, alignItems:'center', justifyContent:'center' }, cellSel:{ borderWidth:1.5, borderColor:'#ffb703', backgroundColor:'rgba(255,183,3,0.12)' }, cellDot:{ color:'rgba(240,248,230,0.85)', fontSize:20 },
   battleUnit:{ position:'absolute', alignItems:'center' }, hpBar:{ width:'92%', height:5, backgroundColor:'#0003', borderRadius:3, overflow:'hidden' }, hpFill:{ height:5, backgroundColor:'#38b000' }, manaBar:{ width:'92%', height:4, backgroundColor:'#0003', borderRadius:3, overflow:'hidden', marginTop:1 }, manaFill:{ height:4, backgroundColor:'#4361ee' },
   battleCtrls:{ position:'absolute', right:8, bottom:8, flexDirection:'row', gap:6 },
   benchRow:{ flexDirection:'row', gap:6, flexWrap:'wrap' }, benchCell:{ width:48, height:48, backgroundColor:'rgba(70,84,64,0.85)', borderRadius:12, alignItems:'center', justifyContent:'center' },

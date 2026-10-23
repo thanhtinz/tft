@@ -76,16 +76,15 @@ export default function SpriteUnit({ spec, artId, size = 84, state = 'idle', sta
   const auraScale = 1 + 0.07 * Math.sin(auraT / 160 + phase);
   return (
     <View style={{ width: s, height: s, alignItems: 'center', justifyContent: 'flex-end' }} pointerEvents="none">
-      {showAura && star >= 3 && (<View style={{ position: 'absolute', bottom: s * 0.02, width: s * 0.86, height: s * 0.24, borderRadius: 999, borderWidth: 3, borderColor: '#ffd60a', backgroundColor: 'rgba(255,214,10,0.16)', opacity: auraFlicker, transform: [{ scaleX: auraScale }, { scaleY: 1 + 0.05 * Math.sin(auraT / 160 + phase) }] }} />)}
+      {showAura && star >= 3 && (<View style={{ position: 'absolute', bottom: s * 0.02, width: s * 0.86, height: s * 0.24, borderRadius: 999, backgroundColor: 'rgba(255,214,10,0.16)', opacity: auraFlicker, transform: [{ scaleX: auraScale }, { scaleY: 1 + 0.05 * Math.sin(auraT / 160 + phase) }] }} />)}
       {showAura && star >= 3 && (<View style={{ position: 'absolute', bottom: s * 0.045, width: s * 0.58, height: s * 0.15, borderRadius: 999, backgroundColor: 'rgba(255,214,10,0.28)', opacity: 0.55 + 0.35 * Math.sin(auraT / 110 + phase + 1.3) }} />)}
-      {showAura && star === 2 && (<View style={{ position: 'absolute', bottom: s * 0.02, width: s * 0.78, height: s * 0.2, borderRadius: 999, borderWidth: 1.5, borderColor: '#d7dde8', opacity: 0.5 }} />)}
       {showAura && star >= 3 && Array.from({ length: 4 }).map((_, i) => {
         const dotP = ((auraT / 1100) + i * 0.25 + (phase % 1) * 0.17) % 1;
         const frac = ((seed * (i + 3) * 37) % 100) / 100;
         const dotSize = 3 + (i % 2);
         return (<View key={i} style={{ position: 'absolute', left: s * (0.2 + 0.6 * frac) - dotSize / 2 + Math.sin(dotP * Math.PI * 2 + phase + i) * s * 0.03, bottom: s * 0.05 + dotP * s * 0.46, width: dotSize, height: dotSize, borderRadius: dotSize / 2, backgroundColor: i % 2 === 0 ? '#ffd60a' : '#fff3b0', opacity: Math.sin(dotP * Math.PI) * 0.95 }} />);
       })}
-      {glow > 0 && (<View style={{ position: 'absolute', bottom: s * 0.02, width: s * 0.8, height: s * 0.22, borderRadius: 999, borderWidth: 3, borderColor: '#ffd60a', opacity: Math.min(1, glow * 0.95), transform: [{ scaleX: glowScale }] }} />)}
+      {glow > 0 && (<View style={{ position: 'absolute', bottom: s * 0.02, width: s * 0.8, height: s * 0.22, borderRadius: 999, backgroundColor: 'rgba(255,214,10,0.22)', opacity: Math.min(1, glow * 0.95), transform: [{ scaleX: glowScale }] }} />)}
       <View style={{ width: s, height: s, opacity, transform: [{ translateX: tx }, { translateY: ty }, { rotate: rot + 'deg' }, { scaleX: (flip ? -1 : 1) * sc }, { scaleY: sy }] }}>
         <Image source={src} style={{ width: s, height: s }} resizeMode="contain" />
         {flash > 0.02 && (<Image source={src} style={{ position: 'absolute', left: 0, top: 0, width: s, height: s, opacity: flash, tintColor: '#ffffff' } as any} resizeMode="contain" />)}
