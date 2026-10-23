@@ -27,35 +27,117 @@ const KEYS = {
   green: { K: [0, 255, 0], dom: [1], oth: [0, 2] },
 };
 
+// Do nhiem mau khoa (spill) tai 1 pixel: magenta -> min(R,B)-G, green -> G-max(R,B)
+function spillOf(d, i, key) {
+  if (key.dom.length === 2) return Math.min(d[i], d[i + 2]) - d[i + 1];
+  return d[i + 1] - Math.max(d[i], d[i + 2]);
+}
+
 function keyOutBuffer(data, W, H, key) {
   const d = Buffer.from(data);
   const [kr, kg, kb] = key.K;
-  const domAvg = (i) => key.dom.reduce((s, c) => s + d[i + c], 0) / key.dom.length;
-  const othMin = (i) => Math.min(...key.oth.map(c => d[i + c]));
+  const N = W * H;
+  // Pass 1: alpha theo khoang cach mau toi mau khoa (giu nguyen nguong da on dinh)
+  const alpha = new Uint8Array(N);
   const T0 = 90, T1 = 210;
-  for (let p = 0; p < W * H; p++) {
-    const i = p * 4, r = d[i], g = d[i + 1], b = d[i + 2];
-    const dist = Math.hypot(r - kr, g - kg, b - kb);
+  for (let p = 0; p < N; p++) {
+    const i = p * 4;
+    const dist = Math.hypot(d[i] - kr, d[i + 1] - kg, d[i + 2] - kb);
     let a = (dist - T0) / (T1 - T0);
     a = a < 0 ? 0 : a > 1 ? 1 : a;
     const na = Math.round(a * 255);
-    d[i + 3] = na < 10 ? 0 : na > 246 ? 255 : na;
-    // Despill: chi khi do thua mau khoa cao (tranh lam nhat trang phuc cua nhan vat)
-    const spill = domAvg(i) - othMin(i);
-    if (na > 0 && spill > 60) {
-      const excess = spill, k = 0.5 * (1 - a * 0.5);
-      for (const c of key.dom) d[i + c] = Math.max(0, Math.round(d[i + c] - excess * k));
+    alpha[p] = na < 10 ? 0 : na > 246 ? 255 : na;
+  }
+  // Pass 1b: giet han pixel alpha thap (<0.35) - chung la quang nen tron >65%,
+  // khong chua thong tin nhan vat dang ke, de lai chi tao dom vien
+  for (let p = 0; p < N; p++) if (alpha[p] > 0 && alpha[p] < 90) alpha[p] = 0;
+  // Pass 2: GOT ALPHA 1px (min-filter 3x3) - cat vong bien ngoai cung von la
+  // phan tron nen nhieu nhat (halo magenta 1-2px cua anh AI sinh tren nen khoa)
+  const er = new Uint8Array(N);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const p = y * W + x;
+    if (alpha[p] === 0) { er[p] = 0; continue; }
+    let m = alpha[p];
+    for (let dy = -1; dy <= 1 && m > 0; dy++) {
+      const yy = y + dy; if (yy < 0 || yy >= H) { m = 0; break; }
+      for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx; if (xx < 0 || xx >= W) { m = 0; break; }
+        const v = alpha[yy * W + xx]; if (v < m) m = v;
+      }
+    }
+    er[p] = m;
+  }
+  for (let p = 0; p < N; p++) alpha[p] = er[p];
+  // Pass 3: DESPILL TRU (subtractive) cho dai bien + pixel dac nhiem nang.
+  // Khong dung unmix chia-cho-alpha: nen magenta cua tranh AI khong thuan
+  // #FF00FF tuyet doi nen phep chia khuech dai sai so -> day kenh con lai
+  // (tung thu: G bi thoi len thanh vien xanh la). Phep tru co gioi han,
+  // chi keo cac kenh khoa ve muc spill muc tieu ti le voi alpha.
+  for (let p = 0; p < N; p++) {
+    const a8 = alpha[p]; if (a8 === 0) continue;
+    const i = p * 4;
+    const spill = spillOf(d, i, key);
+    if (a8 < 255) {
+      const t = Math.max(0, spill - (a8 / 255) * 48);
+      if (t > 0) for (const c of key.dom) d[i + c] = Math.max(0, Math.round(d[i + c] - t));
+    } else if (spill > 100) {
+      const cut = (spill - 100) * 0.7;
+      for (const c of key.dom) d[i + c] = Math.max(0, Math.round(d[i + c] - cut));
+    }
+    d[i + 3] = a8;
+  }
+  // Pass 4: xoa cac DOM ALPHA LO LUNG tach roi (component nho hon nguong)
+  const label = new Int32Array(N).fill(-1);
+  let best = 0, bestSize = 0; const sizes = [];
+  const stack = [];
+  for (let s = 0; s < N; s++) {
+    if (alpha[s] === 0 || label[s] !== -1) continue;
+    const id = sizes.length; let size = 0; stack.push(s); label[s] = id;
+    while (stack.length) {
+      const p = stack.pop(); size++;
+      const x = p % W, y = (p / W) | 0;
+      if (x > 0 && alpha[p - 1] > 0 && label[p - 1] === -1) { label[p - 1] = id; stack.push(p - 1); }
+      if (x < W - 1 && alpha[p + 1] > 0 && label[p + 1] === -1) { label[p + 1] = id; stack.push(p + 1); }
+      if (y > 0 && alpha[p - W] > 0 && label[p - W] === -1) { label[p - W] = id; stack.push(p - W); }
+      if (y < H - 1 && alpha[p + W] > 0 && label[p + W] === -1) { label[p + W] = id; stack.push(p + W); }
+    }
+    sizes.push(size); if (size > bestSize) { bestSize = size; best = id; }
+  }
+  const minKeep = Math.max(24, Math.floor(bestSize * 0.0008));
+  for (let p = 0; p < N; p++) {
+    if (alpha[p] > 0 && label[p] !== best && sizes[label[p]] < minKeep) {
+      alpha[p] = 0; d[p * 4 + 3] = 0;
     }
   }
-  // Pass 2: lam sach fringe o dai vien ban trong suot
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const i = (y * W + x) * 4; const a8 = d[i + 3];
-    if (a8 === 0 || a8 === 255) continue;
-    const r = d[i], g = d[i + 1], b = d[i + 2];
-    const dist = Math.hypot(r - kr, g - kg, b - kb);
-    if (dist < 175) { d[i + 3] = 0; continue; }
-    const spill = domAvg(i) - othMin(i);
-    if (spill > 24) for (const c of key.dom) d[i + c] = Math.max(0, Math.round(d[i + c] - spill * 0.8));
+  // Pass 5: DEM MAU BIEN (color padding): lan mau pixel dac ra vung trong suot
+  // ~3px de khi scale loc song tuyen khong lem mau la; vung trong suot con lai
+  // dua RGB ve 0 (truoc day giu nguyen RGB magenta -> halo hong khi render)
+  const filled = new Uint8Array(N);
+  for (let p = 0; p < N; p++) filled[p] = alpha[p] > 0 ? 1 : 0;
+  for (let iter = 0; iter < 3; iter++) {
+    const src = Buffer.from(d); const srcF = Uint8Array.from(filled);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const p = y * W + x; if (srcF[p]) continue;
+      let sr = 0, sg = 0, sb = 0, cnt = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        const yy = y + dy; if (yy < 0 || yy >= H) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx; if (xx < 0 || xx >= W) continue;
+          const q = yy * W + xx; if (!srcF[q]) continue;
+          const j = q * 4; sr += src[j]; sg += src[j + 1]; sb += src[j + 2]; cnt++;
+        }
+      }
+      if (cnt) {
+        const i = p * 4;
+        d[i] = Math.round(sr / cnt); d[i + 1] = Math.round(sg / cnt); d[i + 2] = Math.round(sb / cnt);
+        filled[p] = 1;
+      }
+    }
+  }
+  for (let p = 0; p < N; p++) {
+    const i = p * 4;
+    if (!filled[p]) { d[i] = 0; d[i + 1] = 0; d[i + 2] = 0; }
+    d[i + 3] = alpha[p];
   }
   return d;
 }
@@ -74,7 +156,7 @@ async function processUnit(inputPath, canvas, keyName) {
   const top = canvas - (meta.height ?? inner) - 4;
   return sharp({ create: { width: canvas, height: canvas, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
     .composite([{ input: resized, left, top }])
-    .webp({ quality: 84, alphaQuality: 92, effort: 4 })
+    .webp({ quality: 86, alphaQuality: 100, effort: 4 })
     .toBuffer();
 }
 
