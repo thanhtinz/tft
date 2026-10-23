@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import Svg, { Circle, Defs, Ellipse, G, Path, Polygon, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Polygon, RadialGradient, Rect, Stop } from 'react-native-svg';
 import ChibiArt from './ChibiArt';
 import { CHAMPIONS, MONSTERS } from '../game/data';
 // TRANH NEN / SCENE ART ve bang SVG: trang chu, ban co, chuong PvE, thang/thua
@@ -142,6 +142,90 @@ export function AmbientParticles({ width, height }: { width: number; height: num
         ? <Ellipse key={i} cx={x} cy={y} rx={p.s * 1.5} ry={p.s} fill="#ffafcc" opacity={o} transform={'rotate(' + ((t * 30 + p.ph * 40) % 360) + ' ' + x + ' ' + y + ')'} />
         : <Circle key={i} cx={x} cy={y} r={p.s} fill="#ffd60a" opacity={o} />;
     })}
+  </Svg>);
+}
+// ===== LOBBY SCENE: tranh rung huyen ao PHU KINH man hinh (nhieu lop chieu sau) =====
+// Lop: troi teal + tia nang xuyen la -> tan cay xa -> cay giua + hoa anh dao -> quang
+// truong sang o giua-phai (noi linh vat dung) -> co/hoa/nam o tien canh -> nhanh cay
+// toi o mep duoi tao khung chieu sau. Deer silhouette la dong vat rung generic.
+const FIREFLIES: { x: number; y: number; r: number; o: number }[] = [
+  { x: 120, y: 120, r: 2.2, o: 0.8 }, { x: 210, y: 84, r: 1.6, o: 0.6 }, { x: 330, y: 150, r: 2.0, o: 0.7 },
+  { x: 470, y: 96, r: 1.5, o: 0.55 }, { x: 560, y: 170, r: 2.3, o: 0.8 }, { x: 640, y: 110, r: 1.7, o: 0.6 },
+  { x: 88, y: 220, r: 1.8, o: 0.65 }, { x: 250, y: 210, r: 1.4, o: 0.5 }, { x: 520, y: 250, r: 1.6, o: 0.6 },
+  { x: 660, y: 230, r: 2.0, o: 0.7 }, { x: 150, y: 300, r: 1.5, o: 0.5 }, { x: 420, y: 190, r: 1.8, o: 0.65 },
+];
+const LOBBY_SPECKLES: { x: number; y: number; r: number; c: string; o: number }[] = Array.from({ length: 40 }, (_, i) => ({
+  x: (i * 89 + 31) % 700, y: 300 + ((i * 37 + 13) % 92), r: 2 + (i % 3), c: i % 3 === 0 ? '#0e4a30' : i % 3 === 1 ? '#8fce6d' : '#5d9440', o: 0.16,
+}));
+export function LobbyScene({ width, height }: { width: number; height: number }) {
+  if (width <= 0 || height <= 0) return null;
+  return (<Svg width={width} height={height} viewBox="0 0 700 400" preserveAspectRatio="xMidYMid slice" style={{ position: 'absolute', left: 0, top: 0 } as any}>
+    <Defs>
+      <LinearGradient id="lobbySky" x1="0" y1="0" x2="0" y2="1">
+        <Stop offset="0" stopColor="#082f3a" /><Stop offset="0.45" stopColor="#11584c" /><Stop offset="0.78" stopColor="#2c7a52" /><Stop offset="1" stopColor="#3d8a54" />
+      </LinearGradient>
+      <RadialGradient id="lobbyGlow" cx="50%" cy="50%" r="50%">
+        <Stop offset="0" stopColor="#ffedb0" stopOpacity="0.5" /><Stop offset="0.6" stopColor="#ffe9a8" stopOpacity="0.16" /><Stop offset="1" stopColor="#ffe9a8" stopOpacity="0" />
+      </RadialGradient>
+      <LinearGradient id="lobbyGrass" x1="0" y1="0" x2="0" y2="1">
+        <Stop offset="0" stopColor="#4c9a58" /><Stop offset="1" stopColor="#1d5c36" />
+      </LinearGradient>
+    </Defs>
+    <Rect width="700" height="400" fill="url(#lobbySky)" />
+    {/* Tia nang xuyen la tu goc tren */}
+    <Polygon points="150,0 235,0 120,400 30,400" fill="#fff7cf" opacity="0.07" />
+    <Polygon points="300,0 350,0 300,400 215,400" fill="#fff7cf" opacity="0.09" />
+    <Polygon points="470,0 540,0 560,400 470,400" fill="#fff7cf" opacity="0.05" />
+    {/* Tan cay xa (bong toi) */}
+    <G fill="#0a4234" opacity="0.85">
+      <Circle cx="40" cy="18" r="52" /><Circle cx="130" cy="6" r="60" /><Circle cx="250" cy="14" r="48" /><Circle cx="380" cy="4" r="58" />
+      <Circle cx="510" cy="12" r="50" /><Circle cx="620" cy="6" r="56" /><Circle cx="695" cy="26" r="44" />
+    </G>
+    <Path d="M96 0 Q92 60 104 104" stroke="#0a4234" strokeWidth="5" fill="none" opacity="0.7" />
+    <Path d="M588 0 Q596 52 584 96" stroke="#0a4234" strokeWidth="5" fill="none" opacity="0.7" />
+    {/* Doi xa */}
+    <Path d="M0 252 Q140 214 300 240 Q470 266 700 226 L700 400 L0 400Z" fill="#17573d" opacity="0.65" />
+    {/* Cay giua khung hai ben + hoa anh dao */}
+    <G>
+      <Path d="M52 400 Q58 260 44 150 L66 150 Q62 260 78 400Z" fill="#4a3220" />
+      <Circle cx="56" cy="128" r="56" fill="#1d6b45" /><Circle cx="16" cy="160" r="38" fill="#256f47" /><Circle cx="98" cy="152" r="40" fill="#185c3a" />
+      <Circle cx="40" cy="112" r="15" fill="#f2a7c3" opacity="0.9" /><Circle cx="76" cy="138" r="12" fill="#e58bb1" opacity="0.9" /><Circle cx="18" cy="140" r="10" fill="#f7c3d8" opacity="0.9" />
+      <Path d="M648 400 Q642 250 656 140 L634 140 Q638 250 622 400Z" fill="#42301e" />
+      <Circle cx="644" cy="120" r="58" fill="#1d6b45" /><Circle cx="686" cy="152" r="38" fill="#256f47" /><Circle cx="602" cy="146" r="40" fill="#185c3a" />
+      <Circle cx="664" cy="104" r="14" fill="#f2a7c3" opacity="0.9" /><Circle cx="622" cy="128" r="11" fill="#e58bb1" opacity="0.9" />
+      <Circle cx="300" cy="66" r="34" fill="#2c7d54" opacity="0.8" /><Circle cx="420" cy="52" r="28" fill="#256f47" opacity="0.8" />
+      <Circle cx="330" cy="58" r="10" fill="#f2a7c3" opacity="0.75" /><Circle cx="398" cy="46" r="8" fill="#f7c3d8" opacity="0.75" />
+    </G>
+    {/* Quang truong sang giua-phai: noi linh vat dung */}
+    <Ellipse cx="445" cy="252" rx="265" ry="150" fill="url(#lobbyGlow)" />
+    <Path d="M0 306 Q180 282 380 300 Q560 316 700 292 L700 400 L0 400Z" fill="url(#lobbyGrass)" />
+    <Ellipse cx="452" cy="330" rx="196" ry="46" fill="#a8d97a" opacity="0.28" />
+    <Ellipse cx="452" cy="334" rx="140" ry="32" fill="#ffe9a8" opacity="0.14" />
+    {LOBBY_SPECKLES.map((s, i) => <Circle key={i} cx={s.x} cy={s.y} r={s.r} fill={s.c} opacity={s.o} />)}
+    {/* Hoa + nam tien canh */}
+    <G>
+      <Circle cx="120" cy="348" r="3.4" fill="#ffafcc" /><Circle cx="180" cy="366" r="3" fill="#ffd60a" /><Circle cx="90" cy="322" r="2.6" fill="#ffd60a" />
+      <Circle cx="586" cy="356" r="3.2" fill="#ffafcc" /><Circle cx="250" cy="342" r="2.6" fill="#cdb4f6" /><Circle cx="640" cy="330" r="2.8" fill="#ffd60a" />
+      <Rect x="66" y="352" width="5" height="10" fill="#f1e3c8" /><Path d="M56 354 Q68 340 80 354Z" fill="#e85d75" /><Circle cx="63" cy="348" r="1.8" fill="#fff" />
+      <Rect x="618" y="368" width="5" height="9" fill="#f1e3c8" /><Path d="M609 370 Q620 357 632 370Z" fill="#fb8500" />
+      <Polygon points="30,386 44,372 58,386" fill="#5d6b7a" opacity="0.8" /><Polygon points="652,392 668,376 684,392" fill="#5d6b7a" opacity="0.8" />
+    </G>
+    {/* Huou nho ben phai (silhouette dong vat rung) */}
+    <G fill="#0d3527" opacity="0.85">
+      <Ellipse cx="612" cy="300" rx="17" ry="10" />
+      <Path d="M624 294 L634 278 L640 280 L632 296Z" /><Circle cx="637" cy="277" r="4.6" />
+      <Path d="M634 272 L632 262 M638 272 L642 263" stroke="#0d3527" strokeWidth="2" />
+      <Rect x="600" y="306" width="3.4" height="15" /><Rect x="620" y="306" width="3.4" height="15" />
+      <Path d="M596 296 L588 290 L597 291Z" />
+    </G>
+    {FIREFLIES.map((f, i) => <Circle key={'ff' + i} cx={f.x} cy={f.y} r={f.r} fill="#ffe27a" opacity={f.o} />)}
+    {/* Nhanh cay toi mep duoi: khung chieu sau */}
+    <Path d="M-10 400 Q120 356 300 384 Q470 408 710 372 L710 400Z" fill="#081f16" />
+    <Path d="M-10 400 Q180 368 360 390 L360 400Z" fill="#0a2a1d" opacity="0.9" />
+    <G fill="#081f16">
+      <Circle cx="26" cy="382" r="17" /><Circle cx="58" cy="392" r="13" /><Circle cx="676" cy="384" r="16" /><Circle cx="646" cy="394" r="12" />
+      <Circle cx="8" cy="30" r="30" /><Circle cx="692" cy="24" r="34" />
+    </G>
   </Svg>);
 }
 export function FloorCell({ w, back }: { w: number; back?: boolean }) {

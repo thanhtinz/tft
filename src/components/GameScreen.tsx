@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import Svg, { Polygon } from 'react-native-svg';
+import Svg, { Ellipse, G, Polygon, Rect } from 'react-native-svg';
 import { router } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { ItemArt } from './ChibiArt';
@@ -15,6 +15,9 @@ import { TOTAL_STAGES, buildStageTeam, stageDef, stageReward } from '../game/sta
 import { TUT_REWARD, TutEvent, createTutorial, currentStep, onTutEvent, skipTutorial } from '../game/tutorial';
 import { audio } from '../game/audio';
 import { eventsInWindow, renderUnitsForFrame } from '../game/fx';
+import { applyMatchRewards } from '../game/accounts';
+import { rankLabel, xpForPlacement } from '../game/auth';
+import RankBadge from './RankBadge';
 export type GameMode = 'arena' | 'campaign' | 'waves' | 'tutorial';
 interface Props { mode: GameMode; stageId?: number; }
 const STAR_TXT = (s:number) => s===1?'★':s===2?'★★':'★★★';
@@ -60,6 +63,46 @@ function StarSparkles({ sz }: { sz: number }) {
     <Polygon points={starPoints(27, 8, 5.5)} fill="#ffe66d" />
     <Polygon points={starPoints(43, 15, 6.5)} fill="#ffb703" />
   </Svg>);
+}
+// ===== Cum thanh tren dau tuong kieu TFT: sao pips + mau CHIA VACH + mana mong + o do mini =====
+function SegmentBar({ frac, color, h }: { frac: number; color: string; h: number }) {
+  const f = Math.max(0, Math.min(1, frac));
+  return (<View style={{ height: h, backgroundColor: 'rgba(4,6,14,0.88)', borderWidth: 1, borderColor: '#04060e', borderRadius: 2, overflow: 'hidden' }}>
+    <View style={{ height: '100%', width: (f * 100) + '%', backgroundColor: color }} />
+    {Array.from({ length: 9 }).map((_, i) => (<View key={i} style={{ position: 'absolute', top: 0, bottom: 0, left: ((i + 1) * 10) + '%', width: 1, backgroundColor: 'rgba(4,6,14,0.6)' }} />))}
+  </View>);
+}
+function UnitBars({ sz, star, hpFrac, manaFrac, items }: { sz: number; star: number; hpFrac: number; manaFrac: number; items: string[] }) {
+  const bw = Math.max(30, sz * 0.92);
+  return (<View pointerEvents="none" style={{ position: 'absolute', top: -sz * 0.17, left: (sz - bw) / 2, width: bw, zIndex: 60 }}>
+    <Text style={{ fontSize: Math.max(8, sz * 0.13), fontWeight: '900', color: '#ffd60a', lineHeight: Math.max(10, sz * 0.15), textShadowColor: 'rgba(0,0,0,0.85)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 }}>{'★'.repeat(star)}</Text>
+    <SegmentBar frac={hpFrac} color="#43c62f" h={Math.max(5, sz * 0.062)} />
+    <View style={{ height: Math.max(2.5, sz * 0.032), marginTop: 1, backgroundColor: 'rgba(4,6,14,0.88)', borderWidth: 1, borderColor: '#04060e', borderRadius: 2, overflow: 'hidden' }}>
+      <View style={{ height: '100%', width: Math.max(0, Math.min(100, manaFrac * 100)) + '%', backgroundColor: '#3aa0ff' }} />
+    </View>
+    {!!items.length && (<View style={{ flexDirection: 'row', gap: 2, marginTop: 2 }}>
+      {items.slice(0, 3).map((iid, i) => { const it = itemById(iid); return (<View key={i} style={{ width: Math.max(11, sz * 0.15), height: Math.max(11, sz * 0.15), backgroundColor: 'rgba(6,9,20,0.9)', borderWidth: 1, borderColor: '#c9a227', borderRadius: 2, alignItems: 'center', justifyContent: 'center' }}>{it ? <ItemArt color={it.color} size={Math.max(9, sz * 0.12)} /> : null}</View>); })}
+    </View>)}
+  </View>);
+}
+// Duoc lua o goc san: lua chay animation bang interval rieng
+function Torch({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
+  const [big, setBig] = useState(false);
+  useEffect(() => { const iv = setInterval(() => setBig(b => !b), 170); return () => clearInterval(iv); }, []);
+  const w = 26 * s, h = 40 * s;
+  return (<Svg width={w} height={h} style={{ position: 'absolute', left: x - w / 2, top: y - h + 6 } as any} pointerEvents="none">
+    <Rect x={w / 2 - 1.6 * s} y={h - 15 * s} width={3.2 * s} height={15 * s} fill="#4a3423" />
+    <Polygon points={(w / 2 - 9 * s) + ',' + (h - 15 * s) + ' ' + (w / 2 + 9 * s) + ',' + (h - 15 * s) + ' ' + (w / 2 + 5.5 * s) + ',' + (h - 7 * s) + ' ' + (w / 2 - 5.5 * s) + ',' + (h - 7 * s)} fill="#6b7280" stroke="#9aa5b1" strokeWidth={1} />
+    <Ellipse cx={w / 2} cy={h - 21 * s} rx={6.4 * s * (big ? 1.14 : 0.95)} ry={10 * s * (big ? 1.12 : 0.94)} fill="#fb8500" opacity={0.92} />
+    <Ellipse cx={w / 2} cy={h - 18 * s} rx={3.4 * s} ry={5.6 * s * (big ? 1.15 : 0.9)} fill="#ffd60a" opacity={0.95} />
+    <Ellipse cx={w / 2} cy={h - 22 * s} rx={15 * s} ry={15 * s} fill="#ffb703" opacity={0.13} />
+  </Svg>);
+}
+// Boc phan tu cho hieu ung bay lo lung (linh thu)
+function FloatWrap({ amp = 4, children }: { amp?: number; children: React.ReactNode }) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => { const iv = setInterval(() => setTick(t => t + 1), 90); return () => clearInterval(iv); }, []);
+  return (<View style={{ transform: [{ translateY: Math.sin(tick * 0.55) * amp }] }}>{children}</View>);
 }
 function FxLayer({ items }: { items: FxItem[] }) {
   const [, setTick] = useState(0);
@@ -121,6 +164,14 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   const [log, setLog] = useState<string[]>(['Chào mừng đến Đấu Trường Chibi! Mua tướng, xếp đội hình rồi bấm Bắt đầu đấu.']);
   const [augments, setAugments] = useState<string[]>([]); const [augChoice, setAugChoice] = useState<string[]|null>(null);
   const [wave, setWave] = useState(1); const [finished, setFinished] = useState<string|null>(null);
+  const [reward, setReward] = useState<{ xp: number; lpDelta?: number; promoted?: boolean; demoted?: boolean; rankText?: string; tier?: number } | null>(null);
+  // Ghi XP/LP/lich su theo tai khoan hien tai khi 1 tran (hoac man) ket thuc
+  async function recordRewards(args: { mode: string; modeLabel: string; resultText: string; placement?: number; xp: number }) {
+    try {
+      const r = await applyMatchRewards({ ...args, totalPlayers: args.placement ? 8 : undefined, team: board.map(u => ({ defId: u.defId, star: u.star })) });
+      setReward({ xp: r.xpGained, lpDelta: r.lpDelta, promoted: r.promoted, demoted: r.demoted, rankText: rankLabel(r.profile.rank), tier: r.profile.rank.tier });
+    } catch {}
+  }
   const [players, setPlayers] = useState<PInfo[]>(() => [{ name:'Bạn', hp:100, alive:true, lvl:1, rank:0 }, ...BOT_NAMES.map(n => ({ name:n, hp:100, alive:true, lvl:1, rank:0 }))]);
   const [oppIdx, setOppIdx] = useState(1); const resolvedRef = useRef(false);
   const [musicOn, setMusicOn] = useState(true); const [sfxOn, setSfxOn] = useState(true);
@@ -132,6 +183,8 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   const [carousel, setCarousel] = useState<{ defId: string; item: string }[] | null>(isArena ? genCarousel() : null);
   const [carAngle, setCarAngle] = useState(0);
   const [scout, setScout] = useState<number | null>(null);
+  const [augView, setAugView] = useState(false);
+  const [itemsByUid, setItemsByUid] = useState<Record<string, string[]>>({});
   const [rightTab, setRightTab] = useState<'players'|'dmg'>('players');
   const [dmgStats, setDmgStats] = useState<{ name: string; dmg: number; team: number }[]>([]);
   const [summary, setSummary] = useState<{ win: boolean; dealt: number; taken: number } | null>(null);
@@ -154,7 +207,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   function emitTut(ev: TutEvent) {
     if (!isTut) return; const r = onTutEvent(tutRef.current, ev); if (!r.advanced) return;
     setTut(r.state); tutRef.current = r.state;
-    if (r.finished) { loadMeta().then(async m => { if (!m.tutorialDone) { m.tutorialDone = true; m.gems += TUT_REWARD; await saveMeta(m); setFinished(`Hoàn thành hướng dẫn chơi! Bạn nhận ${TUT_REWARD} Ngọc thưởng lần đầu. Giờ hãy thử Đấu với AI, PvP Online hoặc Chiến Dịch PvE nhé!`); } else setFinished('Hoàn thành hướng dẫn chơi! Bạn đã nhận thưởng lần đầu trước đó rồi.'); }); audio.playSfx('champion'); }
+    if (r.finished) { loadMeta().then(async m => { if (!m.tutorialDone) { m.tutorialDone = true; m.gems += TUT_REWARD; await saveMeta(m); setFinished(`Hoàn thành hướng dẫn chơi! Bạn nhận ${TUT_REWARD} Ngọc thưởng lần đầu. Giờ hãy thử Đấu với AI, PvP Online hoặc Chiến Dịch PvE nhé!`); } else setFinished('Hoàn thành hướng dẫn chơi! Bạn đã nhận thưởng lần đầu trước đó rồi.'); }); recordRewards({ mode: 'tutorial', modeLabel: 'Học chơi', resultText: 'Hoàn thành hướng dẫn chơi', xp: 20 }); audio.playSfx('champion'); }
   }
   const emitRef = useRef(emitTut); emitRef.current = emitTut;
   function peekOpponent(): { idx: number; name: string } { const aliveBots = players.map((p,i)=>({p,i})).filter(x => x.i>0 && x.p.alive); const pick = aliveBots.length ? aliveBots[round % aliveBots.length] : { i: 1, p: players[1] }; return { idx: pick.i, name: pick.p.name }; }
@@ -220,6 +273,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
     audio.unlock(); audio.startBgm('battle');
     if (isArena && !isPveStageRound(round)) setOppIdx(peekOpponent().idx);
     const e = enemyForRound(); setEnemyLabel(e.label); resolvedRef.current = false;
+    const imap: Record<string, string[]> = {}; [...board, ...e.units].forEach(u => { imap[u.uid] = u.items; }); setItemsByUid(imap);
     const pveFight = mode !== 'arena' || isPveStageRound(round);
     setBanner({ title: 'VÒNG ' + (isArena ? roundLabel(round) : mode === 'campaign' ? stageDef(stageId).name : mode === 'waves' ? 'Sóng ' + wave : 'Luyện tập'), sub: pveFight ? 'Đấu với quái — ' + e.label : 'Đấu với ' + e.label.replace('Đội của ', ''), tone: 'info' });
     setFxItems([]);
@@ -278,11 +332,14 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
     if (mode==='campaign') { const sd = stageDef(stageId); const reward = stageReward(stageId); setBanner({ title: win ? 'THẮNG' : 'THUA', sub: win ? 'Gây ' + dealt + ' sát thương' : 'Nhận ' + taken + ' sát thương', tone: win ? 'win' : 'lose' });
       if (win) { const frac = result.survivors / Math.max(1, board.length); const stars = frac>=0.7?3:frac>=0.35?2:1;
         loadMeta().then(async m => { m.campaignStars[String(stageId)] = Math.max(m.campaignStars[String(stageId)] ?? 0, stars); m.unlockedStage = Math.max(m.unlockedStage, Math.min(TOTAL_STAGES, stageId+1)); m.gems += reward; if (stageId===TOTAL_STAGES) m.wins += 1; await saveMeta(m); });
-        setFinished(`Thắng ${sd.name}! Nhận ${stars} sao và ${reward} Ngọc.`); }
-      else setFinished('Thua rồi... Hãy nâng cấp đội hình, ghép sao và thử lại nhé.');
+        setFinished(`Thắng ${sd.name}! Nhận ${stars} sao và ${reward} Ngọc.`);
+        recordRewards({ mode: 'campaign', modeLabel: 'Chiến dịch PvE', resultText: `Thắng ${sd.name} (${stars} sao)`, xp: 30 }); }
+      else { setFinished('Thua rồi... Hãy nâng cấp đội hình, ghép sao và thử lại nhé.');
+        recordRewards({ mode: 'campaign', modeLabel: 'Chiến dịch PvE', resultText: `Thua tại ${sd.name}`, xp: 8 }); }
       return; }
     if (mode==='waves') { setBanner({ title: win ? 'THẮNG' : 'THUA', sub: win ? 'Gây ' + dealt + ' sát thương' : 'Dừng ở sóng ' + wave, tone: win ? 'win' : 'lose' }); if (win) { say('Qua sóng '+wave+'! Sóng tiếp theo mạnh hơn.'); setWave(w => w+1); setGold(g => g + 6 + Math.floor(wave/3)); if (wave%3===0) setInventory(inv => [...inv, randomItem()]); setPhase('plan'); setResult(null); }
-      else { addGems(wave*5); setFinished(`Dừng lại ở sóng ${wave}. Kỷ lục được lưu, nhận ${wave*5} Ngọc.`); } return; }
+      else { addGems(wave*5); setFinished(`Dừng lại ở sóng ${wave}. Kỷ lục được lưu, nhận ${wave*5} Ngọc.`);
+        recordRewards({ mode: 'waves', modeLabel: 'Sóng quái vô hạn', resultText: `Dừng lại ở sóng ${wave}`, xp: Math.min(60, 6 + wave * 2) }); } return; }
     // Arena theo cau truc stage TFT
     const dmgTaken = win ? 0 : lossDamage(round, result.enemySurvivors);
     let newHp = hp; const newPlayers = players.map(p => ({ ...p, lvl: p.lvl }));
@@ -300,7 +357,8 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
     if (augments.includes('hoi1')) setHp(h => Math.min(100, (win? h : newHp) + 2));
     const nextRound = round + 1; setRound(nextRound);
     if (!locked) setShop(rollShop(level));
-    if (newHp<=0 || aliveCount<=1) { const rank = newHp<=0 ? aliveCount : 1; if (rank===1) audio.playSfx('champion'); loadMeta().then(async m => { m.bestRank = Math.min(m.bestRank, rank); m.gems += Math.max(10, (9-rank)*15); if (rank===1) m.wins += 1; await saveMeta(m); }); setFinished(rank===1 ? 'Vô địch! Bạn đứng hạng 1/8. Tuyệt vời!' : `Trận đấu kết thúc. Bạn xếp hạng ${rank}/8.`); return; }
+    if (newHp<=0 || aliveCount<=1) { const rank = newHp<=0 ? aliveCount : 1; if (rank===1) audio.playSfx('champion'); loadMeta().then(async m => { m.bestRank = Math.min(m.bestRank, rank); m.gems += Math.max(10, (9-rank)*15); if (rank===1) m.wins += 1; await saveMeta(m); }); setFinished(rank===1 ? 'Vô địch! Bạn đứng hạng 1/8. Tuyệt vời!' : `Trận đấu kết thúc. Bạn xếp hạng ${rank}/8.`);
+      recordRewards({ mode: 'arena', modeLabel: 'Đấu với AI (Đấu Trường)', resultText: rank===1 ? 'Vô địch Đấu Trường' : `Xếp hạng ${rank}/8 trong Đấu Trường`, placement: rank, xp: xpForPlacement(rank) }); return; }
     if (AUG_ROUNDS.includes(nextRound)) { const pool = [...AUGMENTS].sort(() => Math.random()-0.5).slice(0,3); setAugChoice(pool.map(a => a.id)); say('Đã đến mốc cường hóa '+roundLabel(nextRound)+' — chọn 1 trong 3!'); }
     if (isCarouselRound(nextRound)) { setCarousel(genCarousel()); audio.playSfx('start'); say('Vòng chọn (carousel) của stage mới: chạm vào 1 tướng + trang bị để nhận!'); }
     setPhase('plan'); setResult(null);
@@ -323,16 +381,22 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
   return (
     <View style={st.root}>
       <View style={[st.frame, { width: frameW, height: frameH }]}>
-        {/* ===== TOP BAR ===== */}
+        {/* ===== TOP BAR: o cuong hoa trai, cum stage giua, nut phai ===== */}
         <View style={st.topbar}>
-          <View style={st.stageDots}>
-            <Text style={st.stageLbl}>{isArena ? roundLabel(round) : mode==='campaign' ? stageDef(stageId).name : mode==='waves' ? 'Sóng '+wave : 'Luyện tập'}</Text>
-            {isArena && stageRounds.map(r => { const ss = stageSub(r); const kind = r===round ? 'cur' : isPveStageRound(r) ? 'pve' : isCarouselRound(r) ? 'car' : 'pvp'; return (<View key={r} style={[st.dot, kind==='cur' && st.dotCur, kind==='pve' && st.dotPve, kind==='car' && st.dotCar]}><Text style={[st.dotTxt, kind==='cur' && { color: '#23180a' }]}>{ss.sub}</Text></View>); })}
-          </View>
-          <View style={st.timerBox}>
-            {phase==='battle' ? <Text style={st.timerTxt}>Đang giao tranh: {enemyLabel}</Text>
-            : isArena ? (<><View style={st.timerBar}><View style={[st.timerFill, { width: (planLeft/planMax*100)+'%', backgroundColor: planLeft<=5 ? '#ef476f' : '#f5c542' }]} /></View><Text style={[st.timerTxt, planLeft<=5 && { color: '#ef476f' }]}>{paused ? 'Đang tạm dừng' : 'Chuẩn bị: '+planLeft+'s'}</Text></>)
-            : <Text style={st.timerTxt}>{mode==='campaign' ? ('Độ khó: '+stageDef(stageId).power+' — Thưởng: '+stageReward(stageId)+' Ngọc') : 'Chuẩn bị tự do'}</Text>}
+          <Pressable style={st.augSquare} onPress={() => { if (augments.length) setAugView(true); else say('Chưa có cường hóa — cường hóa xuất hiện ở các mốc 2-1, 3-2, 4-2.'); }}>
+            <Svg width={24} height={24} viewBox="0 0 24 24"><Polygon points="12,1.5 22.5,12 12,22.5 1.5,12" fill={augments.length ? '#2b3a67' : '#232c4c'} stroke={augments.length ? '#ffd60a' : '#5b6a94'} strokeWidth="1.6" /><Polygon points={starPoints(12, 12, 5.5)} fill={augments.length ? '#ffd60a' : '#5b6a94'} /></Svg>
+            {!!augments.length && (<View style={st.augCount}><Text style={st.augCountTxt}>{augments.length}</Text></View>)}
+          </Pressable>
+          <View style={st.stageCluster}>
+            <View style={st.stagePlaque}>
+              <Text style={st.stageBig}>{isArena ? roundLabel(round) : mode==='campaign' ? stageDef(stageId).name : mode==='waves' ? 'Sóng '+wave : 'Luyện tập'}</Text>
+            </View>
+            {isArena && (<View style={st.stageDots}>
+              {stageRounds.map(r => { const ss = stageSub(r); const kind = r===round ? 'cur' : isPveStageRound(r) ? 'pve' : isCarouselRound(r) ? 'car' : 'pvp'; return (<View key={r} style={[st.dot, kind==='cur' && st.dotCur, kind==='pve' && st.dotPve, kind==='car' && st.dotCar]}><Text style={[st.dotTxt, kind==='cur' && { color: '#23180a' }]}>{ss.sub}</Text></View>); })}
+            </View>)}
+            {phase==='battle' ? <View style={st.timerPill}><Text style={st.timerPillTxt}>Đang giao tranh: {enemyLabel}</Text></View>
+            : isArena ? (<View style={st.timerRow}><View style={[st.timerBar, { width: 120 }]}><View style={[st.timerFill, { width: (planLeft/planMax*100)+'%', backgroundColor: planLeft<=5 ? '#ef476f' : '#f5c542' }]} /></View><View style={st.timerPill}><Text style={[st.timerPillTxt, planLeft<=5 && { color: '#ef476f' }]}>{paused ? 'Tạm dừng' : planLeft + 's'}</Text></View></View>)
+            : <View style={st.timerPill}><Text style={st.timerPillTxt}>{mode==='campaign' ? ('Độ khó: '+stageDef(stageId).power+' — Thưởng: '+stageReward(stageId)+' Ngọc') : 'Chuẩn bị tự do'}</Text></View>}
             {summary && phase!=='battle' && <Text style={st.sumTxt}>{summary.win ? 'Thắng' : 'Thua'} — Gây {summary.dealt} / Nhận {summary.taken} sát thương (đánh thường)</Text>}
           </View>
           <View style={st.topBtns}>
@@ -369,12 +433,23 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             <ArenaScene width={arenaSize.w} height={arenaSize.h}/>
             <AmbientParticles width={arenaSize.w} height={arenaSize.h}/>
                         <Svg style={StyleSheet.absoluteFill} width={arenaSize.w} height={arenaSize.h}>
-              {Array.from({length: rows}).map((_, y) => Array.from({length: 7}).map((_, x) => { const { cx, cy } = hexCenter(hm, x, y); const occ = phase!=='battle' && board.some(u => u.x===x && u.y===y); const enemyHalf = phase==='battle' && y >= 4; return (<React.Fragment key={x+'-'+y}>
-                <Polygon points={hexPoints(cx, cy + hm.size*0.12, hm.size)} fill={enemyHalf ? '#a14a3f99' : '#2e7d5b99'} stroke="transparent" strokeWidth={0}/>
-                <Polygon points={hexPoints(cx, cy, hm.size)} fill={occ ? '#ffe9a8cc' : enemyHalf ? '#ffcfb873' : '#b9fbc073'} stroke={enemyHalf ? '#e5989b' : '#7fc8a9'} strokeWidth={1.2} onPress={phase!=='battle' ? () => tapBoardCell(x, y) : undefined}/>
-              </React.Fragment>); }))}
+              {(() => { const bx = hm.ox - hm.size * 0.8, by = hm.oy - hm.size * 0.6, bw = 7.5 * hm.hw + hm.size * 1.6, bh = (2 * hm.size + (rows - 1) * 1.5 * hm.size) + hm.size * 1.15; return (<React.Fragment>
+                <Rect x={bx} y={by} width={bw} height={bh} rx={16} fill="rgba(10,16,14,0.18)" stroke="#4c5563" strokeWidth={10} strokeOpacity={0.55} />
+                <Rect x={bx + 6} y={by + 6} width={bw - 12} height={bh - 12} rx={12} fill="none" stroke="#aeb8c4" strokeWidth={1.4} strokeOpacity={0.35} />
+                <Rect x={bx + 2} y={by + 2} width={bw - 4} height={bh - 4} rx={14} fill="none" stroke="#2c313a" strokeWidth={2} strokeOpacity={0.5} />
+              </React.Fragment>); })()}
+              {Array.from({length: rows}).map((_, y) => Array.from({length: 7}).map((_, x) => { const { cx, cy } = hexCenter(hm, x, y); const occ = phase!=='battle' && board.some(u => u.x===x && u.y===y); const enemyHalf = phase==='battle' && y >= 4; return (
+                <Polygon key={x+'-'+y} points={hexPoints(cx, cy, hm.size)} fill={occ ? 'rgba(255,214,110,0.20)' : enemyHalf ? 'rgba(255,130,118,0.055)' : 'rgba(120,255,205,0.05)'} stroke={enemyHalf ? 'rgba(255,150,140,0.6)' : 'rgba(64,224,190,0.6)'} strokeWidth={1.3} onPress={phase!=='battle' ? () => tapBoardCell(x, y) : undefined}/>
+              ); }))}
               {phase!=='battle' && selUid != null && (<ValidCellGlow hm={hm} rows={rows} board={board}/>)}
             </Svg>
+            {(() => { const bx = hm.ox - hm.size * 0.8, by = hm.oy - hm.size * 0.6, bw = 7.5 * hm.hw + hm.size * 1.6, bh = (2 * hm.size + (rows - 1) * 1.5 * hm.size) + hm.size * 1.15; return (<React.Fragment>
+              <Torch x={bx + 8} y={by + 12} s={0.95} /><Torch x={bx + bw - 8} y={by + 12} s={0.95} />
+              <Torch x={bx + 8} y={by + bh + 14} s={0.8} /><Torch x={bx + bw - 8} y={by + bh + 14} s={0.8} />
+            </React.Fragment>); })()}
+            {phase==='plan' && (<View pointerEvents="none" style={{ position:'absolute', left:0, right:0, top:0, bottom:0, alignItems:'center', justifyContent:'center', zIndex:1 }}>
+              <Text style={{ fontSize: Math.min(120, arenaSize.w * 0.17), fontWeight:'900', color:'rgba(255,255,255,0.10)', letterSpacing: 4 }}>{board.length}/{level}</Text>
+            </View>)}
                         {phase!=='battle' && board.map(u => { const { cx, cy } = hexCenter(hm, u.x, u.y); const sz = hm.size * 2.05 * rowDepth(u.y, 4).scale * STAR_SCALE(u.star); const isSel = selUid===u.uid; const rig = (
                 <View style={[{ width: sz, height: sz, alignItems:'center' }, u.star>=2 && { shadowColor: u.star>=3 ? '#ffb703' : '#d7dee8', shadowOpacity: 0.9, shadowRadius: u.star>=3 ? 12 : 7, shadowOffset: { width: 0, height: 0 }, elevation: 6 }]}>
                   <UnitPedestal sz={sz} team={0} star={u.star}/>
@@ -384,6 +459,7 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
               <View key={u.uid} style={{ position:'absolute', left: cx - sz/2, top: cy + hm.size*0.28 - sz*0.88, width: sz, height: sz, alignItems:'center', zIndex: rowDepth(u.y, 4).zIndex }} pointerEvents="none">
                 {isSel && <View style={[st.selRing, { width: sz*0.9, height: sz*0.3, bottom: -2 }]} />}
                 {isSel ? <SelBounce>{rig}</SelBounce> : rig}
+                <UnitBars sz={sz} star={u.star} hpFrac={1} manaFrac={0} items={u.items} />
               </View> ); })}
             {phase==='battle' && frame && result && renderUnitsForFrame(frame).map(u => { const { cx, cy } = hexCenter(hm, Math.max(0, Math.min(6, u.x)), Math.max(0, Math.min(6, u.y))); const prev = frameIdx>0 ? result.frames[frameIdx-1].units.find(v => v.uid===u.uid) : undefined; const prevT = frameIdx>0 ? result.frames[frameIdx-1].t : frame.t - 0.5; const evs = eventsInWindow(result.events, prevT, frame.t); const isTarget = evs.some(e => (e.type==='attack' || e.type==='hit') && (e.targetUid ?? e.uid)===u.uid); const lungeEv = evs.find(e => e.type==='attack' && e.attackerUid===u.uid && !e.ranged); const lx = lungeEv && lungeEv.tx!==undefined ? Math.sign(lungeEv.tx - u.x)*12 : 0; const ly = lungeEv && lungeEv.ty!==undefined ? Math.sign(lungeEv.ty - u.y)*6 : 0; const animState = stateForUnit({ alive: u.alive, moved: !!prev && (prev.x!==u.x || prev.y!==u.y), castAtFrame: evs.some(e => e.type==='cast' && e.attackerUid===u.uid), attackedAtFrame: evs.some(e => e.type==='attack' && e.attackerUid===u.uid), hurtAtFrame: evs.some(e => (e.targetUid ?? e.uid)===u.uid && !!e.amount), battleOver: frameIdx >= result.frames.length-1, won: result.winner===u.team }); const dep = rowDepth(u.y, 7); const sz = hm.size * 2.05 * dep.scale * STAR_SCALE(u.star); const stunAngle = (frame.t * 120) % 360; return (
               <View key={u.uid} style={{ position:'absolute', left: cx - sz/2 + lx + (isTarget ? (frameIdx % 2 === 0 ? 3 : -3) : 0), top: cy + hm.size*0.28 - sz*0.88 + ly, width: sz, zIndex: dep.zIndex, alignItems:'center' }}>
@@ -394,12 +470,18 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
                   {u.star>=3 && <StarSparkles sz={sz}/>}
                   {u.stun > 0 && (<Svg width={sz*0.52} height={16} viewBox="0 0 62 16" style={{ position:'absolute', left: sz*0.24, top: -4, transform: [{ rotate: stunAngle + 'deg' }] } as any} pointerEvents="none"><Polygon points={starPoints(9, 8, 6)} fill="#ffd60a"/><Polygon points={starPoints(31, 8, 6)} fill="#ffd60a"/><Polygon points={starPoints(53, 8, 6)} fill="#ffd60a"/></Svg>)}
                 </View>
-                <View style={[st.hpBar, { borderWidth: 1, borderColor: 'rgba(6,8,20,0.55)' }]}><View style={[st.hpFill, { width: Math.max(0, Math.min(100, u.hp/u.maxHp*100))+'%', backgroundColor: u.team===1 ? '#ef476f' : '#38b000' } ]}/></View>
-                <View style={[st.manaBar, { borderWidth: 1, borderColor: 'rgba(6,8,20,0.55)' }]}><View style={[st.manaFill, { width: Math.min(100, u.mana/u.maxMana*100)+'%' } ]}/></View>
+                <UnitBars sz={sz} star={u.star} hpFrac={u.hp / u.maxHp} manaFrac={u.maxMana ? u.mana / u.maxMana : 0} items={itemsByUid[u.uid] ?? []} />
               </View> ); })}
 <View style={st.legend}>
-              <ChibiRig spec={champById('toto')} size={52} state={legendHurt ? 'hurt' : 'idle'}/>
-              <View><Text style={st.legendName}>Linh thú của bạn</Text>{isArena && <Text style={st.legendHp}>{hp} máu — Đội {board.length}/{level}</Text>}{mode==='campaign' && <Text style={st.legendHp}>{stageDef(stageId).name}</Text>}</View>
+              <FloatWrap amp={4}>
+                <ChibiRig spec={champById('toto')} size={56} state={legendHurt ? 'hurt' : 'idle'}/>
+              </FloatWrap>
+              <Text style={st.legendName}>Toto</Text>
+              <View style={st.legendBadge}><Text style={st.legendBadgeTxt}>{isArena ? 'Cấp ' + level : mode==='campaign' ? 'PvE' : mode==='waves' ? 'Sóng ' + wave : 'Tập'}</Text></View>
+              <View style={{ width: 68 }}>
+                <SegmentBar frac={hp / 100} color={hp > 50 ? '#43c62f' : hp > 25 ? '#e0a800' : '#ef476f'} h={6} />
+              </View>
+              <Text style={st.legendHp}>{hp} máu • Đội {board.length}/{level}</Text>
             </View>
             {phase==='battle' && (<View style={st.battleCtrls}><Pressable style={st.smallBtn} onPress={() => result && setFrameIdx(result.frames.length-1)}><Text style={st.smallTxt}>Bỏ qua tới kết quả</Text></Pressable></View>)}
             {phase==='battle' && result && (<View style={st.logFloat}>{result.events.filter(e => Math.abs(e.t - (frame?.t ?? 0)) < 1.4).slice(-2).map((e,i) => <Text key={i} style={st.logTxt}>{e.text}{e.amount?(' ('+e.amount+')'):''}</Text>)}</View>)}
@@ -413,11 +495,19 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
               <View style={st.tabRow}><Pressable style={[st.tab, rightTab==='players' && st.tabOn]} onPress={() => setRightTab('players')}><Text style={[st.tabTxt, rightTab==='players' && st.tabTxtOn]}>Người chơi</Text></Pressable><Pressable style={[st.tab, rightTab==='dmg' && st.tabOn]} onPress={() => setRightTab('dmg')}><Text style={[st.tabTxt, rightTab==='dmg' && st.tabTxtOn]}>Sát thương</Text></Pressable></View>
               {rightTab==='players' ? (<ScrollView showsVerticalScrollIndicator={false}>{players.map((p, i) => { const isOpp = phase!=='battle' ? peekOpponent().idx===i : oppIdx===i; return (
                 <Pressable key={i} onPress={() => { setScout(i); audio.playSfx('click'); }} style={[st.pRow, !p.alive && st.pDead, isOpp && p.alive && st.pOpp]}>
-                  <ChibiRig spec={CHAMPIONS[(i*3) % CHAMPIONS.length]} size={34} state={p.alive ? 'idle' : 'death'}/>
-                  <View style={{ flex: 1 }}>
-                    <Text style={st.pName}>{p.name}{i===0?' (bạn)':''} — Cấp {i===0 ? level : p.lvl}{p.rank ? ' — Hạng '+p.rank : ''}</Text>
-                    <View style={st.pHpBar}><View style={[st.pHpFill, { width: Math.max(0, p.hp)+'%', backgroundColor: p.hp>50 ? '#38b000' : p.hp>25 ? '#e0a800' : '#ef476f' }]} /></View>
-                    <Text style={st.pHp}>{p.hp} máu{i===0 && streak !== 0 ? ' — Chuỗi ' + (streak>0 ? 'thắng ' : 'thua ') + Math.abs(streak) : ''}</Text>
+                  <View style={{ flex: 1, gap: 1 }}>
+                    <Text style={st.pName} numberOfLines={1}>{p.name}{i===0?' (bạn)':''} • Cấp {i===0 ? level : p.lvl}</Text>
+                    <View style={{ flexDirection:'row', alignItems:'center', gap:7 }}>
+                      <Text style={[st.pHpBig, { color: !p.alive ? '#8a93ad' : p.hp>50 ? '#7ee787' : p.hp>25 ? '#ffd60a' : '#ff8fab' }]}>{p.alive ? p.hp : (p.rank ? '#'+p.rank : '0')}</Text>
+                      <View style={[st.pHpBar, { flex: 1 }]}><View style={[st.pHpFill, { width: Math.max(0, p.hp)+'%', backgroundColor: p.hp>50 ? '#43c62f' : p.hp>25 ? '#e0a800' : '#ef476f' }]} /></View>
+                    </View>
+                    {i===0 && streak !== 0 && <Text style={st.pHp}>Chuỗi {streak>0 ? 'thắng ' : 'thua '}{Math.abs(streak)}</Text>}
+                    {!p.alive && !!p.rank && <Text style={st.pHp}>Đã bị loại — Hạng {p.rank}</Text>}
+                  </View>
+                  <View style={[st.pAvatar, isOpp && p.alive && st.pAvatarOpp, !p.alive && { borderColor:'#3a4568' }]}>
+                    <View style={{ position:'absolute', left:-4, top:-5 }}>
+                      <ChibiRig spec={CHAMPIONS[(i*3) % CHAMPIONS.length]} size={46} state={p.alive ? 'idle' : 'death'}/>
+                    </View>
                   </View>
                 </Pressable> ); })}</ScrollView>)
               : (<ScrollView showsVerticalScrollIndicator={false}><Text style={st.dim}>Sát thương đánh thường theo nhật ký trận gần nhất. Chạm người chơi ở tab Người chơi để xem bàn cờ của họ.</Text>{dmgStats.map((d, i) => (<View key={i} style={st.dRow}><Text style={[st.dName, { color: d.team===0 ? '#7fb3ff' : '#ff8fab' }]}>{d.name}</Text><View style={st.dBar}><View style={{ height: 10, borderRadius: 5, width: (d.dmg/maxDmg*100)+'%', backgroundColor: d.team===0 ? '#4361ee' : '#ef476f' }} /></View><Text style={st.dVal}>{d.dmg}</Text></View>))}{!dmgStats.length && <Text style={st.dim}>Chưa có dữ liệu — hãy đấu một round.</Text>}</ScrollView>)}
@@ -431,13 +521,13 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             </>)}
           </View>
         </View>
-        {/* ===== BENCH ===== */}
-        <View style={[st.benchRow, hi('bench') && st.tutHi]}><Text style={st.benchLbl}>Bench</Text>{Array.from({length:9}).map((_,i) => { const u = bench[i]; return (
+        {/* ===== BENCH (o da long vao mep duoi san) ===== */}
+        {phase!=='battle' && (<View style={[st.benchRow, hi('bench') && st.tutHi]}><Text style={st.benchLbl}>Bench</Text>{Array.from({length:9}).map((_,i) => { const u = bench[i]; return (
           <Pressable key={i} onPress={() => u && tapBench(u)} style={[st.benchCell, u && selUid===u.uid && st.cellSel]}>{u ? <ChibiRig spec={champById(u.defId)} size={44} star={u.star} state='idle'/> : <Text style={st.cellDot}>·</Text>}</Pressable> ); })}
           <View style={st.logMini}>{log.slice(0,2).map((l,i) => <Text key={i} style={st.logTxt} numberOfLines={1}>{l}</Text>)}</View>
-        </View>
+        </View>)}
         {/* ===== SHOP ===== */}
-        <View style={st.shopRow}>
+        {phase!=='battle' && (<View style={st.shopRow}>
           <View style={st.shopLeft}>
             <View style={st.lvlCard}><Text style={st.lvlBig}>Cấp {level}</Text><View style={st.xpBar}><View style={{ height: 7, backgroundColor:'#4361ee', width: Math.min(100, xp/Math.max(1,xpToNext(level))*100)+'%' }} /></View><Text style={st.dim}>{level>=9 ? 'Cấp tối đa' : xp+'/'+xpToNext(level)+' XP'}</Text></View>
             <View style={{ flexDirection:'row', gap:6 }}>
@@ -465,8 +555,25 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             </View>
           </View>
           {phase==='plan' && <Pressable style={[st.fightBtn, hi('fight') && st.tutHiBtn]} onPress={startBattle}><Text style={st.fightTxt}>Bắt đầu đấu</Text><Text style={st.fightSub}>{isArena ? enemyForRound().label : mode==='campaign' ? stageDef(stageId).name : mode==='waves' ? 'Sóng '+wave : 'Đội luyện tập'}</Text></Pressable>}
-        </View>
+        </View>)}
         <Pressable style={st.homeLink} onPress={() => router.back()}><Text style={st.dim}>Về trang chủ</Text></Pressable>
+        {/* ===== VONG TRON BAN TUONG o 2 goc duoi (chi khi dang chon 1 tuong, phase chuan bi) ===== */}
+        {phase==='plan' && selUnit && (<React.Fragment>
+          <Pressable style={[st.sellCircle, { left: -74, bottom: -80 }]} onPress={sellSelected}>
+            <View style={{ position:'absolute', right: 20, top: 24, alignItems:'center', gap: 1 }}>
+              <Svg width={24} height={24} viewBox="0 0 24 24"><Rect x="5" y="7" width="14" height="13" rx="2" fill="#aab4d4" /><Rect x="3.5" y="4.5" width="17" height="3" rx="1.5" fill="#e8ecff" /><Rect x="9.5" y="2" width="5" height="3" rx="1.4" fill="#e8ecff" /><Rect x="8.6" y="10" width="2.2" height="7" fill="#232c4c" /><Rect x="13.2" y="10" width="2.2" height="7" fill="#232c4c" /></Svg>
+              <Text style={st.sellGold}>{sellValue(selUnit.defId, selUnit.star)} vàng</Text>
+              <Text style={st.sellLbl}>Bán {champById(selUnit.defId).name}</Text>
+            </View>
+          </Pressable>
+          <Pressable style={[st.sellCircle, { right: -74, bottom: -80 }]} onPress={sellSelected}>
+            <View style={{ position:'absolute', left: 20, top: 24, alignItems:'center', gap: 1 }}>
+              <Svg width={24} height={24} viewBox="0 0 24 24"><Rect x="5" y="7" width="14" height="13" rx="2" fill="#aab4d4" /><Rect x="3.5" y="4.5" width="17" height="3" rx="1.5" fill="#e8ecff" /><Rect x="9.5" y="2" width="5" height="3" rx="1.4" fill="#e8ecff" /><Rect x="8.6" y="10" width="2.2" height="7" fill="#232c4c" /><Rect x="13.2" y="10" width="2.2" height="7" fill="#232c4c" /></Svg>
+              <Text style={st.sellGold}>{sellValue(selUnit.defId, selUnit.star)} vàng</Text>
+              <Text style={st.sellLbl}>Bán {champById(selUnit.defId).name}</Text>
+            </View>
+          </Pressable>
+        </React.Fragment>)}
         {/* ===== OVERLAYS ===== */}
         {isTut && tutStep && (
           <View style={st.coach}>
@@ -497,7 +604,14 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
             <View style={st.carCenter}><ChibiRig spec={champById('toto')} size={64} state='victory'/></View>
           </View>
         </View>)}
-{scout !== null && (<View style={st.overlay}><View style={[st.modal, { maxWidth: 560 }]}>
+{augView && (<View style={st.overlay}><View style={st.modal}>
+          <Text style={st.modalTitle}>Cường hóa đã chọn</Text>
+          <Text style={st.modalDesc}>Cường hóa nhận ở các mốc 2-1, 3-2, 4-2 và có hiệu lực cả trận.</Text>
+          {augments.map(id => { const a = AUGMENTS.find(x => x.id===id); return a ? (<View key={id} style={st.augViewRow}><Svg width={22} height={22} viewBox="0 0 24 24"><Polygon points="12,1.5 22.5,12 12,22.5 1.5,12" fill="#2b3a67" stroke="#ffd60a" strokeWidth="1.6" /><Polygon points={starPoints(12, 12, 5.5)} fill="#ffd60a" /></Svg><View style={{ flex: 1 }}><Text style={st.selName}>{a.name}</Text><Text style={st.dim}>{a.desc}</Text></View></View>) : null; })}
+          {!augments.length && <Text style={st.dim}>Chưa có cường hóa nào.</Text>}
+          <Pressable style={st.bigBtn} onPress={() => setAugView(false)}><Text style={st.bigTxt}>Đóng</Text></Pressable>
+        </View></View>)}
+        {scout !== null && (<View style={st.overlay}><View style={[st.modal, { maxWidth: 560 }]}>
           <Text style={st.modalTitle}>Bàn cờ của {players[scout]?.name ?? 'Đối thủ'} (chỉ xem)</Text>
           <Text style={st.modalDesc}>Cấp {scout === 0 ? level : players[scout]?.lvl} — {scoutTeam.length} tướng trên bàn. Xem đội hình đối thủ để sắp xếp lại đội của bạn.</Text>
           <View style={st.scoutBoard}>
@@ -509,6 +623,14 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
         </View></View>)}
         {(augChoice || finished) && (<View style={st.overlay}><View style={st.modal}>
           {finished ? (<><Text style={st.modalTitle}>Kết quả</Text><Text style={st.modalDesc}>{finished}</Text>
+            {reward && (<View style={st.rewardBox}>
+              <Text style={st.rewardXp}>+{reward.xp} XP hồ sơ</Text>
+              {reward.lpDelta !== undefined && (<View style={{ flexDirection:'row', alignItems:'center', gap:8 }}>
+                {reward.tier !== undefined && <RankBadge tier={reward.tier} size={30} />}
+                <Text style={[st.rewardLp, { color: reward.lpDelta >= 0 ? '#57e389' : '#ff8fab' }]}>{reward.lpDelta >= 0 ? '+' : ''}{reward.lpDelta} LP — {reward.rankText}{reward.promoted ? ' — THĂNG HẠNG!' : reward.demoted ? ' — Giáng hạng' : ''}</Text>
+              </View>)}
+              {reward.lpDelta === undefined && <Text style={st.rewardNote}>Chế độ này chỉ cộng XP, không tính LP hạng.</Text>}
+            </View>)}
             <View style={{ flexDirection:'row', gap:10, justifyContent:'center' }}>{[CHAMPIONS[0], CHAMPIONS[16], CHAMPIONS[23]].map(d => <ChibiRig key={d.id} spec={d} size={70} state={finished.includes('Thắng') || finished.includes('Vô địch') || finished.includes('hạng 1') || finished.includes('Hoàn thành') ? 'victory' : 'hurt'}/>)}</View>
             <Pressable style={st.bigBtn} onPress={() => router.replace('/')}><Text style={st.bigTxt}>Về trang chủ</Text></Pressable></>)
           : (<><Text style={st.modalTitle}>Chọn cường hóa — {roundLabel(round)}</Text><Text style={st.modalDesc}>Mốc cường hóa kiểu TFT (2-1, 3-2, 4-2). Chọn 1 trong 3, hiệu lực cả trận.</Text><View style={st.modalRow}>{(augChoice ?? []).map(id => { const a = AUGMENTS.find(x => x.id===id)!; return (
@@ -521,10 +643,21 @@ export default function GameScreen({ mode, stageId = 1 }: Props) {
 const st = StyleSheet.create({
   root:{ flex:1, backgroundColor:'#14101f', alignItems:'center', justifyContent:'center' },
   frame:{ backgroundColor:'#10182e', borderRadius:16, borderWidth:2, borderColor:'#c9a227', padding:8, gap:6, overflow:'hidden', maxWidth:'100%', maxHeight:'100%' },
-  topbar:{ flexDirection:'row', gap:10, alignItems:'center', backgroundColor:'#1a2340', borderRadius:12, borderWidth:1, borderColor:'#c9a227', paddingHorizontal:10, paddingVertical:6 },
-  stageDots:{ flexDirection:'row', gap:4, alignItems:'center' }, stageLbl:{ fontWeight:'900', fontSize:17, color:'#f5d67b', marginRight:4 },
+  topbar:{ flexDirection:'row', gap:10, alignItems:'flex-start', backgroundColor:'#1a2340', borderRadius:12, borderWidth:1, borderColor:'#c9a227', paddingHorizontal:10, paddingVertical:6 },
+  augSquare:{ width:46, height:46, borderRadius:9, backgroundColor:'#10182e', borderWidth:2, borderColor:'#c9a227', alignItems:'center', justifyContent:'center', position:'relative', marginTop:2 },
+  augCount:{ position:'absolute', right:-6, top:-6, minWidth:18, height:18, borderRadius:9, backgroundColor:'#ffd60a', borderWidth:1, borderColor:'#a86e00', alignItems:'center', justifyContent:'center', paddingHorizontal:4 }, augCountTxt:{ fontSize:10.5, fontWeight:'900', color:'#23180a' },
+  augViewRow:{ flexDirection:'row', gap:9, alignItems:'center', backgroundColor:'#232d4f', borderRadius:11, padding:8, borderWidth:1, borderColor:'#46538a' },
+  stageCluster:{ flex:1, alignItems:'center', gap:3 },
+  stagePlaque:{ backgroundColor:'#0d1526', borderWidth:1.5, borderColor:'#c9a227', borderRadius:10, paddingHorizontal:16, paddingVertical:1, shadowColor:'#000', shadowOpacity:0.4, shadowRadius:5, shadowOffset:{ width:0, height:2 } },
+  stageBig:{ fontWeight:'900', fontSize:20, color:'#f5d67b', letterSpacing:1 },
+  stageDots:{ flexDirection:'row', gap:4, alignItems:'center' },
   dot:{ width:22, height:22, borderRadius:11, backgroundColor:'#2a3454', alignItems:'center', justifyContent:'center', borderWidth:1, borderColor:'#46538a' }, dotCur:{ backgroundColor:'#f5c542', borderColor:'#f5c542', transform:[{scale:1.2}] }, dotPve:{ backgroundColor:'#8a5a13' }, dotCar:{ backgroundColor:'#5a189a' }, dotTxt:{ fontSize:11, fontWeight:'800', color:'#eef1ff' },
-  timerBox:{ flex:1, gap:2 }, timerBar:{ height:8, backgroundColor:'rgba(255,255,255,0.14)', borderRadius:4, overflow:'hidden' }, timerFill:{ height:8, borderRadius:4 }, timerTxt:{ fontWeight:'800', color:'#eef1ff', fontSize:12 }, sumTxt:{ fontSize:11, color:'#aab4d4', fontWeight:'600' },
+  timerRow:{ flexDirection:'row', alignItems:'center', gap:7 }, timerBar:{ height:7, backgroundColor:'rgba(255,255,255,0.14)', borderRadius:4, overflow:'hidden' }, timerFill:{ height:7, borderRadius:4 },
+  timerPill:{ backgroundColor:'rgba(8,12,26,0.85)', borderRadius:999, borderWidth:1, borderColor:'#46538a', paddingHorizontal:10, paddingVertical:2.5 }, timerPillTxt:{ fontWeight:'800', color:'#eef1ff', fontSize:11.5 }, timerTxt:{ fontWeight:'800', color:'#eef1ff', fontSize:12 }, sumTxt:{ fontSize:11, color:'#aab4d4', fontWeight:'600' },
+  sellCircle:{ position:'absolute', width:156, height:156, borderRadius:78, backgroundColor:'rgba(9,12,25,0.93)', borderWidth:2.5, borderColor:'#c9a227', zIndex:45, shadowColor:'#000', shadowOpacity:0.5, shadowRadius:10, elevation:8 },
+  sellGold:{ fontSize:15, fontWeight:'900', color:'#ffd60a' }, sellLbl:{ fontSize:10, fontWeight:'700', color:'#aab4d4', maxWidth:78, textAlign:'center' },
+  rewardBox:{ backgroundColor:'#141b33', borderWidth:1, borderColor:'#c9a227', borderRadius:12, paddingHorizontal:12, paddingVertical:8, alignItems:'center', gap:4, alignSelf:'stretch' },
+  rewardXp:{ fontSize:13.5, fontWeight:'900', color:'#7fb3ff' }, rewardLp:{ fontSize:13, fontWeight:'900' }, rewardNote:{ fontSize:11, color:'#aab4d4', fontWeight:'600' },
   topBtns:{ flexDirection:'row', gap:6 }, tBtn:{ backgroundColor:'#2f6db3', borderRadius:999, paddingHorizontal:10, paddingVertical:6, borderTopWidth:1, borderTopColor:'#8fc1f5', borderBottomWidth:4, borderBottomColor:'#1c4472' }, tBtnTxt:{ color:'#fff', fontWeight:'700', fontSize:11 },
   middle:{ flex:1, flexDirection:'row', gap:8, minHeight:0 },
   leftPanel:{ width:172, backgroundColor:'rgba(26,35,64,0.96)', borderRadius:14, padding:8, borderWidth:1.5, borderColor:'#c9a227' },
@@ -537,14 +670,14 @@ const st = StyleSheet.create({
   arena:{ flex:1, backgroundColor:'#1d3a2a', borderRadius:16, borderWidth:2, borderColor:'#c9a227', position:'relative', overflow:'hidden', alignItems:'center' },
   selRing:{ position:'absolute', borderWidth:3, borderColor:'#ffb703', borderRadius:999, backgroundColor:'#ffb70333' },
   hpBar:{ width:'92%', height:5, backgroundColor:'rgba(6,8,20,0.5)', borderRadius:3, overflow:'hidden' }, hpFill:{ height:5, backgroundColor:'#38b000' }, manaBar:{ width:'92%', height:4, backgroundColor:'rgba(6,8,20,0.5)', borderRadius:3, overflow:'hidden', marginTop:1 }, manaFill:{ height:4, backgroundColor:'#4dabff' },
-  legend:{ position:'absolute', left:8, bottom:6, flexDirection:'row', alignItems:'center', gap:6, backgroundColor:'rgba(16,22,44,0.88)', borderRadius:999, paddingRight:12, paddingLeft:2, paddingVertical:2 }, legendName:{ fontWeight:'800', fontSize:11, color:'#f5d67b' }, legendHp:{ fontSize:11, color:'#aab4d4', fontWeight:'600' },
+  legend:{ position:'absolute', left:7, top:'33%', alignItems:'center', gap:3, zIndex:30 }, legendName:{ fontWeight:'900', fontSize:12, color:'#fff', textShadowColor:'rgba(0,0,0,0.8)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:3 }, legendBadge:{ backgroundColor:'#f5c542', borderRadius:5, paddingHorizontal:6, paddingVertical:1, borderWidth:1, borderColor:'#a86e00' }, legendBadgeTxt:{ fontSize:9.5, fontWeight:'900', color:'#23180a' }, legendHp:{ fontSize:10, color:'#e8ecff', fontWeight:'700', textShadowColor:'rgba(0,0,0,0.8)', textShadowOffset:{ width:0, height:1 }, textShadowRadius:3 },
   battleCtrls:{ position:'absolute', right:8, bottom:8, flexDirection:'row', gap:6 },
   logFloat:{ position:'absolute', left:8, top:8, backgroundColor:'rgba(10,14,30,0.82)', borderRadius:10, padding:7, maxWidth:300 }, logTxt:{ fontSize:11, color:'#ffe9a8' },
   tabRow:{ flexDirection:'row', gap:6, marginBottom:6 }, tab:{ flex:1, backgroundColor:'#242f52', borderRadius:999, paddingVertical:5, alignItems:'center' }, tabOn:{ backgroundColor:'#f5c542' }, tabTxt:{ fontWeight:'800', fontSize:11, color:'#eef1ff' }, tabTxtOn:{ color:'#23180a' },
-  pRow:{ flexDirection:'row', gap:7, alignItems:'center', backgroundColor:'#232d4f', borderRadius:11, padding:6, marginBottom:5, borderWidth:2, borderColor:'transparent' }, pDead:{ opacity:0.45, backgroundColor:'#1a2340' }, pOpp:{ borderColor:'#ffb703', backgroundColor:'#232d4f' }, pName:{ fontWeight:'800', fontSize:11, color:'#eef1ff' }, pHpBar:{ height:7, backgroundColor:'rgba(255,255,255,0.14)', borderRadius:4, overflow:'hidden', marginVertical:2 }, pHpFill:{ height:7 }, pHp:{ fontSize:10, color:'#aab4d4', fontWeight:'600' },
+  pRow:{ flexDirection:'row', gap:7, alignItems:'center', backgroundColor:'#232d4f', borderRadius:11, padding:6, marginBottom:5, borderWidth:2, borderColor:'transparent' }, pDead:{ opacity:0.5, backgroundColor:'#171f38' }, pOpp:{ borderColor:'#ffb703', backgroundColor:'#2a3358' }, pName:{ fontWeight:'800', fontSize:10.5, color:'#eef1ff' }, pHpBar:{ height:5, backgroundColor:'rgba(255,255,255,0.14)', borderRadius:3, overflow:'hidden' }, pHpFill:{ height:5 }, pHp:{ fontSize:9.5, color:'#aab4d4', fontWeight:'600' }, pHpBig:{ fontSize:18, fontWeight:'900', lineHeight:20 }, pAvatar:{ width:38, height:38, borderRadius:19, overflow:'hidden', borderWidth:2, borderColor:'#46538a', backgroundColor:'#141b33', position:'relative' }, pAvatarOpp:{ borderColor:'#ffb703' },
   dRow:{ flexDirection:'row', alignItems:'center', gap:6, marginBottom:5 }, dName:{ width:86, fontSize:11, fontWeight:'700' }, dBar:{ flex:1, backgroundColor:'rgba(255,255,255,0.12)', borderRadius:5 }, dVal:{ width:38, fontSize:11, fontWeight:'800', textAlign:'right', color:'#eef1ff' },
   infoLine:{ fontWeight:'800', color:'#f5d67b' },
-  benchRow:{ flexDirection:'row', gap:5, alignItems:'center', backgroundColor:'rgba(26,35,64,0.96)', borderRadius:12, padding:6, borderWidth:1.5, borderColor:'#c9a227' }, benchLbl:{ fontWeight:'900', color:'#f5d67b', fontSize:12, marginRight:2 }, benchCell:{ width:50, height:50, backgroundColor:'#232d4f', borderRadius:10, alignItems:'center', justifyContent:'center', borderWidth:1, borderColor:'#46538a' }, cellSel:{ borderWidth:3, borderColor:'#ffb703' }, cellDot:{ color:'#7f8fc4', fontSize:18 }, logMini:{ flex:1, gap:1 },
+  benchRow:{ flexDirection:'row', gap:5, alignItems:'center', backgroundColor:'rgba(22,25,34,0.94)', borderRadius:10, padding:6, borderWidth:1.5, borderColor:'#6e5a1e', marginTop:-11, zIndex:25, shadowColor:'#000', shadowOpacity:0.35, shadowRadius:6, shadowOffset:{ width:0, height:-2 } }, benchLbl:{ fontWeight:'900', color:'#f5d67b', fontSize:12, marginRight:2 }, benchCell:{ width:50, height:50, backgroundColor:'#454e61', borderRadius:7, alignItems:'center', justifyContent:'center', borderWidth:1, borderColor:'#79839b', borderTopWidth:2.5, borderTopColor:'#aeb8c4', borderBottomWidth:3.5, borderBottomColor:'#22262f' }, cellSel:{ borderWidth:3, borderColor:'#ffb703' }, cellDot:{ color:'#98a2b8', fontSize:18 }, logMini:{ flex:1, gap:1 },
   shopRow:{ flexDirection:'row', gap:8, backgroundColor:'rgba(26,35,64,0.96)', borderRadius:14, padding:8, borderWidth:1.5, borderColor:'#c9a227', alignItems:'stretch' },
   shopLeft:{ width:206, gap:6 }, lvlCard:{ backgroundColor:'#232d4f', borderRadius:10, padding:7 }, lvlBig:{ fontWeight:'900', fontSize:16, color:'#f5d67b' }, xpBar:{ height:7, backgroundColor:'rgba(255,255,255,0.14)', borderRadius:4, overflow:'hidden', marginVertical:3 },
   shopBtn:{ flex:1, backgroundColor:'#2f6db3', borderRadius:10, paddingVertical:7, alignItems:'center', borderTopWidth:1, borderTopColor:'#8fc1f5', borderBottomWidth:4, borderBottomColor:'#1c4472' }, shopBtnTxt:{ color:'#fff', fontWeight:'800', fontSize:10 },

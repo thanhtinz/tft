@@ -42,8 +42,21 @@ Game auto-battler kiểu Teamfight Tactics (TFT) với đồ họa chibi vẽ ta
 2. Trong project: vào **Project Settings → API**, copy **Project URL** và **anon public key**.
 3. Điền vào `app.json`: `expo.extra.supabaseUrl` và `expo.extra.supabaseAnonKey` (đã có sẵn 2 khóa trống), hoặc đặt biến môi trường `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` khi build.
 4. Build lại bản web/app (Vercel tự deploy lại khi push main nếu biến môi trường được đặt trong Vercel Project Settings; bản native cần build lại bằng EAS).
-5. Không cần chạy SQL. File `supabase/schema.sql` là tùy chọn (bảng lịch sử/phòng công khai) — chạy trong SQL Editor nếu muốn dùng sau.
+5. Riêng phòng đấu online thì không cần chạy SQL. Nếu muốn bật cả **đăng nhập online + hồ sơ đồng bộ**, hãy chạy `supabase/schema.sql` trong SQL Editor (tạo bảng `profiles` + lịch sử) và tắt Confirm email — chi tiết ở mục "Hệ thống tài khoản" ngay dưới.
 Lưu ý: anon key là khóa công khai phía client, dùng kèm Realtime cho phòng bạn bè là phù hợp; đừng điền service_role key vào app.
+
+## Hệ thống tài khoản, hồ sơ và hạng (`src/game/auth.ts`, `accounts.ts`, `authCloud.ts`)
+- **Danh tính kiểu Riot ID**: Tên hiển thị + tag #4 số tự sinh (ví dụ `TinPro#2003`) — định danh mời bạn/chủ phòng. Chạm avatar + tên ở góc trên trái trang chủ để vào **Trang tài khoản** (khách thì vào màn Đăng nhập).
+- **2 chế độ backend**: (1) Có cấu hình Supabase (cùng khóa với PvP Online ở trên): dùng **Supabase Auth** thật (email/mật khẩu), hồ sơ lưu bảng `profiles` trong `supabase/schema.sql` (đã kèm RLS: đọc công khai hồ sơ rút gọn để tìm bạn, chỉ chủ sở hữu sửa được của mình) — cần thêm bước: chạy `schema.sql` trong SQL Editor và tắt **Confirm email** (Authentication → Providers → Email) để đăng nhập được ngay. (2) Chưa cấu hình: **tài khoản LOCAL trên thiết bị** — đăng ký/đăng nhập lưu AsyncStorage, mật khẩu băm SHA-256 + salt lặp 200 vòng (`auth.ts` tự cài SHA-256 thuần, không lưu mật khẩu thô), nhiều tài khoản trên cùng máy, dữ liệu game (Ngọc/PvE/thống kê/hạng/lịch sử/bạn bè) gắn riêng theo từng tài khoản. Đây là chế độ test ngay trên bản live; giao diện ghi rõ "Tài khoản trên thiết bị này". Chế độ **khách** vẫn chơi mọi chế độ nhưng không có hồ sơ đám mây/hạng chính thức.
+- **Trang tài khoản** (bố cục hồ sơ kiểu TFT): header có avatar tướng (đổi được từ danh sách tướng), Tên#Tag (chạm giữ để sao chép), cấp độ + thanh XP, huy hiệu hạng vẽ SVG lớn + LP + thanh tiến trình hạng. 4 tab: **Tổng quan** (tổng trận, Top 1, Top 4, hạng trung bình, tiến độ PvE x/5.200, kỷ lục sóng, Ngọc), **Lịch sử đấu** (ghi thật khi trận kết thúc ở mọi chế độ: hạng đạt, đội hình cuối trận, +XP, ±LP), **Bạn bè** (thêm bằng Riot ID; local chỉ tìm tài khoản trên cùng máy, Supabase tìm trong `profiles`; xóa bạn), **Cài đặt** (đổi tên, đổi avatar, đổi mật khẩu, đăng xuất, xóa tài khoản xác nhận 2 bước).
+- **XP/Cấp**: mỗi trận cộng XP theo hạng (Đấu Trường hạng 1→8: 50/42/36/30/24/18/12/8), thắng PvE +30, thua +8, sóng quái theo sóng, học chơi +20. XP lên cấp: cần `80 + (cấp-1)×40`.
+- **Hạng kiểu TFT**: 10 bậc Sắt → Đồng → Bạc → Vàng → Bạch Kim → Ngọc Lục Bảo → Kim Cương → Cao Thủ → Đại Cao Thủ → Thách Đấu; bậc tới Kim Cương chia IV–I, đủ 100 LP thăng 1 hạng/bậc; giáng hạng khi LP âm (về mức tương đương 75 LP trừ phần âm — đơn giản hóa so với TFT gốc), Cao Thủ+ thăng bậc ở 200 LP, sàn Sắt IV = 0 LP không tụt nữa. Chỉ trận Đấu Trường (AI + Online) tính LP; PvE/sóng quái/học chơi chỉ cộng XP. Bảng LP theo nhóm bậc (hạng 1..8):
+  - Sắt/Đồng: +46/+32/+20/+12/−4/−12/−22/−34
+  - Bạc/Vàng: +42/+30/+19/+11/−6/−15/−25/−38
+  - Bạch Kim/Ngọc Lục Bảo: +40/+28/+18/+10/−8/−17/−28/−42
+  - Kim Cương trở lên: +38/+26/+17/+10/−10/−19/−30/−45
+- Màn kết quả trận hiện +XP và thay đổi LP + huy hiệu hạng mới; PvP Online dùng Tên#Tag + avatar của tài khoản đã đăng nhập làm danh tính phòng.
+- Giới hạn hiện tại: chưa có Supabase project live (chờ người dùng tạo và điền URL + anon key như mục PvP Online) nên nhánh cloud chưa kiểm chứng thực tế — code bám API Supabase Auth/Profile chuẩn và cùng bật với PvP Online khi có khóa. Xóa tài khoản ở chế độ Supabase xóa dữ liệu hồ sơ/lịch sử của chính người dùng (RLS owner) rồi đăng xuất; xóa hẳn user khỏi Auth cần quyền admin trong Dashboard.
 
 ## Âm thanh tổng hợp bằng code (`src/game/audio.ts`)
 - Không dùng file nhạc thương mại. Trên **web**: Web Audio API — BGM dạng sequencer chiptune vòng lặp (2 bản: trang chủ nhẹ nhàng 96bpm, trong trận hào hứng 132bpm, có giai điệu + bass), 15 SFX tổng hợp bằng oscillator (click, tiếng xu khi mua, bán, đặt tướng, làm mới, lên sao, lên cấp, gắn đồ, bắt đầu trận, đánh trúng, tung chiêu, thắng, thua, vô địch, lỗi). Nhạc chỉ bắt đầu sau thao tác đầu tiên (đúng chính sách autoplay của trình duyệt).
@@ -80,7 +93,10 @@ npx expo export --platform web   # xuất bản web tĩnh vào dist/ (demo PC)
 - `src/game/audio.ts` — audio manager duy nhất: dữ liệu giai điệu/SFX + engine Web Audio (web) + phát WAV qua expo-audio (native).
 - `src/game/tutorial.ts` — máy trạng thái 12 bước của hướng dẫn tương tác.
 - `src/game/rig.ts` — xương, clips, nội suy keyframe, state machine animation, hàm 2.5D.
-- `src/game/storage.ts` — tiến độ/cài đặt/danh tính người chơi (AsyncStorage).
-- `src/components/` — GameScreen (màn hình trận ngang chuẩn TFT cho offline/tutorial), OnlineGameScreen (phòng + trận online), ChibiRig, ChibiArt, SceneArt.
-- `src/app/` — expo-router: trang chủ, trận đấu, bản đồ chiến dịch, bộ sưu tập, hướng dẫn đọc, menu PvP online, phòng online.
-- `supabase/schema.sql` — bảng tùy chọn (không bắt buộc để chơi online).
+- `src/game/storage.ts` — tiến độ/cài đặt/danh tính người chơi (AsyncStorage), scope dữ liệu theo tài khoản + hồ sơ/lịch sử/bạn bè.
+- `src/game/auth.ts` — logic tài khoản thuần (SHA-256 tự cài, băm mật khẩu + salt, đăng ký/đăng nhập local, tag Riot ID, XP/cấp, LP + 10 bậc hạng) — có `scripts/test-auth.mjs`.
+- `src/game/accounts.ts` — phiên đăng nhập + danh tính, gán thưởng XP/LP/lịch sử sau trận, bạn bè local.
+- `src/game/authCloud.ts` — lớp Supabase Auth + bảng `profiles` (chỉ chạy khi đã cấu hình khóa).
+- `src/components/` — GameScreen (màn hình trận ngang chuẩn TFT cho offline/tutorial), OnlineGameScreen (phòng + trận online), ChibiRig, ChibiArt, SceneArt, RankBadge (huy hiệu hạng SVG), AuthUi (khung màn hình đăng nhập/đăng ký).
+- `src/app/` — expo-router: trang chủ, trận đấu, bản đồ chiến dịch, bộ sưu tập, hướng dẫn đọc, menu PvP online, phòng online, đăng nhập, đăng ký, tài khoản.
+- `supabase/schema.sql` — bảng phòng/lịch sử online (tùy chọn) + bảng `profiles`/lịch sử tài khoản cho đăng nhập online.

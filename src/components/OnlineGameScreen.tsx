@@ -9,6 +9,8 @@ import { rowDepth, stateForUnit } from '../game/rig';
 import { AUGMENTS, CHAMPIONS, champById, itemById, monsterById, traitName } from '../game/data';
 import { BattleResult, PlacedUnit, computeSynergies, interestOf, isPveRound, newUid, pveEnemiesForRound, randomItem, rollShop, sellValue, simulateBattle, streakBonus, xpToNext } from '../game/engine';
 import { loadMeta, loadPlayer, saveMeta } from '../game/storage';
+import { applyMatchRewards } from '../game/accounts';
+import { rankLabel, xpForPlacement } from '../game/auth';
 import { audio } from '../game/audio';
 import { renderUnitsForFrame } from '../game/fx';
 import { BattleInfo, OnlineMatch, StandingsInfo, quickMatch } from '../game/onlineClient';
@@ -44,6 +46,7 @@ export default function OnlineGameScreen({ mode, joinCode, playerName }: Props) 
   const [battleLabel, setBattleLabel] = useState('');
   const [spectate, setSpectate] = useState(false);
   const submittedRound = useRef(0); const resolvedRef = useRef(false); const myWinRef = useRef(false); const battleInfoRef = useRef<BattleInfo | null>(null);
+  const rewardRecordedRef = useRef(false); const [rewardTxt, setRewardTxt] = useState('');
   const allUnits = useMemo(() => [...board, ...bench], [board, bench]);
   const synergies = useMemo(() => computeSynergies(board), [board]);
   const say = (s: string) => setLog(prev => [s, ...prev].slice(0, 8));
@@ -133,6 +136,11 @@ export default function OnlineGameScreen({ mode, joinCode, playerName }: Props) 
       loadMeta().then(async mm => { mm.bestRank = Math.min(mm.bestRank, rank); mm.gems += Math.max(10, (9 - rank) * 15); if (rank === 1) mm.wins += 1; await saveMeta(mm); });
       audio.playSfx(rank === 1 ? 'champion' : 'lose');
       setFinished(rank === 1 ? 'Vô địch online! Bạn đứng hạng 1/8. Tuyệt vời!' : 'Trận online kết thúc. Bạn xếp hạng ' + rank + '/8.');
+      if (!rewardRecordedRef.current) { rewardRecordedRef.current = true;
+        applyMatchRewards({ mode: 'online', modeLabel: 'PvP Online', resultText: rank === 1 ? 'Vô địch trận online' : 'Xếp hạng ' + rank + '/8 trong trận online', placement: rank, totalPlayers: 8, xp: xpForPlacement(rank), team: board.map(u => ({ defId: u.defId, star: u.star })) })
+          .then(r => setRewardTxt(`+${r.xpGained} XP hồ sơ${r.lpDelta !== undefined ? ` • ${r.lpDelta >= 0 ? '+' : ''}${r.lpDelta} LP — ${rankLabel(r.profile.rank)}${r.promoted ? ' — THĂNG HẠNG!' : r.demoted ? ' — Giáng hạng' : ''}` : ''}`))
+          .catch(() => {});
+      }
       setPhase('done');
     } else { say(win ? 'Thắng vòng! Nhận ' + reward + ' vàng.' : 'Thua vòng này. Bảng xếp hạng đã cập nhật.'); audio.playSfx(win ? 'win' : 'lose'); }
   }
@@ -250,6 +258,7 @@ export default function OnlineGameScreen({ mode, joinCode, playerName }: Props) 
       <Pressable style={st.homeBtn} onPress={leaveRoom}><Text style={st.smallTxt}>Rời trận / về menu online</Text></Pressable>
       {(draft || augChoice || finished) && (<View style={st.overlay}><View style={st.modal}>
         {finished ? (<><Text style={st.modalTitle}>Kết quả trận online</Text><Text style={st.modalDesc}>{finished}</Text>
+          {!!rewardTxt && <Text style={[st.modalDesc, { fontWeight: '800', color: '#4361ee' }]}>{rewardTxt}</Text>}
           <Pressable style={st.bigBtn} onPress={leaveRoom}><Text style={st.bigTxt}>Về menu online</Text></Pressable></>)
           : draft ? (<><Text style={st.modalTitle}>Vòng chọn thưởng</Text><Text style={st.modalDesc}>Chọn 1 tướng miễn phí để bắt đầu trận đấu.</Text><View style={st.modalRow}>{draft.map(id => { const d = champById(id); return (
             <Pressable key={id} style={st.shopCard} onPress={() => chooseDraft(id)}><ChibiRig spec={d} size={88} state='victory' /><Text style={st.shopName}>{d.name}</Text><Text style={st.shopTrait}>{d.traits.map(traitName).join(' / ')}</Text></Pressable>); })}</View></>)
