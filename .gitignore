@@ -6,3 +6,5 @@ dist/
 assets/icon.png
 assets/favicon.png
 scripts/.build/
+assets/audio/
+scripts/.build-*/

@@ -1,1 +1,1 @@
-{"buildCommand":"(npm run icons || true) && npx expo export --platform web","framework":null,"outputDirectory":"dist","rewrites":[{"destination":"/index.html","source":"/(.*)"}]}
+{"buildCommand":"(npm run icons || true) && (npm run audio || true) && npx expo export --platform web","framework":null,"outputDirectory":"dist","rewrites":[{"destination":"/index.html","source":"/(.*)"}]}

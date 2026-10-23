@@ -1,10 +1,14 @@
 {
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@supabase/supabase-js": "^2.118.0",
     "expo": "~58.0.17",
+    "expo-asset": "~58.0.18",
+    "expo-audio": "~58.0.10",
     "expo-constants": "~58.0.13",
     "expo-linking": "~58.0.14",
     "expo-router": "~58.0.25",
+    "expo-screen-orientation": "~58.0.3",
     "expo-status-bar": "~58.0.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -28,9 +32,10 @@
     "icons": "node scripts/generate-icons.mjs",
     "ios": "expo run:ios",
     "start": "expo start",
-    "test": "tsc --ignoreConfig --ignoreDeprecations 6.0 src/game/data.ts src/game/engine.ts src/game/rig.ts --outDir scripts/.build --module commonjs --target es2020 --moduleResolution node10 --skipLibCheck --esModuleInterop && node scripts/test-headless.mjs",
+    "test": "tsc --ignoreConfig --ignoreDeprecations 6.0 src/game/data.ts src/game/engine.ts src/game/rig.ts --outDir scripts/.build --module commonjs --target es2020 --moduleResolution node10 --skipLibCheck --esModuleInterop && node scripts/test-headless.mjs && node scripts/test-online.mjs && node scripts/test-stages.mjs && node scripts/test-audio.mjs && node scripts/test-tutorial.mjs",
     "typecheck": "tsc --noEmit",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "audio": "node scripts/generate-audio.mjs"
   },
   "version": "1.0.0"
 }

@@ -1,5 +1,21 @@
 // Battle engine thuan TypeScript - khong phu thuoc React
 import { CHAMPIONS, ChampDef, ITEMS, MONSTERS, MonsterDef, SHOP_ODDS, TRAITS, champById, itemById } from './data';
+// RNG xac dinh: mulberry32 chuan (32-bit state, tra ve [0,1))
+export function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+// Hash chuoi -> so nguyen khong am: FNV-1a 32-bit
+export function hashSeed(str: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return h >>> 0;
+}
 export interface PlacedUnit { uid: string; defId: string; star: number; items: string[]; x: number; y: number; isMonster?: boolean; monster?: MonsterDef; }
 let uidCounter = 1;
 export const newUid = () => 'u' + (uidCounter++);
@@ -50,7 +66,7 @@ function makeSim(u: PlacedUnit, team: number, aug: string[], all: PlacedUnit[]):
     ad: st.ad*(1+buff.adPct/100), ap: st.ap+buff.apPct, armor: st.armor+buff.armor, mr: st.mr+buff.armor, as: st.as*(1+buff.asPct/100), baseAs: st.as*(1+buff.asPct/100), range:d.range, crit: st.crit+buff.crit, lifesteal: st.lifesteal, dodge: buff.dodge, manaRegen: buff.manaRegen, poison:0, buffAsUntil:0, skillKind:d.skill.kind, skillPower:d.skill.power, skillName:d.skill.name };
 }
 export function simulateBattle(player: PlacedUnit[], enemy: PlacedUnit[], aug: string[] = [], seed = 1): BattleResult {
-  let rngState = seed * 9301 + 49297; const rnd = () => { rngState = (rngState * 9301 + 49297) % 233280; return rngState / 233280; };
+  const rnd = mulberry32(seed);
   const units: SimUnit[] = [...player.map(u => makeSim(u, 0, aug, player)), ...enemy.map(u => makeSim(u, 1, [], enemy))];
   const frames: BattleFrame[] = []; const events: BattleEvent[] = [];
   const snap = (t:number) => frames.push({ t, units: units.map(u => ({ ...u })) });
