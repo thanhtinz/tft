@@ -35,7 +35,7 @@ import java.util.Set;
 
 // Man hinh tran dau — BO CUC SAN TRAN VIEN (hoc tu Kanto Tactics + FighterZ Tactics va ban RN):
 // tranh san la MOT moi truong lien mach phu kin 1280x720, moi UI la lop noi ban trong suot TREN san.
-// Ban co lon o giua (o 68px, sprite 74px), luoi chi mo o pha chuan bi va mo han khi giao tranh.
+// Ban co lon o giua (o 70px, sprite 80px), luoi chi mo o pha chuan bi va mo han khi giao tranh.
 // Bench = hang o ngay mep duoi trong san, shop = hang 5 the o dai duoi tren san.
 // Toc/he = chip nho doc mep trai; danh sach nguoi choi = hang gon mep phai; nhat ky = panel bat/tat.
 // Giu nguyen trinh dien: pow truyen tranh, announcer, bang sat thuong, popup trang bi, xoay gop sao.
@@ -50,7 +50,9 @@ public class MatchScreen extends ScreenAdapter {
     private Phase phase = Phase.PLANNING;
 
     // Geometry — ban co lon giua san, bench + shop la dai duoi TREN san
-    static final float BX = 409, BY = 158, CELL = 66;
+    // O 66 -> 70px: ban rong 490 (395..885), cao 490 (158..648) — van cach plaque tren (y>=668),
+    // chip trai (x<=210) va cot phai (x>=1092) rat xa nen khong chong lan. Sprite ban 74 -> 80px.
+    static final float BX = 395, BY = 158, CELL = 70;
     static final float BENCH_Y = 98, BENCH_X = 388, SLOT = 56;
     static final float SHOP_Y = 6, SHOP_X = 254, CARD_W = 148, CARD_H = 82;
 
@@ -145,8 +147,8 @@ public class MatchScreen extends ScreenAdapter {
         stage = new Stage(new FitViewport(1280, 720), batch);
         Assets a = game.assets;
 
-        // Thanh tren: plaque noi mong o giua-tren (vong | vang | cap | mau | thoi gian)
-        Table top = new Table();
+        // Thanh tren: plaque noi mong o giua-tren (vong | vang | cap | mau | thoi gian) — ShadowTable: tu do bong mem
+        Table top = Ui.shadowTable(a);
         top.setPosition(260, 668);
         top.setSize(760, 48);
         top.background(Ui.plaqueBg(a));
@@ -195,8 +197,8 @@ public class MatchScreen extends ScreenAdapter {
         invBox.top().align(com.badlogic.gdx.utils.Align.left);
         stage.addActor(invBox);
 
-        // Nhat ky: panel noi nho bat/tat bang nut, mac dinh tat de giua san thoang
-        logBox = new Table();
+        // Nhat ky: panel noi nho bat/tat bang nut, mac dinh tat de giua san thoang — ShadowTable: tu do bong mem
+        logBox = Ui.shadowTable(a);
         logBox.setPosition(8, 158);
         logBox.setSize(336, 196);
         logBox.background(Ui.bg(a, Ui.PANEL));
@@ -351,7 +353,13 @@ public class MatchScreen extends ScreenAdapter {
         }
         oppInfo = Ui.labelSmall(game.assets, "", Color.WHITE);
         oppInfo.setWrap(true);
-        playersBox.add(oppInfo).width(172).align(com.badlogic.gdx.utils.Align.left).padTop(4).row();
+        // Nen toi ban trong suot + bong mem sau khoi chu do tham/thong tin (truoc day la chu tran tren tranh):
+        // ShadowTable nen dac alpha 0.45, padding deu 9px, chu nam gon trong khoi.
+        Table oppBg = Ui.shadowTable(game.assets);
+        oppBg.background(Ui.bg(game.assets, new Color(0.04f, 0.03f, 0.10f, 0.45f)));
+        oppBg.pad(9);
+        oppBg.add(oppInfo).width(154).align(com.badlogic.gdx.utils.Align.left);
+        playersBox.add(oppBg).width(172).align(com.badlogic.gdx.utils.Align.left).padTop(4).row();
         StringBuilder ob = new StringBuilder();
         if (match.isPvp()) {
             ob.append("Đối thủ vòng này: ").append(nextOpponentText());
@@ -513,6 +521,7 @@ public class MatchScreen extends ScreenAdapter {
         batch.setColor(0, 0, 0, 0.07f);
         batch.draw(a.whiteTex(), 0, 0, 1280, 720);
         batch.setColor(Color.WHITE);
+        drawDepthOverlay(a);
         batch.end();
         drawBoardBase();
         // --- Don vi / bench / shop / chip toc-he ---
@@ -536,6 +545,11 @@ public class MatchScreen extends ScreenAdapter {
         drawProjectiles();
         drawPows();
         batch.end();
+        // --- Bong do cho khoi danh sach nguoi choi mep phai (Table khong nen, ve tay o day;
+        // cac nut/plaque/panel Scene2D con lai tu do bong qua Ui.ShadowTextButton/ShadowTable) ---
+        batch.begin();
+        drawShadowRect(playersBox.getX(), playersBox.getY(), playersBox.getWidth(), playersBox.getHeight(), 0.30f);
+        batch.end();
         // --- HUD Scene2D (plaque, nut noi, danh sach gon) ---
         stage.act(delta);
         stage.draw();
@@ -546,6 +560,34 @@ public class MatchScreen extends ScreenAdapter {
         else if (phase == Phase.RESULT) drawResultOverlay();
         else if (phase == Phase.OVER) drawOverOverlay();
         if (popupT > 0 && popupItemId != null) drawItemPopup();
+    }
+
+    // Lop phu chieu sau tren san (ve ngay sau tranh san, truoc tuong/UI):
+    // 1) Vet sang mem radial o vung tren san, nhuom mau theo theme, alpha rat thap (0.08–0.11).
+    // 2) Vignette goc toi — texture da chua alpha toi da 0.11 (san moi nuong san ~14%, tranh cong don).
+    private void drawDepthOverlay(Assets a) {
+        Color glow;
+        switch (arenaKey()) {
+            case "sunset": glow = new Color(1f, 0.60f, 0.28f, 1); break;
+            case "desert": glow = new Color(1f, 0.84f, 0.48f, 1); break;
+            case "ice":    glow = new Color(0.72f, 0.88f, 1f, 1); break;
+            default:       glow = new Color(1f, 0.94f, 0.70f, 1); break; // rung: am vang-xanh nhe (vang am la chu yeu)
+        }
+        if (a.glowTex() != null) {
+            batch.setColor(glow.r, glow.g, glow.b, 0.11f);
+            batch.draw(a.glowTex(), 400 - 330, 545 - 185, 660, 370);
+            batch.setColor(glow.r, glow.g, glow.b, 0.08f);
+            batch.draw(a.glowTex(), 905 - 245, 575 - 140, 490, 280);
+        }
+        batch.setColor(Color.WHITE);
+        if (a.vignetteTex() != null) batch.draw(a.vignetteTex(), 0, 0, 1280, 720);
+        batch.setColor(Color.WHITE);
+    }
+
+    // Bong do mem cho cac phan tu ve tay bang batch trong man tran (the shop, chip, panel overlay...).
+    private void drawShadowRect(float x, float y, float w, float h) { drawShadowRect(x, y, w, h, 0.35f); }
+    private void drawShadowRect(float x, float y, float w, float h, float alpha) {
+        Ui.drawShadow(batch, game.assets, x, y, w, h, alpha);
     }
 
     private void drawCentered(BitmapFont f, String text, float cx, float y, Color color) {
@@ -600,6 +642,7 @@ public class MatchScreen extends ScreenAdapter {
             boolean active = "1".equals(chip[1]);
             layout.setText(a.fontSmall, chip[0]);
             float w = Math.min(200, layout.width + 20);
+            drawShadowRect(10, top - 24, w, 24, 0.32f);
             batch.setColor(0.07f, 0.05f, 0.15f, active ? 0.78f : 0.60f);
             batch.draw(a.whiteTex(), 10, top - 24, w, 24);
             if (active) { batch.setColor(Ui.GOLD); batch.draw(a.whiteTex(), 10, top - 24, 3, 24); }
@@ -667,18 +710,18 @@ public class MatchScreen extends ScreenAdapter {
         if (preview != null) for (Engine.PlacedUnit u : preview) {
             float[] p = cellCenter(u.x, 6 - u.y);
             String art = u.isMonster && u.monster != null ? u.monster.id : u.defId;
-            drawShadow(p[0], p[1] - 30, 52);
+            drawShadow(p[0], p[1] - 34, 56);
             drawGroundRing(p[0], p[1], u.star, now, u.uid.hashCode());
-            drawUnitSprite(art, p[0], p[1], 68, u.star, true, 0.85f, 0, null);
+            drawUnitSprite(art, p[0], p[1], 74, u.star, true, 0.85f, 0, null);
             drawBars(p[0], p[1], 1, 0, 0, 1, u.star, false);
         }
         int i = 0;
         for (Engine.PlacedUnit u : h.board) {
             float[] p = cellCenter(u.x, u.y);
             float bob = (float) Math.sin(now * 3 + (i++) * 1.7) * 2;
-            drawShadow(p[0], p[1] - 30, 56);
+            drawShadow(p[0], p[1] - 36, 62);
             drawGroundRing(p[0], p[1], u.star, now, u.uid.hashCode());
-            drawUnitSprite(u.defId, p[0], p[1] + bob, 74, u.star, false, 1, 0, null);
+            drawUnitSprite(u.defId, p[0], p[1] + bob, 80, u.star, false, 1, 0, null);
             drawBars(p[0], p[1], 1, 0, 0, 0, u.star, false);
         }
     }
@@ -739,6 +782,7 @@ public class MatchScreen extends ScreenAdapter {
             float x = SHOP_X + i * (CARD_W + 8), y = SHOP_Y;
             String defId = i < match.shop.size() ? match.shop.get(i) : null;
             if (defId == null) {
+                drawShadowRect(x, y, CARD_W, CARD_H, 0.22f);
                 batch.setColor(0.62f, 0.62f, 0.68f, 0.85f);
                 batch.draw(a.shopFrames[0], x, y, CARD_W, CARD_H);
                 batch.setColor(Color.WHITE);
@@ -746,7 +790,12 @@ public class MatchScreen extends ScreenAdapter {
                 continue;
             }
             ChampDef d = GameData.champById(defId);
+            // The mua duoc: bong do + ep mau ve trang day du truoc khi ve (chong tint xam ro ri tu
+            // the "Da ban"/phan tu ve truoc lam the mua duoc bi toi nhu the da ban).
+            drawShadowRect(x, y, CARD_W, CARD_H, 0.38f);
+            batch.setColor(Color.WHITE);
             batch.draw(a.shopFrames[Math.max(0, Math.min(4, d.cost - 1))], x, y, CARD_W, CARD_H);
+            batch.setColor(Color.WHITE);
             batch.draw(a.unit(d.id), x + 8, y + 10, 56, 62);
             Color costColor = d.cost >= 4 ? Ui.GOLD : d.cost == 3 ? new Color(0.78f, 0.62f, 1, 1) : d.cost == 2 ? new Color(0.45f, 0.8f, 1, 1) : Color.WHITE;
             a.font.setColor(Color.WHITE);
@@ -947,8 +996,8 @@ public class MatchScreen extends ScreenAdapter {
             Color tint = null;
             Float lh = lastHitAt.get(uid);
             if (lh != null && playT - lh < 0.15f) tint = new Color(1, 0.5f, 0.5f, 1);
-            if (!dying) { drawShadow(p[0], p[1] - 32, 58); drawGroundRing(p[0], p[1], base.star, now, uid.hashCode()); }
-            drawUnitSprite(base.artId, cx, cy, 74, base.star, base.team == 1, alpha, rotation, tint);
+            if (!dying) { drawShadow(p[0], p[1] - 38, 64); drawGroundRing(p[0], p[1], base.star, now, uid.hashCode()); }
+            drawUnitSprite(base.artId, cx, cy, 80, base.star, base.team == 1, alpha, rotation, tint);
             lastScreenPos.put(uid, new float[]{cx, cy});
             if (!dying) drawBars(cx, cy, hp / Math.max(1, base.maxHp), mana / Math.max(1, base.maxMana), shield / Math.max(1, base.maxHp), base.team, base.star, base.stun > 0);
         }
@@ -968,6 +1017,7 @@ public class MatchScreen extends ScreenAdapter {
         drawCentered(a.fontTitle, text, 640, 486, c);
         a.fontTitle.getData().setScale(1f);
         // Banner nho di kem: tom tat vong + thay doi mau
+        drawShadowRect(390, 268, 500, 58, 0.35f);
         a.patchPlaque.draw(batch, 390, 268, 500, 58);
         String sub = outcome.summary + (outcome.humanHpDelta != 0 ? "  •  Máu còn: " + match.human().hp : "");
         drawCentered(a.font, sub, 640, 306, Color.WHITE);
@@ -983,6 +1033,7 @@ public class MatchScreen extends ScreenAdapter {
         int n = Math.min(rows.size(), 14);
         float pw = 302, ph = 52 + n * 26;
         float px = 782, py = 654 - ph;
+        drawShadowRect(px, py, pw, ph, 0.40f);
         a.patchPanel.draw(batch, px, py, pw, ph);
         drawCentered(a.fontBig, "SÁT THƯƠNG CỦA TRẬN", px + pw / 2, py + ph - 16, Ui.GOLD);
         double max = Math.max(1, rows.get(0).damage);
@@ -1016,6 +1067,7 @@ public class MatchScreen extends ScreenAdapter {
         float pw = 252 * pop, ph = 96 * pop;
         float cxp = 838, cyp = 384;
         batch.begin();
+        drawShadowRect(cxp - pw / 2, cyp - ph / 2, pw, ph, 0.40f);
         a.patchPanel.draw(batch, cxp - pw / 2, cyp - ph / 2, pw, ph);
         if (pop > 0.8f) {
             drawCentered(a.fontSmall, "NHẬN TRANG BỊ!", cxp, cyp + 40, Ui.GOLD);
@@ -1049,6 +1101,7 @@ public class MatchScreen extends ScreenAdapter {
             float sx = Math.abs((float) Math.cos(prog * Math.PI));
             float w = r.width * Math.max(0.08f, sx);
             float cx = r.x + r.width / 2;
+            drawShadowRect(r.x, r.y, r.width, r.height, 0.30f);
             if (prog < 0.5f) {
                 batch.draw(a.cardBack, cx - w / 2, r.y, w, r.height);
             } else {
@@ -1083,6 +1136,7 @@ public class MatchScreen extends ScreenAdapter {
         if (match.augmentOptions != null) for (int i = 0; i < match.augmentOptions.size(); i++) {
             Rectangle r = augmentRect(i);
             GameData.AugmentDef def = GameData.augmentById(match.augmentOptions.get(i));
+            drawShadowRect(r.x, r.y, r.width, r.height, 0.40f);
             a.patchPanel.draw(batch, r.x, r.y, r.width, r.height);
             drawCentered(a.fontBig, def.name, r.x + r.width / 2, r.y + r.height - 26, Ui.GOLD);
             a.font.setColor(Color.WHITE);
@@ -1106,6 +1160,7 @@ public class MatchScreen extends ScreenAdapter {
         batch.setColor(0.02f, 0.02f, 0.07f, 0.55f);
         batch.draw(a.whiteTex(), 0, 0, 1280, 720);
         batch.setColor(Color.WHITE);
+        drawShadowRect(320, 200, 640, 330, 0.42f);
         a.patchPanel.draw(batch, 320, 200, 640, 330);
         if (outcome != null) {
             drawCentered(a.fontTitle, outcome.bossBattle && outcome.humanWon ? "HẠ GỤC BOSS!" : outcome.humanWon ? "THẮNG!" : "THUA!", 640, 500, outcome.humanWon ? new Color(0.35f, 0.95f, 0.5f, 1) : new Color(1, 0.4f, 0.4f, 1));
@@ -1115,6 +1170,7 @@ public class MatchScreen extends ScreenAdapter {
             if (outcome.droppedItem != null) drawCentered(a.font, "Trang bị rơi: " + GameData.itemById(outcome.droppedItem).name + " (đã vào kho)", 640, 350, Ui.GOLD);
             if (match.mode == Match.Mode.CAMPAIGN || match.mode == Match.Mode.WAVES) drawCentered(a.fontSmall, match.endMessage, 640, 322, Ui.TEXT_DIM);
         }
+        drawShadowRect(resultBtn.x, resultBtn.y, resultBtn.width, resultBtn.height, 0.35f);
         a.patchBtnPrimary[0].draw(batch, resultBtn.x, resultBtn.y, resultBtn.width, resultBtn.height);
         drawCentered(a.fontBig, match.over ? "Xem kết quả" : "Tiếp tục", 640, resultBtn.y + 38, Color.WHITE);
         batch.end();
@@ -1128,6 +1184,7 @@ public class MatchScreen extends ScreenAdapter {
         batch.setColor(0.02f, 0.02f, 0.07f, 0.70f);
         batch.draw(a.whiteTex(), 0, 0, 1280, 720);
         batch.setColor(Color.WHITE);
+        drawShadowRect(300, 180, 680, 380, 0.42f);
         a.patchPanel.draw(batch, 300, 180, 680, 380);
         drawCentered(a.fontTitle, "KẾT THÚC", 640, 528, Ui.GOLD);
         a.font.setColor(Color.WHITE);
@@ -1137,6 +1194,8 @@ public class MatchScreen extends ScreenAdapter {
         layout.setText(a.fontSmall, overDetail, Ui.TEXT_DIM, 600, com.badlogic.gdx.utils.Align.center, true);
         a.fontSmall.draw(batch, layout, 340, 446);
         a.font.setColor(Color.WHITE); a.fontSmall.setColor(Color.WHITE);
+        drawShadowRect(overMenuBtn.x, overMenuBtn.y, overMenuBtn.width, overMenuBtn.height, 0.35f);
+        drawShadowRect(overAgainBtn.x, overAgainBtn.y, overAgainBtn.width, overAgainBtn.height, 0.35f);
         a.patchBtn[0].draw(batch, overMenuBtn.x, overMenuBtn.y, overMenuBtn.width, overMenuBtn.height);
         a.patchBtnPrimary[0].draw(batch, overAgainBtn.x, overAgainBtn.y, overAgainBtn.width, overAgainBtn.height);
         drawCentered(a.fontBig, "Về menu", 452, overMenuBtn.y + 38, Color.WHITE);

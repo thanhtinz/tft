@@ -145,11 +145,16 @@ xvfb-run -a ./gradlew :desktop:screenshot -PscreenshotMode=battle4 -PscreenshotO
 python3 tools/pixelize.py   # tai tao toan bo sprite + preview sheet tu tranh goc cua ban RN
 ```
 
-Cách làm: cắt theo hộp alpha → thu nhỏ premultiplied-alpha (LANCZOS) về tối đa 56px chiều cao →
-lượng tử hóa palette tối đa 28 màu (MEDIANCUT, không dither) → canvas 64×64 neo đáy giữa.
-Kết quả: 35 sprite tướng/quái + arena 4 biến thể (cỏ/hoàng hôn/sa mạc/băng) 480×270, lobby, lưng thẻ 96×134.
-Xem trước: `tools/preview-sheet.png`. Nhận xét chất lượng: sprite nhận diện rõ, alpha sạch không quầng;
-riêng mimi/nana/queen hơi nhạt do tranh gốc vốn bán trong suốt (vào game trên nền arena tối sẽ rõ hơn).
+Pipeline v2 (đợt nâng chất lượng hình ảnh): sprite — cắt theo hộp alpha → tăng bão hòa thích ứng
+(tướng nhạt được tăng mạnh hơn) → thu nhỏ premultiplied-alpha (LANCZOS) về tối đa 108px chiều cao →
+làm sắc nét → cắt alpha cứng + xóa mảnh bụi rời rạc → lượng tử hóa palette tối đa 48 màu (MEDIANCUT,
+không dither) → vẽ viền đậm 1px quanh silhouette → canvas 128×128 neo đáy giữa.
+Sân đấu dùng TRANH VẼ MỚI giàu chi tiết trong `tools/new-art/` (vùng chơi có kết cấu mặt đất, vật thể
+kể chuyện quanh viền, ao nhỏ lệch góc — thay tranh RN cũ có ao phẳng giữa sân): pixel-hóa ở 640×360,
+palette 128 màu, không dither (dither Floyd–Steinberg của v1 là nguồn làm tranh "bùn"), nướng sẵn
+vignette nhẹ vào tranh. Lobby 640×360/128 màu, lưng thẻ 128×179, banner rộng 320px.
+Kết quả: 35 sprite tướng/quái + arena 4 biến thể (rừng/hoàng hôn/sa mạc/băng).
+Xem trước: `tools/preview-sheet.png`, `tools/arena-sheet.png`, `tools/arena-before-after.png`.
 
 ## Android — module đã nối, APK chưa build được TRONG SANDBOX này
 

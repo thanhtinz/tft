@@ -1,9 +1,11 @@
 package com.dautruongchibi.ui;
 
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.NinePatch;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
+import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.ui.TextField;
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
@@ -39,6 +41,44 @@ public final class Ui {
         if (d == null) { d = a.solid(c); cache.put(key, d); }
         return d;
     }
+
+    // ---------- Bong do mem cho UI noi (chieu sau) ----------
+    // Ve texture bong (Assets.shadowTex, Pixmap SDF bo goc) no rong hon phan tu 9px moi chieu,
+    // lech xuong 6px, alpha mac dinh 0.35. Goi TRUOC khi ve phan tu, trong cung batch.
+    public static void drawShadow(Batch batch, Assets a, float x, float y, float w, float h) {
+        drawShadow(batch, a, x, y, w, h, 0.35f);
+    }
+
+    public static void drawShadow(Batch batch, Assets a, float x, float y, float w, float h, float alpha) {
+        if (a == null || a.shadowTex() == null || w <= 0 || h <= 0) return;
+        Color old = batch.getColor();
+        batch.setColor(0, 0, 0, alpha * old.a);
+        batch.draw(a.shadowTex(), x - 9, y - 9 - 6, w + 18, h + 18);
+        batch.setColor(old);
+    }
+
+    // Nut co bong do tu dong: moi Ui.button/buttonBig (moi man hinh dung chung) deu ke thua.
+    private static final class ShadowTextButton extends TextButton {
+        private final Assets assets;
+        ShadowTextButton(String text, TextButtonStyle style, Assets assets) { super(text, style); this.assets = assets; }
+        @Override public void draw(Batch batch, float parentAlpha) {
+            drawShadow(batch, assets, getX(), getY(), getWidth(), getHeight());
+            super.draw(batch, parentAlpha);
+        }
+    }
+
+    // Bang (panel/plaque) co bong do tu dong — dung cho plaque thanh tren, panel nhat ky,
+    // hop ho so o menu, nen chu do tham doi thu...
+    public static final class ShadowTable extends Table {
+        private final Assets assets;
+        public ShadowTable(Assets assets) { this.assets = assets; }
+        @Override public void draw(Batch batch, float parentAlpha) {
+            drawShadow(batch, assets, getX(), getY(), getWidth(), getHeight(), 0.38f);
+            super.draw(batch, parentAlpha);
+        }
+    }
+
+    public static Table shadowTable(Assets a) { return new ShadowTable(a); }
 
     public static Drawable panelBg(Assets a) { return new NinePatchDrawable(a.patchPanel); }
     public static Drawable panelLightBg(Assets a) { return new NinePatchDrawable(a.patchPanelLight); }
@@ -80,7 +120,7 @@ public final class Ui {
         s.over = new NinePatchDrawable(p[1]);
         s.down = new NinePatchDrawable(p[2]);
         s.disabled = new NinePatchDrawable(p[2]).tint(new Color(0.42f, 0.42f, 0.48f, 0.85f));
-        TextButton b = new TextButton(text, s);
+        TextButton b = new ShadowTextButton(text, s, a);
         b.pad(7, 14, 7, 14);
         return b;
     }

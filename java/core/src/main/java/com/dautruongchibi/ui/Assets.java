@@ -37,6 +37,9 @@ public class Assets {
     public Texture[] shopFrames = new Texture[5];
     public Texture benchSlotTex, avatarTex;
     private Texture whiteTex;
+    // Texture chieu sau sinh bang Pixmap luc runtime (khong dung file PNG):
+    // bong do mem (chu nhat bo goc, alpha roi mem ra vien), vignette goc toi, quang sang radial.
+    private Texture shadowTex, vignetteTex, glowTex;
 
     public void load() {
         FreeTypeFontGenerator genBaloo = new FreeTypeFontGenerator(Gdx.files.internal("fonts/Baloo2-ExtraBold.ttf"));
@@ -51,6 +54,9 @@ public class Assets {
         Pixmap pm = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
         pm.setColor(Color.WHITE); pm.fill();
         whiteTex = new Texture(pm); pm.dispose();
+        shadowTex = makeShadowTex();
+        vignetteTex = makeVignetteTex();
+        glowTex = makeGlowTex();
 
         cardBack = loadScene("card-back");
         arena = loadScene("arena");
@@ -175,6 +181,63 @@ public class Assets {
 
     public Drawable white() { return new TextureRegionDrawable(new TextureRegion(whiteTex)); }
     public Texture whiteTex() { return whiteTex; }
+    public Texture shadowTex() { return shadowTex; }
+    public Texture vignetteTex() { return vignetteTex; }
+    public Texture glowTex() { return glowTex; }
+
+    // Bong do mem: SDF chu nhat bo goc — trong long alpha=1, ra ngoai vien roi mem ~10px ve 0.
+    // Ve keo gian + no rong hon phan tu va lech xuong (xem Ui.drawShadow) se cho bong nhu that.
+    private static Texture makeShadowTex() {
+        int S = 96, margin = 14, radius = 20;
+        Pixmap pm = new Pixmap(S, S, Pixmap.Format.RGBA8888);
+        float cx = S / 2f, cy = S / 2f, hx = S / 2f - margin, hy = S / 2f - margin;
+        for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
+            float qx = Math.abs(x + 0.5f - cx) - (hx - radius);
+            float qy = Math.abs(y + 0.5f - cy) - (hy - radius);
+            float ox = Math.max(qx, 0), oy = Math.max(qy, 0);
+            float d = (float) Math.hypot(ox, oy) + Math.min(Math.max(qx, qy), 0) - radius; // SDF: <0 trong, >0 ngoai
+            float a = d <= 0 ? 1f : Math.max(0, 1 - d / 11f);
+            a = a * a * (3 - 2 * a); // smoothstep cho vien mem hon
+            pm.setColor(0, 0, 0, a);
+            pm.drawPixel(x, y);
+        }
+        Texture t = new Texture(pm); pm.dispose();
+        t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        return t;
+    }
+
+    // Vignette: trong suot o giua, den alpha toi da 0.11 o 4 goc (alpha da nhan san vao texture).
+    // CHI 0.11 vi tranh san moi da nuong san vignette nhe ~14% — cong don cao hon se qua toi.
+    private static Texture makeVignetteTex() {
+        int W = 320, H = 180;
+        Pixmap pm = new Pixmap(W, H, Pixmap.Format.RGBA8888);
+        for (int y = 0; y < H; y++) for (int x = 0; x < W; x++) {
+            float dx = (x + 0.5f) / W * 2 - 1, dy = (y + 0.5f) / H * 2 - 1;
+            float r = (float) Math.hypot(dx, dy) / 1.4142f; // 0 o tam -> 1 o goc
+            float t = Math.max(0, Math.min(1, (r - 0.52f) / 0.48f));
+            float a = 0.11f * t * t * (3 - 2 * t);
+            pm.setColor(0, 0, 0, a);
+            pm.drawPixel(x, y);
+        }
+        Texture t = new Texture(pm); pm.dispose();
+        t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        return t;
+    }
+
+    // Quang sang radial trang: alpha=1 o tam roi mem ve 0 o vien (khi ve se tint mau + alpha thap).
+    private static Texture makeGlowTex() {
+        int S = 128;
+        Pixmap pm = new Pixmap(S, S, Pixmap.Format.RGBA8888);
+        for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
+            float d = (float) Math.hypot(x + 0.5 - S / 2.0, y + 0.5 - S / 2.0) / (S / 2f);
+            float a = d >= 1 ? 0 : (1 - d) * (1 - d);
+            pm.setColor(1, 1, 1, a);
+            pm.drawPixel(x, y);
+        }
+        Texture t = new Texture(pm); pm.dispose();
+        t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        return t;
+    }
 
     public Drawable solid(Color c) {
         Pixmap pm = new Pixmap(8, 8, Pixmap.Format.RGBA8888);
@@ -192,5 +255,8 @@ public class Assets {
         for (Texture t : sceneTex.values()) t.dispose();
         for (Texture t : uiTex) t.dispose();
         if (whiteTex != null) whiteTex.dispose();
+        if (shadowTex != null) shadowTex.dispose();
+        if (vignetteTex != null) vignetteTex.dispose();
+        if (glowTex != null) glowTex.dispose();
     }
 }
