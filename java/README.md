@@ -51,6 +51,7 @@ java/
     ├── fetch-deps.sh / fetch_deps.py  # tai dependency bang curl vao local-maven (moi truong han che mang)
     └── shot-*.png           # anh chup kiem chung GUI (menu, lat the, chuan bi, giao tranh)
     └── shot2-*.png          # anh chup dot bo Yu-Gi-Oh (menu, chuan bi khong con panel bay, giao tranh co pow, announcer + popup do)
+    └── shot3-*.png          # anh chup dot lam lai bo cuc san tran vien (menu, lat the, chuan bi, giao tranh, ket qua)
 ```
 
 ## Gameplay đã port (khớp bản RN)
@@ -71,6 +72,14 @@ java/
   xếp hạng kiểu TFT — giữ nguyên, không liên quan máu trong trận. Hồ sơ cũ chỉ lưu rank/thống kê nên tương thích nguyên vẹn.)
 - **Lật thẻ úp mở trận:** đầu trận PvP (và các vòng x-4, sóng 1 ở Sóng Quái) hiện 8 thẻ úp lưng pixel;
   chọn 1 thẻ → lật mở (420ms, các thẻ khác lật nối tiếp) → nhận tướng về bench + 1 trang bị vào kho.
+- **Bố cục màn trận — sân tràn viền (đợt làm lại theo 2 game mẫu):** tranh sân là MỘT môi trường liền mạch phủ kín
+  1280×720, không còn hai cột hộp tím hai bên. Bàn cờ lớn ở giữa (ô 66px, sprite tướng 74px, bóng ellipse mềm dưới chân);
+  lưới ô chỉ hiện mờ ở pha chuẩn bị và mờ hẳn về ~0 khi giao tranh. Bench là hàng ô ngay mép dưới TRONG sân, shop là
+  hàng 5 thẻ ở dải dưới TRÊN sân. Thông tin dồn ra viền: tộc/hệ = chip nhỏ bán trong suốt dọc mép trái, trang bị = nút
+  nổi dưới chip, danh sách người chơi = hàng gọn mép phải (avatar + tên + số máu + thanh máu mỏng, hàng của mình phủ
+  vàng rất nhẹ), thanh trên = plaque nổi mỏng ở giữa-trên, nhật ký thu thành panel nhỏ bật/tắt bằng nút. Nút hành động
+  ở các góc: ĐẤU! to ở góc dưới phải (trên nó là Tốc độ + Bảng sát thương), MUA XP là nút lớn góc dưới trái kiểu
+  TFT mobile (cạnh Làm mới / Bán tướng), Thoát là nút nhỏ góc trên phải.
 - **Trình diễn theo 2 game mẫu (Kanto Tactics + FighterZ Tactics)** — chỉ học bố cục/kỹ thuật trình diễn, không sao chép asset:
   1. **Sân đấu đổi theo chặng** (`game/ArenaTheme.java`): Chiến Dịch theo chương — `(chương-1)%3` lần lượt rừng / sa mạc / băng
      (khớp tông banner chương), vòng Boss → hoàng hôn; PvP + Sóng Quái theo stage: 1 rừng, 2 hoàng hôn, 3 sa mạc, ≥4 băng
@@ -79,7 +88,7 @@ java/
      tỏa ra tại điểm trúng, mục tiêu **lộn nghiêng** ±38° trong 0,35s. (Số sát thương to kiểu Kanto giữ nguyên.)
   3. **Announcer cuối vòng:** chữ Baloo lớn "THẮNG!" / "THUA!" (thắng trận có boss: **"HẠ GỤC BOSS!"**) phồng lên giữa sân
      ~1,5s rồi tan, kèm banner nhỏ chứa tóm tắt vòng + máu còn lại; sau đó mới hiện panel kết quả chi tiết.
-  4. **Bảng sát thương theo tướng:** nút "Bảng sát thương" ở panel phải bật/tắt panel nổi đè mép phải sân, liệt kê từng tướng
+  4. **Bảng sát thương theo tướng:** nút "Bảng sát thương" ở góc dưới phải bật/tắt panel nổi đè mép phải sân, liệt kê từng tướng
      của **cả 2 bên** kèm thanh ngang theo tổng sát thương gây ra trong trận vừa đấu (dữ liệu `Engine.damageChart` cộng từ sự kiện engine).
   5. **Lên sao kiểu tiến hóa:** khi gộp sao, 3 chấm sao xoáy bay vào tướng kết quả + vòng sáng nở ở chân + chớp sáng;
      tướng **2 sao có vòng bạc ở chân**, **3 sao có hào quang vàng cháy** nhấp nháy kèm 3 chấm sao bay quanh chân (cả ở pha chuẩn bị lẫn trong trận).
