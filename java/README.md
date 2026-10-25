@@ -213,6 +213,20 @@ kiểm chứng headless mục 19–21):
 - **Tên tướng trong bảng sát thương:** cột tên được nới rộng (thanh sát thương lùi sang phải) và tên dài
   được cắt bằng `MatchScreen.fitDamageName`: phần tên bị rút gọn kèm "..." nhưng **hậu tố sao "(N sao)"
   luôn nguyên vẹn** (bản cũ cắt mù từ cuối chuỗi thành "Pipo Chim Sẻ (2").
+
+### Nét pixel cho tranh nền + kiểm chứng sân hoàng hôn/băng (đợt 2026-10-25)
+
+- **Lọc Nearest cho riêng tranh nền:** 4 sân đấu + tranh lobby là pixel art 640×360 và mọi nơi vẽ đều
+  phóng đúng **1280×720 = 2× nguyên số** (MatchScreen/MenuScreen/GuideScreen), nên `Assets.loadBackdrop`
+  nạp chúng với **Nearest–Nearest**: hạt pixel vuông nét, đồng bộ với sprite tướng. Trước đây qua Linear
+  nên khối pixel mềm/nhòe lệch tông với tướng. Phạm vi chỉ nền — texture tướng giữ MipMapLinearLinear
+  (đợt khử viền), icon trang bị/UI/font/card-back/banner giữ Linear như cũ.
+- **Ảnh trận đầu tiên của sân hoàng hôn + sân băng:** ScreenshotMain thêm 2 mode `battlesunset`
+  (PvP vòng 8 → stage 2) và `battleice` (vòng 20 → stage 4), dùng đội hình `battleItemsMatch` (2 phe
+  đều có tướng mang đồ). Soi ảnh: thanh máu/mana + icon đồ dưới thanh máu rõ trên cả nền ấm hoàng hôn
+  lẫn nền tuyết sáng của sân băng, bóng xiên + contact AO đọc rõ (hệ số ×1.30/×0.80), tướng không lẫn
+  vào nền. Đối chiếu trước/sau lọc ở `tools/shot23-crop-arena.png` / `shot23-crop-lobby.png`,
+  ảnh trận ở `tools/shot23-after-battlesunset.png` / `shot23-after-battleice.png`.
 - **Đồ đã đeo là CỐ ĐỊNH:** không có đường tháo/dời đồ khỏi tướng. Đường duy nhất lấy đồ lại là **bán
   tướng** — `Match.sell` trả **toàn bộ** đồ trên người tướng về khay (kể cả đồ đã tự hợp nhất trên người:
   trả nguyên đồ hoàn chỉnh, không tách lại thành phần) và thông báo bán liệt kê các món được trả

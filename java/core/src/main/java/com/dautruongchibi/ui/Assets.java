@@ -73,11 +73,11 @@ public class Assets {
         glowTex = makeGlowTex();
 
         cardBack = loadScene("card-back");
-        arena = loadScene("arena");
-        arenaSunset = loadScene("arena-sunset");
-        arenaDesert = loadScene("arena-desert");
-        arenaIce = loadScene("arena-ice");
-        lobbyTex = loadScene("lobby");
+        arena = loadBackdrop("arena");
+        arenaSunset = loadBackdrop("arena-sunset");
+        arenaDesert = loadBackdrop("arena-desert");
+        arenaIce = loadBackdrop("arena-ice");
+        lobbyTex = loadBackdrop("lobby");
         bannerForest = loadScene("banner-forest");
         bannerDesert = loadScene("banner-desert");
         bannerIce = loadScene("banner-ice");
@@ -178,6 +178,26 @@ public class Assets {
         try {
             t = new Texture(Gdx.files.internal("scenes/" + name + ".png"));
             t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        } catch (Exception e) {
+            Pixmap pm = new Pixmap(64, 64, Pixmap.Format.RGBA8888);
+            pm.setColor(new Color(0.16f, 0.12f, 0.28f, 1)); pm.fill();
+            t = new Texture(pm); pm.dispose();
+        }
+        sceneTex.put(name, t);
+        return t;
+    }
+
+    // Tranh NEN toan man (4 san + lobby): nguon pixel 640x360, MOI noi ve deu phong
+    // dung 1280x720 = 2x nguyen so (MatchScreen/MenuScreen/GuideScreen) nen dung
+    // Nearest-Nearest de hat pixel vuong NET, dong bo voi sprite tuong pixel.
+    // Linear lam khoi pixel bi mem/nhoe, lech tong voi tuong. CHI ap dung cho nen:
+    // texture tuong giu MipMapLinearLinear (dot khu vien), icon/UI/font giu Linear.
+    private Texture loadBackdrop(String name) {
+        Texture t = sceneTex.get(name);
+        if (t != null) return t;
+        try {
+            t = new Texture(Gdx.files.internal("scenes/" + name + ".png"));
+            t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
         } catch (Exception e) {
             Pixmap pm = new Pixmap(64, 64, Pixmap.Format.RGBA8888);
             pm.setColor(new Color(0.16f, 0.12f, 0.28f, 1)); pm.fill();

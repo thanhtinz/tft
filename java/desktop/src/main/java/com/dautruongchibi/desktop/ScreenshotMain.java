@@ -24,6 +24,8 @@ import java.lang.reflect.Method;
 // | drag (gia lap dang keo mot tuong tren ban ve phia o bench: sprite bam tro + 2 vung thung rac hien)
 // | stars (doi chieu 1/2/3 sao cua Gogo dung canh nhau tren ban — sprite tien hoa theo sao)
 // | starbattle (giao tranh PvE voi Gogo 3 sao dang tien hoa trong doi hinh)
+// | battlesunset / battleice (tran danh that ep theme san: PvP vong 8 = stage 2 hoang hon,
+//   vong 20 = stage 4 bang — kiem chung 2 san chua tung co anh tran)
 // | battlecard (tran dang chay + THE TUONG PHA TRAN mo tren Gogo 3 sao deo 3 mon)
 // | battlecardinfo (nhu battlecard + bang thong tin mon hoan chinh mo tu o do cua the)
 // | fxfire/fxice/fxlightning/fxheal/fxbeam (chup dung khung hinh mot tuong tung chieu theo
@@ -131,6 +133,16 @@ public class ScreenshotMain {
                 case "battleitems": {
                     // Tran danh that: ca 2 phe deu co tuong mang do (dich cua makeAiTeam vong 13)
                     Match m = battleItemsMatch();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "battlesunset": case "battleice": {
+                    // Ep THEME SAN bang so vong PvP (ArenaTheme.forStage): vong 8 -> stage 2
+                    // = hoang hon; vong 20 -> stage 4 = bang. Doi hinh nhu battleitems
+                    // (ca 2 phe co tuong mang do) de kiem chung tren tung nen san.
+                    Match m = battleItemsMatch();
+                    m.round = "battlesunset".equals(mode) ? 8 : 20;
                     matchScreen = new MatchScreen(this, m);
                     setScreen(matchScreen);
                     break;
@@ -345,7 +357,7 @@ public class ScreenshotMain {
                     dragSet = true;
                 }
                 boolean fxMode = mode.startsWith("fx");
-                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || "battleitems".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode) || "battlecard".equals(mode) || "battlecardinfo".equals(mode) || fxMode;
+                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || "battleitems".equals(mode) || "battlesunset".equals(mode) || "battleice".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode) || "battlecard".equals(mode) || "battlecardinfo".equals(mode) || fxMode;
                 if (battleMode && !battleStarted && frames > 30 && matchScreen != null) {
                     Method mb = MatchScreen.class.getDeclaredMethod("startBattle");
                     mb.setAccessible(true);
