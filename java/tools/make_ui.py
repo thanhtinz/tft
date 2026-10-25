@@ -201,16 +201,8 @@ def make_shopcards():
         finish(img, (W, H), f"shopcard{i + 1}.png")
 
 
-def make_benchslot():
-    S = 52
-    size = (S * SS, S * SS)
-    stops = [(0.0, (32, 26, 56, 235)), (1.0, (14, 11, 28, 235))]
-    img = framed_shape(size, 8 * SS, stops, noise=3, gloss_a=12,
-                       border_dark=(52, 42, 92, 255), border_mid=(104, 88, 160, 255),
-                       border_light=(150, 138, 200, 255))
-    img = corner_diamonds(img, radius_final_pos=8, r=0.1, fill=(0, 0, 0, 0), outline=(0, 0, 0, 0)) \
-        if False else img  # benchslot khong de kim cuong, giu sach de dat tuong len
-    finish(img, (S, S), "benchslot.png")
+# (Da bo make_benchslot: o cho bench gio la MANG DAT painted sinh bang tools/make_bench_patches.py —
+#  tuong dung tren dat thuoc mat san, khong con o khung hop UI.)
 
 
 def make_avatar():
@@ -453,7 +445,7 @@ make_button("btn_green", (84, 186, 98), (66, 160, 80), (30, 96, 42))
 make_button("btn_red", (224, 88, 80), (198, 62, 58), (130, 30, 28))
 make_cardfront()
 make_shopcards()
-make_benchslot()
+# make_benchslot() — da bo: o cho gio la mang dat (make_bench_patches.py)
 make_avatar()
 make_icons()
 print("DONE ->", OUT)

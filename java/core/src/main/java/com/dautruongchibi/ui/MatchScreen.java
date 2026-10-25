@@ -38,9 +38,10 @@ import java.util.Set;
 // Man hinh tran dau — BO CUC SAN TRAN VIEN (hoc tu Kanto Tactics + FighterZ Tactics va ban RN):
 // tranh san la MOT moi truong lien mach phu kin 1280x720, moi UI la lop noi ban trong suot TREN san.
 // Ban co lon o giua (o painted 84x70, sprite 100px), luoi chi mo o pha chuan bi va mo han khi giao tranh.
-// Bench = hang o ngay mep duoi trong san. DIEU KHIEN hoc TFT Mobile: nut tron xanh duong goc duoi
+// Bench = hang MANG DAT ngay duoi ban co trong san (tuong DUNG tren dat, khong khung hop).
+// DIEU KHIEN hoc TFT Mobile: nut tron xanh duong goc duoi
 // trai = cap + mua XP, nut tron vang goc duoi phai = vang + mo/dong SHOP (shop la lop mo/dong nam
-// tren bench, reroll tron chi co trong shop, cham vung trong thi dong shop); tran TU DONG bat dau
+// DUOI hang cho, sat mep duoi man hinh, reroll tron chi co trong shop, cham vung trong thi dong shop); tran TU DONG bat dau
 // khi het 45s chuan bi; pha ket qua tu chuyen sau ~4s va bang sat thuong tu hien o pha do.
 // Toc/he = chip nho doc mep trai; danh sach nguoi choi = hang gon mep phai; nhat ky = nut icon nho.
 // Giu nguyen trinh dien: pow truyen tranh, announcer, popup trang bi, xoay gop sao, keo-tha + thung rac, VFX theo he.
@@ -54,14 +55,16 @@ public class MatchScreen extends ScreenAdapter {
     private ShapeRenderer shapes;
     private Phase phase = Phase.PLANNING;
 
-    // Geometry — ban co lon giua san, bench + shop la dai duoi TREN san.
+    // Geometry — ban co lon giua san; thu tu doc dai duoi: ban co -> hang cho (mang dat) -> shop.
     // Ti le PAINTED (chot tu ban mau so sanh): o chu nhat 84x70 (ban 588x490, 357..945 x 152..642),
     // sprite ban/tran 100px, xem truoc dich 88px, bench o 64 sprite 56px.
     static final float BX = 357, BY = 152, CELLX = 84, CELLY = 70;
-    static final float BENCH_Y = 94, BENCH_X = 357, SLOT = 64;
-    // Shop la LOP MO/DONG (truong shopOpen): hang the nam o dai duoi TREN bench (y 156..238,
-    // phu tam hang ban 0 khi dang mo), khong con nam sat mep duoi nhu ban cu.
-    static final float SHOP_Y = 156, SHOP_X = 254, CARD_W = 148, CARD_H = 82;
+    // Hang cho: 9 MANG DAT (y 108..152, sat day ban co) — tuong dung tren dat + bong chan mem,
+    // khong con o khung hop. SLOT_H = chieu cao mang dat / vung cham cua o cho.
+    static final float BENCH_Y = 108, BENCH_X = 357, SLOT = 64, SLOT_H = 44;
+    // Shop la LOP MO/DONG (truong shopOpen): hang the nam DUOI hang cho, sat mep duoi man hinh
+    // (the y 2..84; dong odds ngay tren hang the y 86..106 — giua hang the va hang cho).
+    static final float SHOP_Y = 2, SHOP_X = 254, CARD_W = 148, CARD_H = 82;
     // Hai nut tron dieu khien kieu TFT Mobile (ve tay bang batch, hit-test hinh tron trong BoardInput):
     // tron xanh duoi-trai = cap + MUA XP, tron vang duoi-phai = vang + mo/dong shop.
     static final float XP_CX = 62, XP_CY = 58, XP_R = 54;
@@ -424,7 +427,7 @@ public class MatchScreen extends ScreenAdapter {
     private float[] unitScreenPos(Engine.PlacedUnit u, Match.PlayerState h) {
         if (h.board.contains(u)) return cellCenter(u.x, u.y);
         int bi = h.bench.indexOf(u);
-        if (bi >= 0) return new float[]{BENCH_X + bi * SLOT + (SLOT - 4) / 2f, BENCH_Y + 27};
+        if (bi >= 0) return new float[]{BENCH_X + bi * SLOT + (SLOT - 4) / 2f, BENCH_Y + 30};
         return null;
     }
 
@@ -787,24 +790,34 @@ public class MatchScreen extends ScreenAdapter {
         }
     }
 
+    // Hang cho = 9 MANG DAT thuoc mat san (3 bien the luan phien + lat ngang o le cho do giong nhau):
+    // tuong DUNG tren mang dat nhu dung tren ban — chan neo o phan duoi mang dat, bong ellipse mem
+    // duoi chan; o duoc chon/keo qua chi co QUANG SANG MEM bam theo mang dat, khong khung hop.
     private void drawBench(float now) {
         Assets a = game.assets;
         Match.PlayerState h = match.human();
         for (int i = 0; i < 9; i++) {
             float x = BENCH_X + i * SLOT, y = BENCH_Y;
-            batch.draw(a.benchSlotTex, x, y, SLOT - 4, 52);
+            com.badlogic.gdx.graphics.Texture patch = a.benchPatchTex[i % 3];
+            batch.draw(patch, x - 2, y - 2, SLOT, SLOT_H + 4, 0, 0, patch.getWidth(), patch.getHeight(), i % 2 == 1, false);
             if (i < h.bench.size()) {
                 Engine.PlacedUnit u = h.bench.get(i);
                 if (!isUnitHidden(u.uid)) { // an sprite tai cho khi dang keo / dang truot ve
-                    boolean sel = u.uid.equals(selUid);
-                    drawUnitSprite(u.defId, x + (SLOT - 4) / 2f, y + 27, 56, u.star, false, 1, 0, null);
+                    float cx = x + (SLOT - 4) / 2f;
+                    if (u.uid.equals(selUid)) { // quang sang mem bam theo mang dat (thay khung vang cu)
+                        float pulse = 0.30f + 0.10f * (float) Math.sin(now * 5);
+                        batch.setColor(1f, 0.85f, 0.3f, pulse);
+                        batch.draw(a.glowTex(), x - 8, y - 8, SLOT + 12, SLOT_H + 16);
+                        batch.setColor(Color.WHITE);
+                    }
+                    drawShadow(cx, y + 5, 46); // bong dat mem duoi chan nhu tuong tren ban
+                    drawUnitSprite(u.defId, cx, y + 30, 56, u.star, false, 1, 0, null);
                     if (u.star >= 2) {
                         float sw = 10, total = u.star * (sw + 1) - 1;
                         batch.setColor(Ui.GOLD);
-                        for (int k = 0; k < u.star; k++) batch.draw(a.icon("star"), x + (SLOT - 4) / 2f - total / 2 + k * (sw + 1), y + 50, sw, sw);
+                        for (int k = 0; k < u.star; k++) batch.draw(a.icon("star"), cx - total / 2 + k * (sw + 1), y + 60, sw, sw);
                         batch.setColor(Color.WHITE);
                     }
-                    if (sel) drawBorder(x, y, SLOT - 4, 52, Ui.GOLD, 3);
                 }
             }
         }
@@ -857,27 +870,28 @@ public class MatchScreen extends ScreenAdapter {
         drawRerollButton(a, h);
     }
 
-    // Dong ti le odds theo bac gia o cap hien tai (du lieu GameData.SHOP_ODDS) — nam ngay tren hang the.
+    // Dong ti le odds theo bac gia o cap hien tai (du lieu GameData.SHOP_ODDS) — nam ngay tren hang
+    // the (giua hang the o mep duoi va hang cho phia tren).
     private void drawShopOdds(Assets a) {
         Match.PlayerState h = match.human();
         int lvl = Math.max(1, Math.min(9, h.level));
-        float oy = SHOP_Y + CARD_H + 4;
+        float oy = SHOP_Y + CARD_H + 2;
         batch.setColor(0.05f, 0.05f, 0.12f, 0.78f);
-        batch.draw(a.whiteTex(), SHOP_X - 6, oy, 330, 24);
+        batch.draw(a.whiteTex(), SHOP_X - 6, oy, 330, 20);
         batch.setColor(Color.WHITE);
         a.fontSmall.setColor(Ui.TEXT_DIM);
-        a.fontSmall.draw(batch, "Tỉ lệ cấp " + lvl + ":", SHOP_X, oy + 17);
+        a.fontSmall.draw(batch, "Tỉ lệ cấp " + lvl + ":", SHOP_X, oy + 15);
         String label = "Tỉ lệ cấp " + lvl + ":";
         layout.setText(a.fontSmall, label);
         float cx = SHOP_X + layout.width + 10;
         Color[] tierCols = { new Color(0.75f, 0.75f, 0.8f, 1), new Color(0.4f, 0.9f, 0.45f, 1), new Color(0.4f, 0.65f, 1, 1), new Color(0.78f, 0.5f, 1, 1), new Color(1, 0.8f, 0.2f, 1) };
         for (int c = 0; c < 5; c++) {
             batch.setColor(tierCols[c]);
-            batch.draw(a.whiteTex(), cx, oy + 6, 11, 11);
+            batch.draw(a.whiteTex(), cx, oy + 4, 11, 11);
             batch.setColor(Color.WHITE);
             String pct = GameData.SHOP_ODDS[lvl][c] + "%";
             a.fontSmall.setColor(Color.WHITE);
-            a.fontSmall.draw(batch, pct, cx + 14, oy + 17);
+            a.fontSmall.draw(batch, pct, cx + 14, oy + 15);
             layout.setText(a.fontSmall, pct);
             cx += 14 + layout.width + 10;
         }
@@ -1633,7 +1647,7 @@ public class MatchScreen extends ScreenAdapter {
         }
         if (armedItem != null) return planningClick(x, y);
         for (int i = 0; i < 9; i++) {
-            Rectangle r = new Rectangle(BENCH_X + i * SLOT, BENCH_Y, SLOT - 4, 52);
+            Rectangle r = new Rectangle(BENCH_X + i * SLOT, BENCH_Y, SLOT - 4, SLOT_H);
             if (r.contains(x, y) && i < h.bench.size()) { beginDragCandidate(h.bench.get(i), true, x, y); return true; }
         }
         int cx = cellXAt(x), cy = cellYAt(y);
@@ -1675,7 +1689,7 @@ public class MatchScreen extends ScreenAdapter {
 
     private int benchSlotAt(float x, float y) {
         for (int i = 0; i < 9; i++) {
-            Rectangle r = new Rectangle(BENCH_X + i * SLOT, BENCH_Y, SLOT - 4, 52);
+            Rectangle r = new Rectangle(BENCH_X + i * SLOT, BENCH_Y, SLOT - 4, SLOT_H);
             if (r.contains(x, y)) return i;
         }
         return -1;
@@ -1753,12 +1767,12 @@ public class MatchScreen extends ScreenAdapter {
                 drawBorder(x + 1, y + 1, CELLX - 2, CELLY - 2, Ui.GOLD, 3);
             } else {
                 int slot = benchSlotAt(dragX, dragY);
-                if (slot >= 0) {
+                if (slot >= 0) { // quang sang mem bam theo mang dat cua o dich (khong khung hop)
                     float x = BENCH_X + slot * SLOT, y = BENCH_Y;
-                    batch.setColor(1, 0.85f, 0.3f, 0.30f);
-                    batch.draw(a.whiteTex(), x + 1, y + 1, SLOT - 6, 50);
+                    float pulse = 0.42f + 0.15f * (float) Math.sin(now * 6);
+                    batch.setColor(1f, 0.85f, 0.3f, pulse);
+                    batch.draw(a.glowTex(), x - 8, y - 8, SLOT + 12, SLOT_H + 16);
                     batch.setColor(Color.WHITE);
-                    drawBorder(x, y, SLOT - 4, 52, Ui.GOLD, 3);
                 }
             }
             float size = (dragFromBench ? 96 : 100) * 1.05f;
@@ -1788,7 +1802,7 @@ public class MatchScreen extends ScreenAdapter {
         Match.PlayerState h = match.human();
         // Bench
         for (int i = 0; i < 9; i++) {
-            Rectangle r = new Rectangle(BENCH_X + i * SLOT, BENCH_Y, SLOT - 4, 52);
+            Rectangle r = new Rectangle(BENCH_X + i * SLOT, BENCH_Y, SLOT - 4, SLOT_H);
             if (r.contains(x, y)) {
                 if (i < h.bench.size()) {
                     Engine.PlacedUnit u = h.bench.get(i);

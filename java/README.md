@@ -30,7 +30,7 @@ kéo xuống thùng rác góc dưới để bán, thả hụt thì trượt về
 | Backend web | **backend-teavm 1.4.0** (TeaVM 0.13) — build ra HTML/JS hoàn chỉnh |
 | Backend Android | AGP **8.5.2**, compileSdk/targetSdk **35**, minSdk 24 |
 | Font tiếng Việt | **Baloo 2** ExtraBold (tiêu đề) + **Nunito** ExtraBold/Bold (thân chữ) qua FreeType (gdx-freetype) — font game tròn đậm, đủ dấu tiếng Việt; DejaVu giữ làm dự phòng |
-| Texture giao diện | Bộ 9-patch vẽ bằng PIL trong `assets/ui/` — **v2 (đợt painted hóa)**: nút dày có khối, bo góc lớn, viền vàng 2 lớp + kim cương 4 góc, gloss nửa trên; **5 họ nút × 3 trạng thái** (thường/hồng ngọc/xanh lá/đỏ/**vàng mới**), panel, plaque, thẻ shop theo bậc giá 1–5, mặt thẻ, ô bench, avatar + **12 icon vẽ nét cao 96×96** (coin, tim, sao, kiếm, khiên, cúp, sách, cờ, sóng, thùng rác, biểu đồ, tốc độ) |
+| Texture giao diện | Bộ 9-patch vẽ bằng PIL trong `assets/ui/` — **v2 (đợt painted hóa)**: nút dày có khối, bo góc lớn, viền vàng 2 lớp + kim cương 4 góc, gloss nửa trên; **5 họ nút × 3 trạng thái** (thường/hồng ngọc/xanh lá/đỏ/**vàng mới**), panel, plaque, thẻ shop theo bậc giá 1–5, mặt thẻ, avatar (ô chờ bench KHÔNG thuộc bộ này: là mảng đất painted riêng — xem `tools/make_bench_patches.py`) + **12 icon vẽ nét cao 96×96** (coin, tim, sao, kiếm, khiên, cúp, sách, cờ, sóng, thùng rác, biểu đồ, tốc độ) |
 
 ## Cấu trúc project
 
@@ -84,13 +84,16 @@ java/
 - **Bố cục màn trận — sân tràn viền (đợt làm lại theo 2 game mẫu):** tranh sân là MỘT môi trường liền mạch phủ kín
   1280×720, không còn hai cột hộp tím hai bên. Bàn cờ lớn ở giữa (**ô 84×70px, sprite tướng 100px** — tỉ lệ painted,
   bóng ellipse mềm dưới chân);
-  lưới ô chỉ hiện mờ ở pha chuẩn bị và mờ hẳn về ~0 khi giao tranh. Bench là hàng ô ngay mép dưới TRONG sân. Thông tin
+  lưới ô chỉ hiện mờ ở pha chuẩn bị và mờ hẳn về ~0 khi giao tranh. Bench là hàng **9 mảng đất** ngay dưới bàn cờ
+  TRONG sân (texture painted `benchpatch1..3.png` sinh bằng `tools/make_bench_patches.py` — tướng ĐỨNG trên đất với
+  bóng chân mềm, không còn ô khung hộp; ô được chọn/đang kéo qua chỉ có quầng sáng mềm bám theo mảng đất). Thông tin
   dồn ra viền: tộc/hệ = chip nhỏ bán trong suốt dọc mép trái, trang bị = nút nổi dưới chip, danh sách người chơi = hàng
   gọn mép phải (avatar + tên + số máu + thanh máu mỏng, hàng của mình phủ vàng rất nhẹ), thanh trên = plaque nổi mỏng ở
   giữa-trên, nhật ký thu thành nút icon cuốn sách nhỏ. **Điều khiển học TFT Mobile (đợt 2026-10-25):** hai NÚT TRÒN ở
   hai góc dưới — tròn XANH DƯƠNG dưới-trái vừa là cấp (huy hiệu "Lv.") vừa là nút MUA XP (tiến trình "XP a/b" + vòng
   cung tiến trình quanh nút, giá 4 + icon xu; chạm = mua XP), tròn VÀNG dưới-phải hiện số vàng (+ huy hiệu lửa khi có
-  chuỗi thắng) và là nút MỞ/ĐÓNG SHOP. Shop là lớp mở/đóng nằm TRÊN bench: hàng 5 thẻ như cũ + dòng tỉ lệ odds % theo
+  chuỗi thắng) và là nút MỞ/ĐÓNG SHOP. Shop là lớp mở/đóng nằm DƯỚI hàng chờ, sát mép dưới màn hình (thứ tự dọc:
+  bàn cờ → hàng chờ → shop): hàng 5 thẻ như cũ + dòng tỉ lệ odds % theo
   bậc giá của cấp hiện tại + nút LÀM MỚI tròn vàng cuối hàng (2 vàng, chỉ tồn tại khi shop mở); mua xong shop vẫn mở,
   chạm vùng sân trống = đóng shop, vào giao tranh shop tự đóng. Các nút ĐẤU!/Tốc độ/Bảng sát thương/Bán tướng chọn/
   MUA XP/Làm mới chữ nhật đều đã BỎ; trận TỰ ĐỘNG bắt đầu khi hết 45s chuẩn bị; pha kết quả tự chuyển sau ~4s
