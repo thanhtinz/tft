@@ -1,7 +1,9 @@
-# Đấu Trường Chibi — Bản Java + Đồ họa vẽ tay 2D (LibGDX)
+# Đấu Trường Chibi — Bản Java + Đồ họa pixel art 2D (LibGDX)
 
-Bản chuyển đổi của game "Đấu Trường Chibi" từ React Native sang **Java + LibGDX** với đồ họa **vẽ tay 2D**,
-(trước đây là pixel 2D — xem đợt painted hóa bên dưới),
+Bản chuyển đổi của game "Đấu Trường Chibi" từ React Native sang **Java + LibGDX** với đồ họa **pixel art 2D**
+(theo quyết định của chủ dự án 2026-10-25: "Chuyển qua pixel đi" — toàn bộ tranh painted của các đợt trước
+đã được pixel-hóa bằng pipeline pixel v2, xem mục "Pipeline đồ họa pixel" bên dưới; hướng painted chỉ còn
+là lịch sử/tuỳ chọn, khôi phục được từ git history),
 theo quyết định của chủ dự án (đợt 1, 2026-10-23). **Đợt hoàn thiện (cùng ngày):** nâng LibGDX 1.14.0 +
 bản web TeaVM dựng thành công, trau chuốt giao diện desktop, nối âm thanh đầy đủ, do thám đội hình đối thủ,
 nội suy vị trí mượt (smoothstep), module Android đã nối sẵn (xem mục Android về giới hạn build trong sandbox).
@@ -49,10 +51,11 @@ java/
 ├── desktop/                 # DesktopLauncher (LWJGL3 1280x720) + ScreenshotMain (cong cu kiem chung GUI)
 ├── android/                 # Module Android day du (AGP 8.5.2, SDK 35) — xem muc Android ve gioi han build APK
 ├── web/                     # Backend TeaVM 1.4.0 — build thanh cong ra web/build/webapp (index.html + game.js + assets)
-├── assets/                  # units/ (35 sprite PAINTED 512x512 giu alpha), scenes/ (arena 1280x720 + lobby + card-back painted), fonts/ (Baloo 2 + Nunito), ui/ (texture giao diện v2 + icon vẽ nét cao), audio/ (22 file WAV)
+├── assets/                  # units/ (85 sprite PIXEL 128x128: 25 tuong x 3 dang sao + 10 quai), scenes/ (arena + lobby pixel 640x360, card-back, banner), items/ (18 icon trang bi pixel), fonts/ (Baloo 2 + Nunito), ui/ (texture giao diện v2 + icon vẽ nét cao + mang dat bench pixel), audio/ (22 file WAV)
 └── tools/
-    ├── make-painted-assets.py # pipeline painted hoa: sinh lai 35 sprite + 4 san 1280x720 tu tranh goc (chay lai duoc)
-    ├── pixelize.py          # pipeline pixel cu (legacy, khong con dung cho ban chinh)
+    ├── make-painted-assets.py # pipeline painted hoa (dot truoc): sinh lai sprite + san painted tu tranh goc (chay lai duoc)
+    ├── pixelize.py          # pipeline pixel v2: thu vien ham + thong so pixel da chot (sprite 128px/48 mau, san 640x360/128 mau, khong dither)
+    ├── pixelize_from_painted.py # pipeline pixel v3 (BAN CHINH): pixel-hoa toan bo tranh painted hien tai theo thong so v2 — chay: python3 tools/pixelize_from_painted.py [--icons]
     ├── make_ui.py           # sinh lai toan bo texture assets/ui/ bang PIL (nut v2 day co khoi + icon net cao) — chay: python3 tools/make_ui.py
     ├── ui-preview.png       # bang xem truoc bo texture nut/icon v2
     ├── preview-sheet.png    # bang xem truoc toan bo sprite (phong to nearest-neighbor)
@@ -230,22 +233,44 @@ xvfb-run -a ./gradlew :desktop:screenshot -PscreenshotMode=battle4 -PscreenshotO
 - JDK dùng ở máy Muse: Temurin 17 tại `~/workspace/tools/jdk17` (`source ~/workspace/tools/env.sh`),
   `GRADLE_USER_HOME=~/workspace/tft-java-game/.gradle-home` (bản sao cấu hình proxy của máy).
 
-## Pipeline đồ họa painted (bản chính hiện tại)
+## Pipeline đồ họa pixel (bản chính hiện tại)
 
 ```bash
-python3 tools/make-painted-assets.py   # sinh lai 35 sprite painted + 4 san 1280x720 tu tranh goc
+python3 tools/pixelize_from_painted.py            # pixel-hoa units + scenes + mang dat bench
+python3 tools/pixelize_from_painted.py --icons    # + 18 icon trang bi
 ```
 
-Theo chốt của chủ dự án (sau bản mẫu đối chiếu), bản chính dùng **tranh vẽ nét cao trực tiếp, không pixel-hóa**:
-sân = tranh gốc `tools/new-art/arena-*.webp` cắt 16:9 theo đúng neo của pipeline cũ, resize LANCZOS về 1280×720
-(không quantize, không nướng vignette — vignette/quầng sáng vẫn do code vẽ); tướng/quái = tranh raster gốc của dự án RN,
-chỉ chuẩn hóa khung (trim alpha, thân về tỉ lệ 432/512 chiều cao canvas, neo đáy, căn giữa trên canvas 512×512,
-resize premultiplied-alpha cho viền sạch) — giữ nguyên RGBA nét cao. Texture scene/unit trong `Assets` dùng filter
-**Linear** để thu nhỏ mượt. Kết quả: 35 sprite painted + arena 4 biến thể (rừng/hoàng hôn/sa mạc/băng).
+Theo chốt của chủ dự án 2026-10-25 ("Chuyển qua pixel đi"), bản chính quay về **pixel art** như bản Java
+đời đầu. Pipeline v3 (`tools/pixelize_from_painted.py`) tái dùng nguyên hàm + thông số của pipeline pixel v2
+(`tools/pixelize.py`) nhưng lấy **nguồn là toàn bộ tranh painted hiện tại** (gồm cả dạng tiến hoá `_s2/_s3`
+và bản đã khử viền trắng) thay vì tranh RN/new-art cũ:
 
-`tools/pixelize.py` là pipeline pixel cũ (v1/v2: palette 48 màu, viền đậm 1px, sân 640×360/128 màu không dither) —
-**legacy, không còn dùng cho bản chính**; chỉ giữ để tham khảo. Xem trước lịch sử: `tools/preview-sheet.png`,
-`tools/arena-sheet.png`.
+- **Sprite tướng/quái (85 file):** canvas 128×128, thân tối đa 108×116, palette 48 màu (MEDIANCUT, không
+  dither), tăng bão hoà thích ứng, resize premultiplied, alpha cắt cứng (ngưỡng 96), xoá mảnh bụi ≤20px,
+  viền đậm 1px, neo đáy — tỉ lệ thân/canvas và cỡ vẽ trong game (100px trên bàn/bench) không đổi.
+- **Sân (4) + lobby:** 640×360, palette 128 màu, không dither, KHÔNG nướng thêm vignette (tranh painted
+  đã nướng sẵn ~14%). Card-back 128×179/64 màu; banner rộng 320/96 màu.
+- **Mảng đất bench (3):** lưới pixel 96×48 (= đúng cỡ vẽ trong game), palette 96 màu, giữ alpha.
+- **Icon trang bị (18):** lưới nội bộ 64×64, palette 96 màu (rộng hơn sprite để đọc rõ ở cỡ khay ~40px),
+  phóng NEAREST lên file 128×128. Cả 18 icon đều đọc rõ sau pixel-hóa (kiểm chứng trong game thật:
+  khay trang bị + bảng thông tin) — không icon nào phải giữ painted.
+- **KHÔNG pixel-hóa:** khung/nút/panel UI, hiệu ứng BattleFx vẽ bằng code, chữ/số.
+
+Lần chạy đầu, script tự chụp snapshot nguồn painted vào `tools/painted-src/` (thư mục làm việc cục bộ,
+không đẩy lên repo). Đợt khử viền (`defringe_units.py`) không còn cần cho sprite pixel vì alpha đã cắt
+cứng — script vẫn giữ trong repo. Hướng painted dưới đây chỉ còn là lịch sử/tuỳ chọn.
+
+## Pipeline đồ họa painted (đợt trước — giữ làm tuỳ chọn)
+
+```bash
+python3 tools/make-painted-assets.py   # sinh lai sprite painted + 4 san 1280x720 tu tranh goc
+```
+
+Đợt painted-hóa (sau bản mẫu đối chiếu) từng là bản chính: sân = tranh gốc `tools/new-art/arena-*.webp`
+cắt 16:9, resize LANCZOS về 1280×720 (không quantize); tướng/quái = tranh raster gốc, chuẩn hóa khung
+trên canvas 512×512 (thân tỉ lệ 432/512, neo đáy). Đã bị thay bởi hướng pixel ở mục trên theo quyết định
+2026-10-25; toàn bộ asset painted vẫn khôi phục được từ git history (commit `26c8f81c` trở về trước).
+Xem trước lịch sử: `tools/preview-sheet.png`, `tools/arena-sheet.png`.
 
 ## Android — module đã nối, APK chưa build được TRONG SANDBOX này
 
