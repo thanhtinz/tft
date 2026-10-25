@@ -1,5 +1,6 @@
 package com.dautruongchibi.headless;
 
+import com.dautruongchibi.data.FxProfile;
 import com.dautruongchibi.data.GameData;
 import com.dautruongchibi.game.ArenaTheme;
 import com.dautruongchibi.game.Engine;
@@ -277,6 +278,29 @@ public class HeadlessMain {
         check("Sprite tien hoa: du 25 tuong x s2/s3, chon asset theo sao dung, fallback dang goc khi thieu",
             evoFilesOk && evoLogicOk,
             evoFilesOk ? "file=" + availStar.size() + "/50, logicOk=" + evoLogicOk : "thieu: " + evoMiss);
+
+        // 18) VFX/SFX theo tuong: moi tuong + quai co ho so he (FxProfile), du file tieng
+        // tung chieu cast_<he>.wav cho moi he thuc su duoc dung, 2 ky nang dac trung dung he
+        boolean fxOk = true; StringBuilder fxMiss = new StringBuilder();
+        Set<String> usedFx = new HashSet<>();
+        for (GameData.ChampDef c : GameData.CHAMPIONS) {
+            FxProfile.Fx f = FxProfile.of(c.id, c.skill.kind);
+            if (f == null) { fxOk = false; fxMiss.append(c.id).append(' '); }
+            else usedFx.add(FxProfile.sfxKey(f));
+        }
+        for (GameData.MonsterDef mst : GameData.MONSTERS) {
+            if (FxProfile.of(mst.id, mst.skill.kind) == null) { fxOk = false; fxMiss.append(mst.id).append(' '); }
+        }
+        for (String key : usedFx) {
+            if (!new java.io.File("assets/audio/cast_" + key + ".wav").isFile()) { fxOk = false; fxMiss.append("cast_").append(key).append(".wav "); }
+        }
+        boolean signatureOk = FxProfile.of("rero", GameData.SkillKind.burst) == FxProfile.Fx.ENERGY
+            && FxProfile.of("zaza", GameData.SkillKind.burst) == FxProfile.Fx.LIGHTNING
+            && FxProfile.of("drago", GameData.SkillKind.aoe) == FxProfile.Fx.FIRE
+            && FxProfile.of("astro", GameData.SkillKind.freeze) == FxProfile.Fx.ICE;
+        check("VFX/SFX theo tuong: 25 tuong + 10 quai co ho so he, du file cast_<he>.wav, he dac trung dung",
+            fxOk && signatureOk,
+            "so he dung: " + usedFx.size() + " " + usedFx + (fxOk && signatureOk ? "" : "; loi: " + fxMiss + "signatureOk=" + signatureOk));
 
         System.out.println("=== TONG KET: " + pass + " PASS / " + fail + " FAIL ===");
         if (fail > 0) { System.out.println("Muc fail: " + failures); System.exit(1); }

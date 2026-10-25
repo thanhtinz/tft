@@ -294,3 +294,43 @@ bằng một máy chủ tĩnh (ví dụ `python3 -m http.server`) trên máy th�
 - **Chưa kiểm chứng (nói thẳng):** kéo–thả bằng tay thật trên bản chạy (mới kiểm bằng test logic + ảnh giả lập trạng thái
   kéo + code path cảm ứng); runtime bản web TeaVM vẫn chỉ build PASS như các đợt trước; bảng sát thương/nhật ký ở
   trạng thái đang mở và thẻ shop ở trạng thái mua được vẫn chưa có ảnh chụp trực tiếp (giới hạn công cụ chụp).
+
+## Đợt VFX/SFX theo tướng (2026-10-25)
+
+Trước đợt này mọi tướng tung chiêu chỉ có 1 quầng sáng vàng chung và tiếng "cast" chung (thực tế sự kiện cast
+còn không phát tiếng nào). Nay mỗi tướng có **hồ sơ hiệu ứng theo hệ/kỹ năng** dùng chung cho cả hình và tiếng:
+
+- **Bảng ánh xạ (`data/FxProfile.java`):** 25 tướng + 10 quái → 10 hồ sơ: LỬA (drago, fifi, phoenix, dragonboss),
+  BĂNG (astro, frostboss), SÉT (susu, zaza), ĐỘC (nấm độc), HỒI PHỤC (dodo, vivi, queen), KHIÊN (bobi, toto, king),
+  NĂNG LƯỢNG (lulu, haha, rero, luna), VẬT LÝ (mimi, pipo, kiki, gogo, titan + quái cận chiến), BÓNG TỐI (baba,
+  shadow, witchmob), THIÊN NHIÊN (nana, sumo, kingboss). Id lạ → suy theo `SkillKind`.
+  Quyết định các tướng mơ hồ (đã ghi trong code): **fifi** kind là poison (DoT) nhưng tên/mô tả là lửa đốt → LỬA
+  (vệt cháy thay vũng độc); **astro** "Hố Đen Nhỏ" nhưng kind freeze/mô tả đóng băng → BĂNG; **baba** phù thủy tối
+  → BÓNG TỐI (sao băng = tia tối rơi xuống); **luna** tên trăng → NĂNG LƯỢNG bạc-tím; **king** buff + tự khiên →
+  KHIÊN; **sumo/kingboss** triệu hồi → THIÊN NHIÊN (cổng đất/lá).
+- **VFX (`ui/BattleFx.java`, MatchScreen chỉ đưa sự kiện vào):** nổ hạt theo hệ tại điểm trúng (lửa kèm tàn lửa
+  bay lên, băng vỡ mảnh tinh thể rơi, sét = tia lửa điện, độc = bọt xanh); **vệt đất** cháy/độc/băng 1,2–4s;
+  **vòm khiên** bong bóng khi cast khiên; **cổng triệu hồi** 2 vòng mở rộng cho summon; dấu cộng + hạt sáng bay
+  lên ở sự kiện hồi máu; **sao xoay quanh đầu** khi tướng bị choáng (đọc từ trạng thái stun của frame) và
+  **phủ tông băng** lên mục tiêu bị freeze (~2s); vòng chấn động cho Đập Đất; vệt chém chữ X cho execute;
+  hạt hút ngược về người tung cho lifesteal. Trần hiệu năng: tối đa 280 hạt cùng lúc.
+- **Hai kỹ năng đặc trưng làm riêng:** Rero **"Tia Laser" = beam 3 lớp** (quầng ngoài màu hệ, thân màu, lõi
+  trắng, nhấp nháy + chớp tại điểm trúng, xuyên qua mục tiêu một đoạn); Zaza **"Sấm Liên Hoàn" = tia sét gãy
+  khúc nối người tung → từng mục tiêu**. Lưu ý trung thực: engine mô phỏng Zaza là burst 1 mục tiêu (mô tả
+  ghi nhảy 3 mục tiêu) — tia sét vẽ nối thêm 2 địch gần nhất trên sân cho đúng mô tả, **không đổi sát thương**.
+- **Đòn đánh xa:** viên đạn đổi màu/hình theo hệ của tướng bắn (lửa = cầu lửa, băng = mảnh thoi xoay, sét = lõi
+  rung, còn lại = cầu năng lượng theo màu hệ) + vệt sáng ngắn phía sau — thay ô cam dùng chung trước đây.
+- **Ăn theo đợt tiến hoá:** tướng **3 sao** tung chiêu → hiệu ứng phóng to ×1.25.
+- **SFX theo hệ (`tools/make_cast_sfx.py`):** tổng hợp 10 file `assets/audio/cast_<hệ>.wav` (PCM 16-bit mono
+  22050Hz, đúng tiền lệ các file tự sinh trước): lửa phừng + lách tách, băng vỡ lách cách cao, sét rẹt 2 nhịp,
+  độc sủi bọt, hồi phục chuông arpeggio, khiên rung trầm, năng lượng rít lên, vật lý vút gió, bóng tối thở ầm
+  thấp, thiên nhiên gảy lá. `Sound.castFor()` phát đúng file theo hệ khi có sự kiện cast, thiếu file thì lui về
+  "cast" chung; nút bật/tắt âm thanh ở menu giữ nguyên tác dụng.
+  **Nói thẳng: âm thanh mới chỉ ở mức nạp file + nối sự kiện + kiểm chứng file tồn tại — CHƯA nghe thử bằng tai**
+  (sandbox không có card tiếng, như mọi đợt trước).
+- **Kiểm chứng đợt này:** compile desktop PASS; `verifyHeadless` **18 PASS / 0 FAIL** (mục 18 mới: đủ 25 tướng
+  + 10 quái có hồ sơ hệ, đủ file `cast_<hệ>.wav` cho các hệ đã dùng, hệ của 2 kỹ năng đặc trưng đúng);
+  `:web:buildWeb` PASS (game.js 940.648 byte, webapp có đủ 10 file cast). Ảnh chụp bắt khoảnh khắc cast:
+  `tools/fx-fire.png`, `fx-ice.png`, `fx-lightning.png`, `fx-heal.png`, `fx-beam.png` (ScreenshotMain thêm chế độ
+  `fx<he>`: dựng đội hình có tướng của hệ đó, chờ `BattleFx.lastCastFx` trùng hệ rồi chụp trễ ~8 frame cho
+  hiệu ứng đã rõ).

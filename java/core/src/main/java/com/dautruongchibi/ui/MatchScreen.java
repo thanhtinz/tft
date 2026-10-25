@@ -18,8 +18,10 @@ import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.utils.viewport.FitViewport;
+import com.dautruongchibi.data.FxProfile;
 import com.dautruongchibi.data.GameData;
 import com.dautruongchibi.data.GameData.ChampDef;
+import com.dautruongchibi.data.GameData.SkillKind;
 import com.dautruongchibi.game.ArenaTheme;
 import com.dautruongchibi.game.Engine;
 import com.dautruongchibi.game.Match;
@@ -106,6 +108,9 @@ public class MatchScreen extends ScreenAdapter {
     // Hieu ung theo 2 game mau: pow truyen tranh + lon nghieng (FighterZ), announcer,
     // bang sat thuong, popup trang bi mo qua (Kanto), xoay gop sao + vong chan theo sao.
     private final List<Pow> pows = new ArrayList<>();
+    // Hieu ung theo HE/KY NANG tung tuong (dot VFX/SFX): BattleFx nhan su kien cast/hit/heal
+    // tu fireEvents va ve particle/vet dat/set lan/beam/khien theo ho so FxProfile cua tuong.
+    private final BattleFx battleFx = new BattleFx();
     private final Map<String, Float> lastHeavyHitAt = new HashMap<>();
     private final Map<String, Engine.FightUnit> unitIndex = new HashMap<>();
     private float announceT = 0; // >0: dang hien chu ho lon giua san o pha RESULT
@@ -514,6 +519,7 @@ public class MatchScreen extends ScreenAdapter {
             for (int i = floatTexts.size() - 1; i >= 0; i--) { FloatText ft = floatTexts.get(i); ft.ttl += delta; ft.y += 30 * delta; if (ft.ttl > ft.maxTtl) floatTexts.remove(i); }
             for (int i = glows.size() - 1; i >= 0; i--) { Glow g = glows.get(i); g.ttl += delta; if (g.ttl > 0.45f) glows.remove(i); }
             for (int i = pows.size() - 1; i >= 0; i--) { Pow pw = pows.get(i); pw.ttl += delta; if (pw.ttl > 0.38f) pows.remove(i); }
+            battleFx.update(delta);
             if (playT >= outcome.result.duration + 1.0f) {
                 phase = Phase.RESULT;
                 announceT = 1.5f; // announcer phong to giua san roi moi hien panel ket qua
@@ -536,6 +542,7 @@ public class MatchScreen extends ScreenAdapter {
         drawBoardBase();
         // --- Don vi / bench / shop / chip toc-he ---
         batch.begin();
+        battleFx.drawGround(batch, circleTex); // vet dat theo he (chay/doc/bang) nam duoi chan tuong
         if (phase == Phase.BATTLE || phase == Phase.RESULT) drawBattleUnits(now);
         else { drawPlanningUnits(now); drawBench(now); drawShop(); }
         drawSynergyChips();
@@ -554,6 +561,7 @@ public class MatchScreen extends ScreenAdapter {
         }
         drawProjectiles();
         drawPows();
+        battleFx.draw(batch, a, circleTex, ringTex); // hieu ung theo he: beam/set/vom khien/particle
         batch.end();
         // --- Bong do cho khoi danh sach nguoi choi mep phai (Table khong nen, ve tay o day;
         // cac nut/plaque/panel Scene2D con lai tu do bong qua Ui.ShadowTextButton/ShadowTable) ---
@@ -834,6 +842,11 @@ public class MatchScreen extends ScreenAdapter {
         }
     }
 
+    private static SkillKind parseKind(String s) {
+        if (s == null) return null;
+        try { return SkillKind.valueOf(s); } catch (Exception ex) { return null; }
+    }
+
     // ---------- Playback tran danh tu frames/events cua engine ----------
     private void fireEvents() {
         if (outcome == null || outcome.result == null) return;
@@ -843,6 +856,9 @@ public class MatchScreen extends ScreenAdapter {
             switch (e.type) {
                 case "attack": case "hit": {
                     boolean crit = Boolean.TRUE.equals(e.crit);
+                    Engine.FightUnit atkU = e.attackerUid != null ? unitIndex.get(e.attackerUid) : null;
+                    SkillKind evKind = parseKind(e.skillKind);
+                    FxProfile.Fx evFx = FxProfile.of(atkU != null ? atkU.artId : null, evKind);
                     if (e.amount != null && e.amount > 0 && e.tx != null) {
                         float[] p = cellCenter(e.tx, e.ty);
                         String txt = "-" + e.amount.intValue() + (crit ? "!" : "");
@@ -861,6 +877,17 @@ public class MatchScreen extends ScreenAdapter {
                             lastHeavyHitAt.put(e.targetUid, (float) e.t);
                         }
                     }
+                    // Impact cua ky nang: hieu ung theo he tai muc tieu (dong bang/bong doc
+                    // danh dau rieng trong BattleFx de phu tong + vet dat dung thoi luong)
+                    if (evKind != null && e.targetUid != null) {
+                        float[] tp2 = lastScreenPos.get(e.targetUid);
+                        if (tp2 == null && e.tx != null) tp2 = cellCenter(e.tx, e.ty);
+                        float[] ap2 = e.attackerUid != null ? lastScreenPos.get(e.attackerUid) : null;
+                        if (ap2 == null && e.ax != null) ap2 = cellCenter(e.ax, e.ay);
+                        if (tp2 != null) battleFx.onSkillHit(evFx, evKind, tp2[0], tp2[1],
+                            ap2 != null ? ap2[0] : tp2[0], ap2 != null ? ap2[1] : tp2[1],
+                            atkU != null && atkU.star >= 3 ? 1.25f : 1f, e.targetUid, e.t);
+                    }
                     if (e.attackerUid != null) {
                         lastAttackAt.put(e.attackerUid, (float) e.t);
                         if (e.tx != null) lastAttackTarget.put(e.attackerUid, new float[]{e.tx, e.ty});
@@ -868,7 +895,8 @@ public class MatchScreen extends ScreenAdapter {
                     if (e.targetUid != null) lastHitAt.put(e.targetUid, (float) e.t);
                     if (Boolean.TRUE.equals(e.ranged) && e.ax != null && e.tx != null) {
                         float[] from = cellCenter(e.ax, e.ay), to = cellCenter(e.tx, e.ty);
-                        projectiles.add(new float[]{(float) e.t, from[0], from[1], to[0], to[1]});
+                        // [5] = ordinal he cua nguoi ban -> dan bay ve mau/hinh theo he do
+                        projectiles.add(new float[]{(float) e.t, from[0], from[1], to[0], to[1], evFx.ordinal()});
                     }
                     break;
                 }
@@ -876,12 +904,60 @@ public class MatchScreen extends ScreenAdapter {
                     if (e.amount != null && e.amount > 0 && e.tx != null) {
                         float[] p = cellCenter(e.tx, e.ty);
                         floatTexts.add(new FloatText(p[0], p[1] + 34, "+" + e.amount.intValue(), new Color(0.4f, 1, 0.5f, 1), 1f));
+                        battleFx.onHeal(p[0], p[1]); // dau cong + hat sang bay len quanh dong minh duoc hoi
                     }
                     break;
                 }
                 case "cast": {
                     float[] p = e.attackerUid != null && lastScreenPos.containsKey(e.attackerUid) ? lastScreenPos.get(e.attackerUid) : cellCenter(e.ax == null ? 3 : e.ax, e.ay == null ? 3 : e.ay);
-                    glows.add(new Glow(p[0], p[1], new Color(1, 0.85f, 0.3f, 1)));
+                    Engine.FightUnit caster = e.attackerUid != null ? unitIndex.get(e.attackerUid) : null;
+                    SkillKind sk = parseKind(e.skillKind);
+                    FxProfile.Fx fx = FxProfile.of(caster != null ? caster.artId : null, sk);
+                    // Quang sang tai nguoi tung: mau theo HE cua tuong thay cho vang chung truoc day
+                    glows.add(new Glow(p[0], p[1], FxProfile.mainColor(fx)));
+                    float fxScale = caster != null && caster.star >= 3 ? 1.25f : 1f; // 3 sao: hieu ung to hon 1 bac
+                    float[] tp = e.tx != null ? cellCenter(e.tx, e.ty) : p;
+                    // Muc tieu trung ky nang CUNG thoi diem (su kien hit/heal co skillKind, cung
+                    // nguoi tung) theo dung thu tu su kien — day la duong di cua set lan Zaza.
+                    List<BattleFx.HitPos> tgts = new ArrayList<>();
+                    for (int j = firedIdx; j < evs.size(); j++) {
+                        Engine.BattleEvent n = evs.get(j);
+                        if (n.t != e.t) break;
+                        if ((!"hit".equals(n.type) && !"heal".equals(n.type)) || n.skillKind == null) continue;
+                        if (e.attackerUid == null || !e.attackerUid.equals(n.attackerUid) || n.tx == null) continue;
+                        float[] hp = cellCenter(n.tx, n.ty);
+                        tgts.add(new BattleFx.HitPos(hp[0], hp[1], n.targetUid));
+                    }
+                    // Rieng Zaza: engine mo phong burst 1 muc tieu, nhung mo ta ky nang la set
+                    // nhay qua 3 muc tieu -> noi them 2 dich dang tren san gan muc tieu nhat
+                    // cho phan VE tia set (chi hinh anh, khong doi sat thuong mo phong).
+                    if (caster != null && "zaza".equals(caster.artId) && !tgts.isEmpty()) {
+                        final BattleFx.HitPos first = tgts.get(0);
+                        List<Engine.FightUnit> foes = new ArrayList<>();
+                        for (Engine.FightUnit u : unitIndex.values()) {
+                            if (u.team == caster.team || u.uid.equals(first.uid)) continue;
+                            if (lastScreenPos.containsKey(u.uid)) foes.add(u);
+                        }
+                        foes.sort((x, y) -> {
+                            float[] px = lastScreenPos.get(x.uid), py = lastScreenPos.get(y.uid);
+                            return Double.compare(Math.hypot(px[0] - first.x, px[1] - first.y), Math.hypot(py[0] - first.x, py[1] - first.y));
+                        });
+                        for (int i = 0; i < Math.min(2, foes.size()); i++) {
+                            float[] sp = lastScreenPos.get(foes.get(i).uid);
+                            tgts.add(new BattleFx.HitPos(sp[0], sp[1], foes.get(i).uid));
+                        }
+                    }
+                    List<float[]> teamPos = null;
+                    if (sk == SkillKind.buffAS && caster != null) {
+                        teamPos = new ArrayList<>();
+                        for (Engine.FightUnit u : unitIndex.values()) {
+                            if (u.team != caster.team) continue;
+                            float[] sp = lastScreenPos.get(u.uid);
+                            if (sp != null) teamPos.add(sp);
+                        }
+                    }
+                    battleFx.onCast(fx, sk, caster != null ? caster.artId : null, p[0], p[1], tp[0], tp[1], tgts, teamPos, fxScale);
+                    game.sound().castFor(FxProfile.sfxKey(fx)); // tieng tung chieu theo he cua tuong
                     break;
                 }
                 default: break;
@@ -889,14 +965,43 @@ public class MatchScreen extends ScreenAdapter {
         }
     }
 
+    // Dan bay cua don danh xa: mau + hinh theo HE cua tuong ban (trước đây la 1 o cam
+    // dung chung cho moi tuong), kem vet sang ngan phia sau. pr[5] = ordinal FxProfile.
     private void drawProjectiles() {
         if (phase != Phase.BATTLE && phase != Phase.RESULT) return;
         for (float[] pr : projectiles) {
             float k = (playT - pr[0]) / 0.18f;
             if (k < 0 || k > 1) continue;
+            FxProfile.Fx fx = pr.length > 5 ? FxProfile.Fx.values()[(int) pr[5]] : FxProfile.Fx.ENERGY;
+            Color main = FxProfile.mainColor(fx), acc = FxProfile.accentColor(fx);
+            for (int g = 2; g >= 1; g--) { // vet sang: 2 bong mo dan phia sau vien dan
+                float kg = k - g * 0.055f;
+                if (kg < 0) continue;
+                float gx = pr[1] + (pr[3] - pr[1]) * kg, gy = pr[2] + (pr[4] - pr[2]) * kg;
+                batch.setColor(main.r, main.g, main.b, g == 2 ? 0.18f : 0.28f);
+                float gr = g == 2 ? 4.5f : 6f;
+                batch.draw(circleTex, gx - gr, gy - gr, gr * 2, gr * 2);
+            }
             float x = pr[1] + (pr[3] - pr[1]) * k, y = pr[2] + (pr[4] - pr[2]) * k;
-            batch.setColor(1, 0.75f, 0.25f, 0.95f);
-            batch.draw(game.assets.whiteTex(), x - 4, y - 4, 8, 8);
+            if (fx == FxProfile.Fx.ICE) {
+                // Manh bang: hinh thoi xoay theo huong bay
+                float ang = (float) Math.toDegrees(Math.atan2(pr[4] - pr[2], pr[3] - pr[1]));
+                batch.setColor(acc.r, acc.g, acc.b, 0.95f);
+                batch.draw(game.assets.whiteTex(), x - 6, y - 6, 6, 6, 12, 12, 1, 1, ang + 45, 0, 0, 1, 1, false, false);
+            } else if (fx == FxProfile.Fx.LIGHTNING) {
+                // Vien set: loi sang rung nhe quanh duong bay
+                float jx = x + (float) Math.sin(playT * 61 + pr[0] * 40) * 2.2f, jy = y + (float) Math.cos(playT * 53 + pr[0] * 31) * 2.2f;
+                batch.setColor(acc.r, acc.g, acc.b, 0.95f);
+                batch.draw(circleTex, jx - 5, jy - 5, 10, 10);
+                batch.setColor(main.r, main.g, main.b, 0.9f);
+                batch.draw(circleTex, jx - 3, jy - 3, 6, 6);
+            } else {
+                float r = fx == FxProfile.Fx.FIRE ? 6.5f : fx == FxProfile.Fx.PHYSICAL ? 4f : 5.5f;
+                batch.setColor(main.r, main.g, main.b, 0.5f);
+                batch.draw(circleTex, x - r * 1.7f, y - r * 1.7f, r * 3.4f, r * 3.4f);
+                batch.setColor(acc.r, acc.g, acc.b, 0.95f);
+                batch.draw(circleTex, x - r, y - r, r * 2, r * 2);
+            }
             batch.setColor(Color.WHITE);
         }
     }
@@ -1012,10 +1117,12 @@ public class MatchScreen extends ScreenAdapter {
             Color tint = null;
             Float lh = lastHitAt.get(uid);
             if (lh != null && playT - lh < 0.15f) tint = new Color(1, 0.5f, 0.5f, 1);
+            if (!dying && battleFx.isFrozen(uid, playT)) tint = new Color(0.62f, 0.85f, 1f, 1); // phu tong bang khi bi dong bang (Astro/Boss Bang)
             if (!dying) { drawShadow(p[0], p[1] - 47, 80); drawGroundRing(p[0], p[1], base.star, now, uid.hashCode()); }
             drawUnitSprite(base.artId, cx, cy, 100, base.star, base.team == 1, alpha, rotation, tint);
             lastScreenPos.put(uid, new float[]{cx, cy});
             if (!dying) drawBars(cx, cy, hp / Math.max(1, base.maxHp), mana / Math.max(1, base.maxMana), shield / Math.max(1, base.maxHp), base.team, base.star, base.stun > 0);
+            if (!dying && base.stun > 0) battleFx.drawStunStars(batch, game.assets.icon("star"), cx, cy + 70, now); // sao xoay quanh dau khi choang/dong bang
         }
     }
 
@@ -1226,7 +1333,7 @@ public class MatchScreen extends ScreenAdapter {
         battleArenaKey = arenaKey(); // chot san cua VONG SAP DAU truoc khi fight() tang round
         outcome = match.fight();
         playT = 0; firedIdx = 0; speed = 1; speedBtn.setText("Tốc độ: x1");
-        floatTexts.clear(); glows.clear(); projectiles.clear(); pows.clear();
+        floatTexts.clear(); glows.clear(); projectiles.clear(); pows.clear(); battleFx.clear();
         lastAttackAt.clear(); lastAttackTarget.clear(); lastHitAt.clear(); lastScreenPos.clear(); lastHeavyHitAt.clear();
         // Chi muc don vi toan tran (gom ca golem trieu hoi xuat hien giua tran) cho nguong don nang 15%
         unitIndex.clear();

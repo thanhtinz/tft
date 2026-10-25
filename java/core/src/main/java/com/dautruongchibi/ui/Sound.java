@@ -33,7 +33,10 @@ public final class Sound {
             bgmBattle = loadMusic("audio/bgm-battle.wav");
             String[] names = {"click", "coin", "sell", "place", "champion", "reroll", "equip",
                 "cast", "hit", "levelup", "starup", "start", "win", "lose", "error",
-                "sparkle", "burst", "freeze", "heal", "stun"};
+                "sparkle", "burst", "freeze", "heal", "stun",
+                // SFX tung chieu THEO HE cua tuong (dot VFX/SFX): cast_<he>.wav tong hop rieng
+                "cast_fire", "cast_ice", "cast_lightning", "cast_poison", "cast_heal",
+                "cast_shield", "cast_energy", "cast_physical", "cast_shadow", "cast_nature"};
             for (String n : names) {
                 try {
                     sfx.put(n, Gdx.audio.newSound(Gdx.files.internal("audio/" + n + ".wav")));
@@ -94,6 +97,13 @@ public final class Sound {
         com.badlogic.gdx.audio.Sound s = sfx.get(name);
         if (s == null) return;
         try { s.play(0.8f); } catch (Exception ignored) {}
+    }
+
+    // Tieng tung chieu theo he cua tuong (khoa tu FxProfile.sfxKey): co file rieng thi
+    // phat file do, thieu thi lui ve tieng "cast" chung — khong bao gio loi am thanh.
+    public void castFor(String fxKey) {
+        if (fxKey != null && sfx.containsKey("cast_" + fxKey)) sfx("cast_" + fxKey);
+        else sfx("cast");
     }
 
     public void dispose() {
