@@ -134,7 +134,7 @@ java/
      tỏa ra tại điểm trúng, mục tiêu **lộn nghiêng** ±38° trong 0,35s. (Số sát thương to kiểu Kanto giữ nguyên.)
   3. **Announcer cuối vòng:** chữ Baloo lớn "THẮNG!" / "THUA!" (thắng trận có boss: **"HẠ GỤC BOSS!"**) phồng lên giữa sân
      ~1,5s rồi tan, kèm banner nhỏ chứa tóm tắt vòng + máu còn lại; sau đó mới hiện panel kết quả chi tiết.
-  4. **Bảng sát thương theo tướng:** panel nổi ở phía phải sân **TỰ HIỆN trong pha kết quả vòng** (không còn nút bật/tắt),
+  4. **Bảng sát thương theo tướng:** là **cột phải của chính thẻ kết quả** giữa sân (đợt gọn trình bày 2026-10-25: pha kết quả chỉ còn MỘT khối duy nhất — scrim phủ toàn sân, cột trái = kết quả + phần thưởng vòng, cột phải = bảng sát thương; không còn panel/hộp rời) **TỰ HIỆN trong pha kết quả vòng** (không còn nút bật/tắt),
      liệt kê từng tướng của **cả 2 bên** kèm thanh ngang theo tổng sát thương gây ra trong trận vừa đấu (dữ liệu `Engine.damageChart` cộng từ sự kiện engine).
   5. **Lên sao = TIẾN HOÁ ĐỔI HÌNH DẠNG (kiểu Kanto):** mỗi tướng có **3 hình dạng riêng theo cấp sao** — gộp sao là tướng
      đổi hẳn hình, không chỉ tăng chỉ số: **2 sao = dạng trưởng thành** (thêm giáp vai, viền **bạc**, vũ khí to hơn có đá quý,
@@ -144,8 +144,8 @@ java/
      (quái/Boss không gộp sao nên chỉ có dạng gốc). Kích thước hiển thị cũng lớn dần: 2 sao ×1.06, 3 sao ×1.12.
      Khoảnh khắc gộp: 3 chấm sao xoáy bay vào tướng kết quả + vòng sáng nở ở chân + chớp sáng bung ra để lộ dạng tiến hoá mới;
      tướng **2 sao có vòng bạc ở chân**, **3 sao có hào quang vàng cháy** nhấp nháy kèm 3 chấm sao bay quanh chân (cả ở pha chuẩn bị lẫn trong trận).
-  6. **Popup nhận trang bị kiểu mở quà:** thắng vòng quái PvE (mọi vòng quái trong PvP; Sóng Quái mỗi 3 sóng; Chiến Dịch khi thắng màn Boss)
-     rơi 1 đồ THÀNH PHẦN ngẫu nhiên vào kho + thẻ popup (icon vẽ tay thật của món đồ + tên + dòng chỉ số) nảy vào giữa-phải sân ~2,3s.
+  6. **Nhận trang bị kiểu mở quà:** thắng vòng quái PvE (mọi vòng quái trong PvP; Sóng Quái mỗi 3 sóng; Chiến Dịch khi thắng màn Boss)
+     rơi 1 đồ THÀNH PHẦN ngẫu nhiên vào kho — ở pha kết quả, phần thưởng (icon + tên đồ + vàng nhận) hiện **ngay trong thẻ kết quả**; thẻ popup nổi giữa-phải sân ~2,3s (icon vẽ tay thật của món đồ + tên + dòng chỉ số) chỉ còn dùng ở ngữ cảnh ngoài pha kết quả (vd ghép đồ xong).
 - **Hồ sơ local:** tên người chơi, hạng (10 bậc Sắt → Thách Đấu, bảng LP port từ bản RN: Top 1 +46 ở nhóm thấp...),
   cấp độ/XP, tiến độ chiến dịch, kỷ lục sóng — lưu JSON tại `~/.dau-truong-chibi/profile.json`. Chỉ PvP Hạng mới đổi rank LP.
 - **Animation kiểu sprite như bản RN:** nhún thở (bob), lao đòn, giật đỏ khi trúng đòn, ngã xoay + mờ dần khi chết,
@@ -160,7 +160,7 @@ tím viền vàng, đọc rõ ở cỡ 40px. Icon thay thế hoàn toàn cách t
 **popup nhận đồ**, **thẻ lật mở trận** và **bảng thông tin đồ**.
 
 - **Khay trang bị** (mép trái, dưới chip tộc/hệ): mỗi món đồ trong kho là 1 ô icon riêng (lưới 4 cột, ô 48px);
-  kho trống hiện 8 ô mờ. Đồ rơi vào tự thêm ô.
+  kho trống thì **không vẽ khung ô nào** (kiểu TFT: có đồ icon mới hiện, không có thì trống trơn — đợt gọn trình bày 2026-10-25 đã bỏ 8 ô mờ vẽ sẵn; khi đang kéo đồ, một quầng sáng mờ tạm thời hiện sau vùng khay làm gợi ý vùng thả).
 - **Chạm (không kéo) vào icon** → **bảng thông tin**: icon lớn + tên + loại + dòng chỉ số/mô tả. Thành phần có thêm
   mục **"GHÉP ĐƯỢC THÀNH"** (từng dòng: icon thành phần kia + icon đồ đích + tên); đồ hoàn chỉnh có dòng
   **"GHÉP TỪ: A + B"** kèm icon. Đóng bằng nút X hoặc chạm ra ngoài bảng.

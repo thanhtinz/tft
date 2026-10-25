@@ -33,6 +33,7 @@ public class ScreenshotMain {
         int resultFrames = 0;
         int panelFrames = 0;
         boolean battleStarted = false, captured = false, dragSet = false, shopSet = false;
+        boolean overAdvanced = false; int overFrames = 0;
         MatchScreen matchScreen;
         int fxSeenSeq = -1;
         int fxCaptureAt = -1;
@@ -144,6 +145,34 @@ public class ScreenshotMain {
                     Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
                     for (int i = 0; i < 3 && !m.over; i++) { m.autoPlan(); m.fight(); }
                     m.autoPlan();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "resultlose": {
+                    // Ban trong (tuong nhan tu lat the nam o bench) -> thua chac vong PvE 1-1:
+                    // chup THE KET QUA THUA (khong muc phan thuong do, chi dong vang thuong vong)
+                    Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
+                    if (m.draftPending) m.pickDraft(0);
+                    if (m.augmentPending) m.pickAugment(0);
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "resultpanelbig": {
+                    // Doi hinh lon vong sau: nhieu hang sat thuong -> kiem chung the ket qua
+                    // gop hai cot khi cot sat thuong cao hon cot ket qua
+                    Match m = battleItemsMatch();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "over": {
+                    // Song Quai: mau con 1 + ban trong -> thua song 1 la ket thuc tran ngay:
+                    // chup man hinh KET THUC TRAN (OVER)
+                    Match m = Match.startWaves(7, "QA Pixel");
+                    if (m.draftPending) m.pickDraft(0);
+                    m.human().hp = 1;
                     matchScreen = new MatchScreen(this, m);
                     setScreen(matchScreen);
                     break;
@@ -293,13 +322,13 @@ public class ScreenshotMain {
                     dragSet = true;
                 }
                 boolean fxMode = mode.startsWith("fx");
-                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || "battleitems".equals(mode) || fxMode;
+                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || "battleitems".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode) || fxMode;
                 if (battleMode && !battleStarted && frames > 30 && matchScreen != null) {
                     Method mb = MatchScreen.class.getDeclaredMethod("startBattle");
                     mb.setAccessible(true);
                     mb.invoke(matchScreen);
                     battleStarted = true;
-                    if ("result".equals(mode) || "resultpanel".equals(mode)) {
+                    if ("result".equals(mode) || "resultpanel".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode)) {
                         // Tang toc playback x3 de vao pha RESULT nhanh (announcer chi keo 1,5s)
                         Field fs = MatchScreen.class.getDeclaredField("speed");
                         fs.setAccessible(true);
@@ -347,9 +376,10 @@ public class ScreenshotMain {
                     due = (fxCaptureAt >= 0 && frames >= fxCaptureAt) || frames >= 5400;
                     if (due && fxCaptureAt < 0) System.out.println("FX_NOT_CAPTURED wanted=" + wanted + " lastFx=" + lastFx);
                     if (due && fxCaptureAt >= 0) System.out.println("FX_CAPTURED wanted=" + wanted + " frame=" + frames);
-                } else if ("resultpanel".equals(mode) && battleStarted) {
-                    // Cho announcer chay xong (announceT <= 0) de panel ket qua + bang sat thuong
-                    // da hien, chup nhanh trong cua so ~4s truoc khi pha RESULT tu chuyen tiep
+                } else if (("resultpanel".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode)) && battleStarted) {
+                    // Cho announcer chay xong (announceT <= 0) de THE KET QUA GOP (ket qua +
+                    // phan thuong + cot sat thuong trong cung mot khoi) da hien, chup nhanh
+                    // trong cua so ~4s truoc khi pha RESULT tu chuyen tiep
                     Field fp = MatchScreen.class.getDeclaredField("phase");
                     fp.setAccessible(true);
                     Field fa = MatchScreen.class.getDeclaredField("announceT");
@@ -357,6 +387,20 @@ public class ScreenshotMain {
                     boolean panelUp = "RESULT".equals(String.valueOf(fp.get(matchScreen))) && fa.getFloat(matchScreen) <= 0;
                     if (panelUp) panelFrames++;
                     due = panelFrames >= 12 || frames >= 2400;
+                } else if ("over".equals(mode) && battleStarted) {
+                    // Tran da ket thuc trong luc dau: o pha RESULT thi chuyen thang sang OVER
+                    // bang advanceFromResult (nhu nguoi choi cham man hinh), roi chup overlay
+                    Field fp = MatchScreen.class.getDeclaredField("phase");
+                    fp.setAccessible(true);
+                    String ph = String.valueOf(fp.get(matchScreen));
+                    if ("RESULT".equals(ph) && !overAdvanced) {
+                        Method ma = MatchScreen.class.getDeclaredMethod("advanceFromResult");
+                        ma.setAccessible(true);
+                        ma.invoke(matchScreen);
+                        overAdvanced = true;
+                    }
+                    if ("OVER".equals(ph)) overFrames++;
+                    due = overFrames >= 12 || frames >= 2400;
                 } else if ("result".equals(mode) && battleStarted) {
                     Field fp = MatchScreen.class.getDeclaredField("phase");
                     fp.setAccessible(true);

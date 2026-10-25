@@ -459,6 +459,7 @@ public final class Match {
         public boolean bossBattle = false; // tran co boss (announcer "HA GUC BOSS!" + san hoang hon)
         public String opponentName = "";
         public int humanHpDelta = 0;
+        public int goldGained = 0; // vang da cong vao kho sau vong (chi de HIEN thi o the ket qua, khong doi so lieu)
         public String droppedItem = null; // trang bi roi tu tran PvE thang (popup mo qua)
         public String summary = "";
     }
@@ -538,6 +539,7 @@ public final class Match {
             int income = 5 + Engine.interestOf(h.gold) + Engine.streakBonus(h.streak) + (out.humanWon ? 1 : 0);
             if (out.humanWon && h.augments.contains("vang2")) income += 4;
             h.gold += income;
+            out.goldGained = income;
             addXp(h, 2);
             if (h.augments.contains("hoi1")) h.hp = Math.min(Engine.HP_MAX, h.hp + 2);
             round++;
@@ -584,7 +586,9 @@ public final class Match {
         out.result = res;
         out.humanWon = res.winner == 0;
         if (out.humanWon) {
-            h.gold += 6 + Engine.interestOf(h.gold);
+            int gain = 6 + Engine.interestOf(h.gold);
+            h.gold += gain;
+            out.goldGained = gain;
             addXp(h, 2);
             out.summary = "Dọn sạch sóng " + wave + "!";
             if (wave % 3 == 0) grantDrop(out); // moi 3 song roi 1 trang bi

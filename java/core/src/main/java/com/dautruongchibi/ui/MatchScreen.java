@@ -451,19 +451,23 @@ public class MatchScreen extends ScreenAdapter {
     }
 
     // Khay trang bi VE TAY: moi mon do trong kho la 1 o icon rieng (icon ve tay that, khong
-    // con chu + vong tron mau). Kho trong -> 8 o mo trong. O vua nhan do ghep xong loe sang vang.
+    // con chu + vong tron mau). Kho trong -> KHONG ve khung o nao (kieu TFT: co do thi icon
+    // hien, khong co thi trong tron). O vua nhan do ghep xong loe sang vang.
     private void drawItemTray(float now) {
         Assets a = game.assets;
         Match.PlayerState h = match.human();
         int n = h.inventory.size();
-        if (n == 0) {
-            for (int i = 0; i < 8; i++) {
-                Rectangle r = traySlotRect(i);
-                batch.setColor(0.05f, 0.04f, 0.12f, 0.35f);
-                batch.draw(a.whiteTex(), r.x + 2, r.y + 2, 44, 44);
-                batch.setColor(Color.WHITE);
-                drawBorder(r.x + 2, r.y + 2, 44, 44, new Color(1, 1, 1, 0.16f), 1);
-            }
+        int rows = Math.max(2, (n + TRAY_COLS - 1) / TRAY_COLS);
+        // Dang keo do: quang sang mo sau vung khay lam goi y vung tha/ghep (CHI hien luc keo,
+        // khong ve thuong truc nhu khung o cu).
+        if (itemDragActive && dragItemIndex >= 0) {
+            float pulse = 0.10f + 0.045f * (float) Math.sin(now * 6);
+            float gx = TRAY_X - 4, gy = TRAY_TOP - rows * TRAY_SLOT - 4;
+            float gw = TRAY_COLS * TRAY_SLOT + 8, gh = rows * TRAY_SLOT + 8;
+            batch.setColor(1f, 0.85f, 0.3f, pulse);
+            batch.draw(a.whiteTex(), gx, gy, gw, gh);
+            batch.setColor(Color.WHITE);
+            drawBorder(gx, gy, gw, gh, new Color(1, 0.85f, 0.3f, 0.38f), 2);
         }
         for (int i = 0; i < n; i++) {
             if (i == dragItemIndex && itemDragActive) continue; // o goc an di khi dang keo icon di
@@ -478,7 +482,6 @@ public class MatchScreen extends ScreenAdapter {
                 drawBorder(r.x, r.y, 48, 48, new Color(1, 0.85f, 0.3f, Math.min(1, combineFlashT / 0.3f)), 3);
             }
         }
-        int rows = Math.max(2, (n + TRAY_COLS - 1) / TRAY_COLS);
         drawLeft(a.fontSmall, "Kéo để ghép/đeo • chạm xem chi tiết", 10, TRAY_TOP - rows * TRAY_SLOT - 8, Ui.TEXT_DIM);
     }
 
@@ -814,10 +817,11 @@ public class MatchScreen extends ScreenAdapter {
         else if (phase == Phase.AUGMENT) drawAugmentOverlay();
         else if (phase == Phase.RESULT) drawResultOverlay();
         else if (phase == Phase.OVER) drawOverOverlay();
-        // Bang sat thuong TU HIEN o pha ket qua vong (sau announcer, cung luc panel ket qua) —
-        // khong con nut bat/tat; du lieu van la Engine.damageChart cua tran vua dau.
-        if (phase == Phase.RESULT && announceT <= 0 && outcome != null && outcome.result != null) drawDamageChart();
-        if (popupT > 0 && popupItemId != null) drawItemPopup();
+        // Bang sat thuong o pha ket qua vong: da GOP vao cung the ket qua (drawResultOverlay
+        // ve ca cot sat thuong trong cung mot khoi) — khong con hop roi o goc phai.
+        // Popup nhan do: KHONG ve o pha RESULT nua (phan thuong da nam trong the ket qua);
+        // popup chi con dung o cac ngu canh ngoai pha ket qua.
+        if (popupT > 0 && popupItemId != null && phase != Phase.RESULT) drawItemPopup();
     }
 
     // Lop phu chieu sau tren san (ve ngay sau tranh san, truoc tuong/UI):
@@ -1591,28 +1595,29 @@ public class MatchScreen extends ScreenAdapter {
         drawCentered(a.font, sub, 640, 306, Color.WHITE);
     }
 
-    // Bang sat thuong theo tuong cua tran vua dau (ca 2 ben) — panel noi sat mep phai san
-    // (nam ngay trai cot nguoi choi gon), bat/tat bang nut "Bang sat thuong". Du lieu tu Engine.damageChart.
-    private void drawDamageChart() {
+    // Cot sat thuong theo tuong cua tran vua dau (ca 2 ben) — ve BEN TRONG the ket qua
+    // (cung mot khoi voi cot ket qua, cach nhau mot vach chia mo; khong con panel roi o
+    // goc phai nhu truoc). Goi trong luc batch dang begin cua drawResultOverlay.
+    // (px, top): goc trai + dinh cua cot; be rong cot 302 nhu panel cu.
+    private void drawDamageColumn(float px, float top, List<Engine.DamageRow> rows) {
         Assets a = game.assets;
-        List<Engine.DamageRow> rows = Engine.damageChart(outcome.result);
-        if (rows.isEmpty()) return;
-        batch.begin();
         int n = Math.min(rows.size(), 14);
-        float pw = 302, ph = 52 + n * 26;
-        float px = 782, py = 654 - ph;
-        drawShadowRect(px, py, pw, ph, 0.40f);
-        a.patchPanel.draw(batch, px, py, pw, ph);
-        drawCentered(a.fontBig, "SÁT THƯƠNG CỦA TRẬN", px + pw / 2, py + ph - 16, Ui.GOLD);
+        drawCentered(a.fontBig, "SÁT THƯƠNG CỦA TRẬN", px + 151, top - 38, Ui.GOLD);
         double max = Math.max(1, rows.get(0).damage);
         for (int i = 0; i < n; i++) {
             Engine.DamageRow r = rows.get(i);
-            float ry = py + ph - 48 - i * 26;
+            float ry = top - 66 - i * 26;
             batch.draw(a.unit(r.artId, r.star), px + 10, ry - 15, 20, 20);
             String nm = r.name + (r.star > 1 ? " (" + r.star + " sao)" : "");
+            // Ten dai PHAI cat theo do rong do that — truoc day layout wrap=true lam ten
+            // xuong dong de len hang duoi (vd "Pipo Chim Se (2 sao)" -> "sao)" de "Drago...")
+            layout.setText(a.fontSmall, nm);
+            while (layout.width > 118 && nm.length() > 1) {
+                nm = nm.substring(0, nm.length() - 1);
+                layout.setText(a.fontSmall, nm);
+            }
             a.fontSmall.setColor(r.team == 0 ? new Color(0.45f, 0.95f, 0.6f, 1) : new Color(1, 0.55f, 0.55f, 1));
-            layout.setText(a.fontSmall, nm, a.fontSmall.getColor(), 118, com.badlogic.gdx.utils.Align.left, true);
-            a.fontSmall.draw(batch, layout, px + 36, ry + 4);
+            a.fontSmall.draw(batch, nm, px + 36, ry + 4);
             batch.setColor(0, 0, 0, 0.55f);
             batch.draw(a.whiteTex(), px + 160, ry - 10, 92, 10);
             batch.setColor(r.team == 0 ? new Color(0.3f, 0.85f, 0.45f, 1) : new Color(0.95f, 0.35f, 0.35f, 1));
@@ -1622,7 +1627,6 @@ public class MatchScreen extends ScreenAdapter {
             a.fontSmall.draw(batch, String.valueOf((int) r.damage), px + 258, ry + 4);
         }
         a.fontSmall.setColor(Color.WHITE);
-        batch.end();
     }
 
     // Popup nhan trang bi kieu mo qua (Kanto): the nay vao giua-phai san ~2,3s khi PvE roi do.
@@ -1735,36 +1739,94 @@ public class MatchScreen extends ScreenAdapter {
         batch.end();
     }
 
-    // Panel ket qua vong nam LECH TRAI (tam x=451) de phia phai san danh cho bang sat thuong
-    // tu hien cung luc. Khong con nut "Tiep tuc": pha RESULT tu chuyen sau ~4s, cham = chuyen ngay.
-    private static final float RESULT_CX = 451;
+    // THE KET QUA VONG — MOT KHOI DUY NHAT o giua man (trinh bay gon kieu TFT: cuoi vong
+    // chi la mot lop tom tat, khong phai nhieu hop roi canh tranh nhau):
+    // - Scrim phu TOAN SAN (ke ca HUD) cho lop nen lui han ve sau.
+    // - Trong the: cot trai = ket qua vong (tieu de, tom tat, doi thu, mau) + muc PHAN
+    //   THUONG nam TRONG the (icon do roi + vang nhan) — popup nhan do roi khong con
+    //   xuat hien o pha nay nua; cot phai = bang sat thuong, cach nhau mot vach chia mo.
+    // - Announcer chu lon giu nguyen la khoanh khac chao mung rieng, chay TRUOC khi the
+    //   hien — hai cach the hien khong bao gio xuat hien cung luc.
+    // Khong con nut "Tiep tuc": pha RESULT tu chuyen sau ~4s, cham = chuyen ngay.
     private void drawResultOverlay() {
         Assets a = game.assets;
         batch.begin();
         if (announceT > 0 && outcome != null) {
-            // Announcer dang chay: chi hien chu ho + banner nho tren nen san (khong che panel)
+            // Announcer dang chay: chi hien chu ho + banner nho tren nen san (khong che the)
             drawAnnouncer();
             batch.end();
             return;
         }
-        batch.setColor(0.02f, 0.02f, 0.07f, 0.55f);
+        List<Engine.DamageRow> rows = (outcome != null && outcome.result != null)
+            ? Engine.damageChart(outcome.result) : new java.util.ArrayList<Engine.DamageRow>();
+        boolean hasChart = !rows.isEmpty();
+        int n = Math.min(rows.size(), 14);
+        // Khoi the: pad 22 + cot trai 430 + gap 26 + cot sat thuong 302 + pad 22 = 802
+        float cardW = hasChart ? 802 : 470;
+        float cardH = hasChart ? Math.max(332, 96 + n * 26) : 332;
+        float cardX = (1280 - cardW) / 2, cardY = (720 - cardH) / 2;
+        float top = cardY + cardH;
+        batch.setColor(0.02f, 0.02f, 0.07f, 0.62f);
         batch.draw(a.whiteTex(), 0, 0, 1280, 720);
         batch.setColor(Color.WHITE);
-        drawShadowRect(216, 200, 470, 330, 0.42f);
-        a.patchPanel.draw(batch, 216, 200, 470, 330);
+        drawShadowRect(cardX, cardY, cardW, cardH, 0.42f);
+        a.patchPanel.draw(batch, cardX, cardY, cardW, cardH);
+        float lcx = hasChart ? cardX + 237 : 640; // tam cot trai (rong 430, pad trai 22)
         if (outcome != null) {
-            drawCentered(a.fontTitle, outcome.bossBattle && outcome.humanWon ? "HẠ GỤC BOSS!" : outcome.humanWon ? "THẮNG!" : "THUA!", RESULT_CX, 500, outcome.humanWon ? new Color(0.35f, 0.95f, 0.5f, 1) : new Color(1, 0.4f, 0.4f, 1));
-            // Tom tat vong: chu to neu vua panel 470, dai qua thi ha xuong font thuong
+            float cur = top - 38;
+            drawCentered(a.fontTitle, outcome.bossBattle && outcome.humanWon ? "HẠ GỤC BOSS!" : outcome.humanWon ? "THẮNG!" : "THUA!", lcx, cur, outcome.humanWon ? new Color(0.35f, 0.95f, 0.5f, 1) : new Color(1, 0.4f, 0.4f, 1));
+            cur -= 54;
+            // Tom tat vong: chu to neu vua cot 430, dai qua thi ha xuong font thuong
             layout.setText(a.fontBig, outcome.summary);
-            if (layout.width <= 430) drawCentered(a.fontBig, outcome.summary, RESULT_CX, 448, Color.WHITE);
-            else drawCentered(a.font, outcome.summary, RESULT_CX, 448, Color.WHITE);
-            drawCentered(a.font, "Đối thủ: " + outcome.opponentName, RESULT_CX, 414, Ui.TEXT_DIM);
-            if (outcome.humanHpDelta != 0) drawCentered(a.font, "Máu thay đổi: " + outcome.humanHpDelta + "  •  Máu còn: " + match.human().hp, RESULT_CX, 382, Color.WHITE);
-            if (outcome.droppedItem != null) drawCentered(a.font, "Trang bị rơi: " + GameData.itemById(outcome.droppedItem).name + " (đã vào kho)", RESULT_CX, 350, Ui.GOLD);
-            if (match.mode == Match.Mode.CAMPAIGN || match.mode == Match.Mode.WAVES) drawCentered(a.fontSmall, match.endMessage, RESULT_CX, 322, Ui.TEXT_DIM);
+            if (layout.width <= 430) drawCentered(a.fontBig, outcome.summary, lcx, cur, Color.WHITE);
+            else drawCentered(a.font, outcome.summary, lcx, cur, Color.WHITE);
+            cur -= 34;
+            drawCentered(a.font, "Đối thủ: " + outcome.opponentName, lcx, cur, Ui.TEXT_DIM);
+            if (outcome.humanHpDelta != 0) {
+                cur -= 32;
+                drawCentered(a.font, "Máu thay đổi: " + outcome.humanHpDelta + "  •  Máu còn: " + match.human().hp, lcx, cur, Color.WHITE);
+            }
+            if ((match.mode == Match.Mode.CAMPAIGN || match.mode == Match.Mode.WAVES) && match.endMessage != null && !match.endMessage.isEmpty()) {
+                cur -= 30;
+                drawCentered(a.fontSmall, match.endMessage, lcx, cur, Ui.TEXT_DIM);
+            }
+            // PHAN THUONG NAM TRONG THE: icon + ten do roi, dong vang nhan duoc
+            boolean hasItem = outcome.droppedItem != null;
+            boolean hasGold = outcome.goldGained > 0;
+            if (hasItem || hasGold) {
+                cur -= 46;
+                drawCentered(a.fontSmall, "PHẦN THƯỞNG VÒNG NÀY:", lcx, cur, Ui.GOLD);
+                if (hasItem) {
+                    GameData.ItemDef it = GameData.itemById(outcome.droppedItem);
+                    String nm = it.name + " — đã vào kho";
+                    layout.setText(a.font, nm);
+                    float gw = 38 + 8 + layout.width;
+                    float gx = lcx - gw / 2;
+                    batch.draw(a.itemIcon(it.id), gx, cur - 48, 38, 38);
+                    drawLeft(a.font, nm, gx + 46, cur - 24, Color.WHITE);
+                    cur -= 56;
+                }
+                if (hasGold) {
+                    String gt = "+" + outcome.goldGained + " vàng vòng này";
+                    layout.setText(a.font, gt);
+                    float gw = 20 + 7 + layout.width;
+                    float gx = lcx - gw / 2;
+                    float gy = hasItem ? cur - 26 : cur - 48;
+                    batch.setColor(0.98f, 0.78f, 0.25f, 1);
+                    batch.draw(discTex, gx, gy, 20, 20);
+                    batch.setColor(Color.WHITE);
+                    drawLeft(a.font, gt, gx + 27, gy + 16, new Color(1f, 0.9f, 0.55f, 1));
+                }
+            }
         }
         int remain = Math.max(0, (int) Math.ceil(4.0f - resultT));
-        drawCentered(a.fontSmall, match.over ? "Chạm để xem kết quả cuối" : "Tự tiếp tục sau " + remain + "s — chạm để đi ngay", RESULT_CX, 238, Ui.TEXT_DIM);
+        drawCentered(a.fontSmall, match.over ? "Chạm để xem kết quả cuối" : "Tự tiếp tục sau " + remain + "s — chạm để đi ngay", lcx, cardY + 36, Ui.TEXT_DIM);
+        if (hasChart) {
+            batch.setColor(1, 1, 1, 0.13f);
+            batch.draw(a.whiteTex(), cardX + 464, cardY + 20, 2, cardH - 40);
+            batch.setColor(Color.WHITE);
+            drawDamageColumn(cardX + 478, top, rows);
+        }
         batch.end();
     }
 
