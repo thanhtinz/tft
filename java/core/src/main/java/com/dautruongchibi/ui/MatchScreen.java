@@ -287,7 +287,10 @@ public class MatchScreen extends ScreenAdapter {
         logBox.setSize(336, 190);
         logBox.background(Ui.bg(a, Ui.PANEL));
         logBox.pad(8);
-        logBox.top().align(com.badlogic.gdx.utils.Align.left);
+        // LUU Y: giong playersBox — KHONG viet .top().align(left): align() GHI DE mat na
+        // can le lam MAT co top, noi dung bi CAN GIUA doc; nhat ky dai se tran ca hai
+        // phia va de len tieu de "NHAT KY". Phai gop co trong 1 lan align().
+        logBox.align(com.badlogic.gdx.utils.Align.top | com.badlogic.gdx.utils.Align.left);
         logBox.add(Ui.labelBig(a, "NHẬT KÝ", Ui.GOLD)).align(com.badlogic.gdx.utils.Align.left).row();
         logLabel = Ui.labelSmall(a, "", Ui.TEXT_DIM);
         logLabel.setWrap(true);
