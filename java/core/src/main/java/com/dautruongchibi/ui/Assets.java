@@ -11,6 +11,8 @@ import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 
+import com.dautruongchibi.data.GameData;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -137,6 +139,26 @@ public class Assets {
         return t != null ? t : avatarTex;
     }
 
+    // Icon TRANG BI ve tay (assets/items/<id>.png — 6 thanh phan + 12 hoan chinh, cung 1 bo
+    // nen phien da quy toi). Thieu file thi fallback o mau theo mau dai dien cua do (khong crash).
+    private final Map<String, Texture> itemTex = new HashMap<>();
+    public Texture itemIcon(String itemId) {
+        Texture t = itemTex.get(itemId);
+        if (t != null) return t;
+        try {
+            t = new Texture(Gdx.files.internal("items/" + itemId + ".png"));
+            t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        } catch (Exception e) {
+            GameData.ItemDef def = GameData.itemById(itemId);
+            Pixmap pm = new Pixmap(48, 48, Pixmap.Format.RGBA8888);
+            pm.setColor(def != null ? Color.valueOf(def.color) : Color.GRAY); pm.fill();
+            t = new Texture(pm); pm.dispose();
+        }
+        itemTex.put(itemId, t);
+        uiTex.add(t);
+        return t;
+    }
+
     public Texture bannerFor(int idx) {
         switch (Math.abs(idx) % 3) {
             case 1: return bannerDesert;
@@ -160,22 +182,37 @@ public class Assets {
         return t;
     }
 
+    // Nap texture TUONG co MIPMAP: sprite canvas 512 bi thu xuong ~100px khi dung tren san
+    // (va 20px o bang sat thuong) — khong mipmap thi GPU chi lay mau song tuyen 2x2 texel,
+    // texel vanh sang bi lay mau roi rac -> quang trang + lap loang/mo quanh silhouette.
+    // 512 la luy thua 2 nen mipmap hop le ca WebGL1 (TeaVM). Loi sinh mipmap o bat ky
+    // moi truong nao -> fallback texture thuong + Linear (hanh vi cu), khong crash.
+    private static Texture loadUnitTexture(String path) {
+        try {
+            Texture t = new Texture(Gdx.files.internal(path), true);
+            t.setFilter(Texture.TextureFilter.MipMapLinearLinear, Texture.TextureFilter.Linear);
+            return t;
+        } catch (Exception e) {
+            Texture t = new Texture(Gdx.files.internal(path));
+            t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+            return t;
+        }
+    }
+
     public Texture unit(String artId) {
         Texture t = unitTex.get(artId);
         if (t != null) return t;
         String id = artId == null ? "slime" : artId;
         try {
-            t = new Texture(Gdx.files.internal("units/" + id + ".png"));
+            t = loadUnitTexture("units/" + id + ".png");
         } catch (Exception e) {
-            try { t = new Texture(Gdx.files.internal("units/slime.png")); }
+            try { t = loadUnitTexture("units/slime.png"); }
             catch (Exception e2) {
                 Pixmap pm = new Pixmap(64, 64, Pixmap.Format.RGBA8888);
                 pm.setColor(new Color(1, 0.6f, 0.8f, 1)); pm.fill();
                 t = new Texture(pm); pm.dispose();
             }
         }
-        // Painted (khong con pixel): loc Linear de tranh net cao khong bi vo hat khi thu nho
-        t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
         unitTex.put(artId, t);
         return t;
     }
@@ -205,8 +242,7 @@ public class Assets {
                 Texture t = unitTex.get(sid);
                 if (t == null) {
                     try {
-                        t = new Texture(Gdx.files.internal("units/" + sid + ".png"));
-                        t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+                        t = loadUnitTexture("units/" + sid + ".png");
                         unitTex.put(sid, t);
                     } catch (Exception e) {
                         unitStarMiss.add(sid);
@@ -233,9 +269,15 @@ public class Assets {
             try {
                 Pixmap pm = new Pixmap(Gdx.files.internal("units/" + id + ".png"));
                 darkenFeet(pm);
-                t = new Texture(pm);
+                // Cung mipmap nhu loadUnitTexture (ban tiep dat la texture ve tren san chinh)
+                try {
+                    t = new Texture(pm, true);
+                    t.setFilter(Texture.TextureFilter.MipMapLinearLinear, Texture.TextureFilter.Linear);
+                } catch (Exception e2) {
+                    t = new Texture(pm);
+                    t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+                }
                 pm.dispose();
-                t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
                 unitGroundTex.put(id, t);
                 return t;
             } catch (Exception e) { /* thu ung vien tiep theo / fallback o cuoi */ }

@@ -67,7 +67,7 @@ java/
 
 - **Lõi auto-battler:** shop 5 thẻ theo odds từng cấp, reroll 2 vàng, mua XP 4 vàng, lãi theo vàng giữ (tối đa +5),
   thưởng chuỗi thắng/thua, bench 9 ô, bàn 7×4 (đặt ở 4 hàng dưới), ghép sao tự động ×1.8 / ×3.2,
-  tộc/hệ 8 hệ với ngưỡng như bản RN, 12 trang bị, cường hóa ở vòng 2-1 / 3-2 / 4-2, bot AI dựng đội + hao hụt bot-vs-bot mô phỏng.
+  tộc/hệ 8 hệ với ngưỡng như bản RN, trang bị ghép kiểu TFT (6 đồ thành phần → 12 đồ hoàn chỉnh, xem mục riêng bên dưới), cường hóa ở vòng 2-1 / 3-2 / 4-2, bot AI dựng đội + hao hụt bot-vs-bot mô phỏng.
 - **Cơ cấu chế độ (theo chốt của user):**
   - PvE **Chiến Dịch**: 5.200 màn / 52 chương sinh tất định, boss mỗi 10 màn, boss lớn cuối chương.
   - PvE **Sóng Quái** vô tận, boss mỗi 10 sóng.
@@ -80,7 +80,7 @@ java/
   thanh trên hiện máu kèm icon tim, danh sách người chơi hiện máu 0–100. (Điểm **rank LP** của chế độ Hạng là điểm
   xếp hạng kiểu TFT — giữ nguyên, không liên quan máu trong trận. Hồ sơ cũ chỉ lưu rank/thống kê nên tương thích nguyên vẹn.)
 - **Lật thẻ úp mở trận:** đầu trận PvP (và các vòng x-4, sóng 1 ở Sóng Quái) hiện 8 thẻ úp lưng vẽ;
-  chọn 1 thẻ → lật mở (420ms, các thẻ khác lật nối tiếp) → nhận tướng về bench + 1 trang bị vào kho.
+  chọn 1 thẻ → lật mở (420ms, các thẻ khác lật nối tiếp) → nhận tướng về bench + 1 đồ thành phần vào kho.
 - **Bố cục màn trận — sân tràn viền (đợt làm lại theo 2 game mẫu):** tranh sân là MỘT môi trường liền mạch phủ kín
   1280×720, không còn hai cột hộp tím hai bên. Bàn cờ lớn ở giữa (**ô 84×70px, sprite tướng 100px** — tỉ lệ painted).
   **Lưới ô mặc định KHÔNG hiện (đợt 2026-10-25):** sân bình thường là một môi trường liền mạch không ô; lưới chỉ
@@ -90,13 +90,20 @@ java/
   hoàng hôn dài nhất) + **contact AO** — mảng tối mềm dẹt ngay dưới bàn chân + **gradient tối nhẹ ở dải chân**
   sprite (bản texture lúc chạy `Assets.unitOnGround`, file tranh gốc không đổi) — hết cảm giác tướng bị dán lên
   mặt đất; tướng đang bị nhấc lên (kéo) thì bóng nhỏ/mờ lại và AO biến mất. (Đã thử thêm tint hoà sáng ấm theo
-  theme: soi A/B thấy chênh lệch không đáng kể mà làm lệch màu tranh gốc nên KHÔNG giữ.) Bench là hàng **9 mảng đất** ngay dưới bàn cờ
+  theme: soi A/B thấy chênh lệch không đáng kể mà làm lệch màu tranh gốc nên KHÔNG giữ.) **Khử viền trắng +
+  hết mờ sprite (đợt 2026-10-25):** sprite painted tách nền từ nền sáng nên vành bán trong suốt bị nhiễm
+  matte sáng (đo: ~11% pixel vành sáng bất thường so với thân) và game thu 512→100px bằng Linear KHÔNG
+  mipmap gây quầng sáng + lấp loáng. Đã chạy `tools/defringe_units.py` cho cả 85 sprite (gọt mép ngoài
+  1px, diệt alpha <28, cắt phần sáng vượt của vành về phía màu thân gần nhất, bleed màu ra vùng trong
+  suốt thay RGB đen, unsharp nhẹ) — pixel vành sáng bất thường còn ~1,9% — và bật **mipmap +
+  MipMapLinearLinear** cho texture tướng trong `Assets` (gồm bản `unitOnGround`; lỗi sinh mipmap thì tự
+  fallback Linear như cũ). Bench là hàng **9 mảng đất** ngay dưới bàn cờ
   TRONG sân (texture painted `benchpatch1..3.png` sinh bằng `tools/make_bench_patches.py` — tướng ĐỨNG trên đất với
   bóng chân mềm, không còn ô khung hộp; ô được chọn/đang kéo qua chỉ có quầng sáng mềm bám theo mảng đất). **Ô bench
   ĐÚNG bằng ô bàn 84×70 (dải 357..1113 × 92..162, nằm gọn giữa 2 đĩa tròn góc) và sprite bench ĐÚNG 100px như trên
   bàn — bench là một hàng ngang nữa của bàn cờ, neo chân/bóng đất/vòng sao/hàng sao dùng CHUNG quy tắc với tướng
   trên bàn (đợt cân bằng bench 2026-10-25, mảng đất vẽ lại rộng và bẹt 96×48 bao quanh vùng chân cy−50).** Thông tin
-  dồn ra viền: tộc/hệ = chip nhỏ bán trong suốt dọc mép trái, trang bị = nút nổi dưới chip, danh sách người chơi = hàng
+  dồn ra viền: tộc/hệ = chip nhỏ bán trong suốt dọc mép trái, trang bị = khay icon vẽ tay dưới chip (chạm = bảng thông tin, kéo = ghép/đeo), danh sách người chơi = hàng
   gọn mép phải (avatar + tên + số máu + thanh máu mỏng, hàng của mình phủ vàng rất nhẹ), thanh trên = plaque nổi mỏng ở
   giữa-trên, nhật ký thu thành nút icon cuốn sách nhỏ. **Điều khiển học TFT Mobile (đợt 2026-10-25):** hai NÚT TRÒN ở
   hai góc dưới — tròn XANH DƯƠNG dưới-trái vừa là cấp (huy hiệu "Lv.") vừa là nút MUA XP (tiến trình "XP a/b" + vòng
@@ -135,12 +142,54 @@ java/
      Khoảnh khắc gộp: 3 chấm sao xoáy bay vào tướng kết quả + vòng sáng nở ở chân + chớp sáng bung ra để lộ dạng tiến hoá mới;
      tướng **2 sao có vòng bạc ở chân**, **3 sao có hào quang vàng cháy** nhấp nháy kèm 3 chấm sao bay quanh chân (cả ở pha chuẩn bị lẫn trong trận).
   6. **Popup nhận trang bị kiểu mở quà:** thắng vòng quái PvE (mọi vòng quái trong PvP; Sóng Quái mỗi 3 sóng; Chiến Dịch khi thắng màn Boss)
-     rơi 1 trang bị ngẫu nhiên vào kho + thẻ popup (viên ngọc màu theo trang bị + tên + dòng chỉ số) nảy vào giữa-phải sân ~2,3s.
+     rơi 1 đồ THÀNH PHẦN ngẫu nhiên vào kho + thẻ popup (icon vẽ tay thật của món đồ + tên + dòng chỉ số) nảy vào giữa-phải sân ~2,3s.
 - **Hồ sơ local:** tên người chơi, hạng (10 bậc Sắt → Thách Đấu, bảng LP port từ bản RN: Top 1 +46 ở nhóm thấp...),
   cấp độ/XP, tiến độ chiến dịch, kỷ lục sóng — lưu JSON tại `~/.dau-truong-chibi/profile.json`. Chỉ PvP Hạng mới đổi rank LP.
 - **Animation kiểu sprite như bản RN:** nhún thở (bob), lao đòn, giật đỏ khi trúng đòn, ngã xoay + mờ dần khi chết,
   đạn bay cho tướng tầm xa, vệt sáng tung chiêu, số sát thương phong cách Kanto (cam/vàng, chí mạng to + "!"),
   thanh máu/mana/khiên viền mỏng + sao phía trên đầu.
+
+## Trang bị — ghép đồ kiểu TFT (đợt 2026-10-25)
+
+Mọi món đồ trong game đều có **icon vẽ tay thật** (`assets/items/<id>.png`, sinh bằng `tools/make_item_icons.py`
+từ tranh thô trong `tools/item-icons-raw/`): một bộ thống nhất — vật thể vẽ painted trên nền phiến đá quý tối
+tím viền vàng, đọc rõ ở cỡ 40px. Icon thay thế hoàn toàn cách trình bày cũ (chữ + vòng tròn màu) ở **khay trang bị**,
+**popup nhận đồ**, **thẻ lật mở trận** và **bảng thông tin đồ**.
+
+- **Khay trang bị** (mép trái, dưới chip tộc/hệ): mỗi món đồ trong kho là 1 ô icon riêng (lưới 4 cột, ô 48px);
+  kho trống hiện 8 ô mờ. Đồ rơi vào tự thêm ô.
+- **Chạm (không kéo) vào icon** → **bảng thông tin**: icon lớn + tên + loại + dòng chỉ số/mô tả. Thành phần có thêm
+  mục **"GHÉP ĐƯỢC THÀNH"** (từng dòng: icon thành phần kia + icon đồ đích + tên); đồ hoàn chỉnh có dòng
+  **"GHÉP TỪ: A + B"** kèm icon. Đóng bằng nút X hoặc chạm ra ngoài bảng.
+- **Kéo–thả là đường dùng đồ duy nhất** (luồng cũ "chạm đồ rồi chạm tướng" đã bỏ): kéo icon thả lên icon khác
+  trong khay → **ghép** nếu có công thức (loé sáng + toast; không có công thức thì toast từ chối, icon về chỗ cũ);
+  kéo thả lên tướng trên bàn/bench → **đeo**. Ô đích đang nhắm được tô viền (xanh lá = ghép được, đỏ = không).
+- **6 đồ thành phần** (đeo được như đồ thường, tối đa 3 ô/tướng như luật chung): Lưỡi Kiếm Mật Ong (+10 ST),
+  Gậy Phép Socola (+15 SMKN), Dây Cung Kẹo Dẻo (+12% tốc đánh), Găng Tay Nhung (+10% chí mạng),
+  Mảnh Vỏ Kẹo Cứng (+12 giáp, +75 máu), Mảnh Tim Kẹo (+150 máu).
+- **Nguồn rơi chỉ trả thành phần**: vòng quái PvE trong PvP, Sóng Quái mỗi 3 sóng, Boss Chiến Dịch, đồ kèm thẻ
+  lật mở trận. Đồ hoàn chỉnh chỉ có được bằng ghép (hoặc cường hoá ghi rõ tặng đồ hoàn chỉnh).
+- **Tự hợp nhất trên người tướng:** tướng đang đeo 1 thành phần, đeo thêm thành phần còn lại của cùng công thức
+  thì 2 món tự gộp thành đồ hoàn chỉnh chiếm 1 ô (kể cả khi tướng đã đủ 3 ô vẫn gộp được).
+
+**Bảng công thức** (mỗi đồ hoàn chỉnh = đúng 1 cặp thành phần; dữ liệu ở `GameData.RECIPES`,
+kiểm chứng headless mục 19–21):
+
+| Đồ hoàn chỉnh | Ghép từ |
+| --- | --- |
+| Kiếm Bánh Quy (+20 sát thương) | Lưỡi Kiếm Mật Ong + Lưỡi Kiếm Mật Ong |
+| Gậy Socola (+30 SMKN) | Gậy Phép Socola + Gậy Phép Socola |
+| Cung Kẹo Dẻo (+25% tốc đánh) | Dây Cung Kẹo Dẻo + Dây Cung Kẹo Dẻo |
+| Trái Tim Ấm (+400 máu) | Mảnh Tim Kẹo + Mảnh Tim Kẹo |
+| Găng Kim Cương (+20% chí mạng, +15 SMKN) | Găng Tay Nhung + Găng Tay Nhung |
+| Khiên Vàng (+35 giáp, +35 kháng phép) | Mảnh Vỏ Kẹo Cứng + Mảnh Vỏ Kẹo Cứng |
+| Giáp Kẹo Cứng (+25 giáp, +150 máu) | Mảnh Vỏ Kẹo Cứng + Mảnh Tim Kẹo |
+| Áo Choàng Đêm (+25 kháng phép, +200 máu) | Mảnh Vỏ Kẹo Cứng + Gậy Phép Socola |
+| Vuốt Rồng (+20% hút máu, +15 sát thương) | Lưỡi Kiếm Mật Ong + Mảnh Tim Kẹo |
+| Sách Cổ Ma Thuật (+40 SMKN, +10 mana) | Gậy Phép Socola + Găng Tay Nhung |
+| Giày Bay (+20% tốc đánh) | Dây Cung Kẹo Dẻo + Găng Tay Nhung |
+| Giọt Nước Mắt Sao (+20 mana, +15 SMKN) | Gậy Phép Socola + Mảnh Tim Kẹo |
+
 
 ## Cách build & chạy
 
@@ -153,7 +202,7 @@ Máy có mạng bình thường (Gradle tự tải dependency từ Maven Central
 ```bash
 cd java
 ./gradlew :desktop:run            # chay ban desktop
-./gradlew :desktop:verifyHeadless # chay bo kiem tra logic (phai dat 16 PASS / 0 FAIL)
+./gradlew :desktop:verifyHeadless # chay bo kiem tra logic (phai dat 21 PASS / 0 FAIL)
 ./gradlew :web:buildWeb           # dung ban web TeaVM -> web/build/webapp (index.html + game.js + assets)
 ./gradlew :android:assembleDebug  # build APK debug (can Android SDK; module chi kich hoat khi co
                                   # local.properties chua sdk.dir hoac bien ANDROID_HOME)
