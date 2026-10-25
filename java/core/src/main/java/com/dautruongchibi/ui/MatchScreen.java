@@ -268,7 +268,10 @@ public class MatchScreen extends ScreenAdapter {
         playersBox = new Table();
         playersBox.setPosition(1092, 292);
         playersBox.setSize(180, 350);
-        playersBox.top().align(com.badlogic.gdx.utils.Align.left);
+        // LUU Y: Table.align() GHI DE toan bo co can le — viet .top().align(left) se lam
+        // MAT co top, noi dung bi CAN GIUA doc; khi khoi doi thu dai (noi dung > 350px)
+        // hang dau tien bi day LEN trung vao tieu de "NGUOI CHOI — MAU". Phai gop 1 lan.
+        playersBox.align(com.badlogic.gdx.utils.Align.top | com.badlogic.gdx.utils.Align.left);
         stage.addActor(playersBox);
 
         // Mep trai duoi: nhan TRANG BI — khay do gio VE TAY hoan toan (luoi icon o drawItemTray,
