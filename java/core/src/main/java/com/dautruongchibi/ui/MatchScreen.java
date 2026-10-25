@@ -1625,26 +1625,40 @@ public class MatchScreen extends ScreenAdapter {
         batch.end();
     }
 
-    // Popup nhan trang bi kieu mo qua (Kanto): the nay vao giua-phai san ~2,3s khi PvE roi do
+    // Popup nhan trang bi kieu mo qua (Kanto): the nay vao giua-phai san ~2,3s khi PvE roi do.
+    // Bo cuc DO THEO NOI DUNG THAT: khoi ten duoc do bang GlyphLayout (wrap 160) TRUOC khi tinh
+    // kich thuoc popup. Ban cu cao co dinh 96 + dong chi so gan chet o cyp-28, nen ten dai xuong
+    // 2 dong de thang len dong chi so ("Gang Tay / Nhung" de "+10% chi mang", "Giot Nuoc / Mat
+    // Sao" de "+20 mana..."). Gio popup cao them dung bang phan chieu cao thua cua khoi ten,
+    // tieu de neo theo DINH popup, icon + ten neo theo khoang duoi tieu de, dong chi so neo theo
+    // DAY popup — moi toa do deu suy ra tu pw/ph (da nhan he so pop) nen ca luc pop-in cung
+    // khong con chu nao de/chay ra ngoai khung. Ten 1 dong thi so do trung khop ban cu tung pixel.
     private void drawItemPopup() {
         GameData.ItemDef it = GameData.itemById(popupItemId);
         if (it == null) return;
         Assets a = game.assets;
         float elapsed = 2.3f - popupT;
         float pop = elapsed < 0.18f ? 0.55f + 0.45f * (elapsed / 0.18f) : 1f;
-        float pw = 252 * pop, ph = 96 * pop;
+        // Do khoi ten that (fontBig, wrap 160 nhu khi ve) — ten 2 dong -> popup cao them 1 dong
+        layout.setText(a.fontBig, it.name, Color.WHITE, 160, com.badlogic.gdx.utils.Align.left, true);
+        float extraH = Math.max(0, layout.height - a.fontBig.getLineHeight());
+        float pw = 252 * pop, ph = (96 + extraH) * pop;
         float cxp = 838, cyp = 384;
+        float topY = cyp + ph / 2, botY = cyp - ph / 2;
         batch.begin();
-        drawShadowRect(cxp - pw / 2, cyp - ph / 2, pw, ph, 0.40f);
-        a.patchPanel.draw(batch, cxp - pw / 2, cyp - ph / 2, pw, ph);
+        drawShadowRect(cxp - pw / 2, botY, pw, ph, 0.40f);
+        a.patchPanel.draw(batch, cxp - pw / 2, botY, pw, ph);
         if (pop > 0.8f) {
-            drawCentered(a.fontSmall, GameData.isComponent(popupItemId) ? "NHẬN ĐỒ THÀNH PHẦN!" : "NHẬN TRANG BỊ!", cxp, cyp + 40, Ui.GOLD);
-            // Icon ve tay that cua mon do (khong con vong tron mau dai dien nhu truoc)
-            batch.draw(a.itemIcon(it.id), cxp - 92, cyp - 24, 44, 44);
+            // Tieu de neo dinh: baseline duoi dinh 8 (ph=96 -> cyp+40 nhu ban cu)
+            drawCentered(a.fontSmall, GameData.isComponent(popupItemId) ? "NHẬN ĐỒ THÀNH PHẦN!" : "NHẬN TRANG BỊ!", cxp, topY - 8, Ui.GOLD);
+            // Icon ve tay that cua mon do (khong con vong tron mau dai dien nhu truoc):
+            // dinh icon duoi dinh popup 28 (ph=96 -> icon y cyp-24 nhu ban cu)
+            batch.draw(a.itemIcon(it.id), cxp - 92, topY - 72, 44, 44);
             a.fontBig.setColor(Color.WHITE);
             layout.setText(a.fontBig, it.name, Color.WHITE, 160, com.badlogic.gdx.utils.Align.left, true);
-            a.fontBig.draw(batch, layout, cxp - 40, cyp + 12);
-            drawCentered(a.fontSmall, it.desc, cxp + 8, cyp - 28, Ui.TEXT_DIM);
+            a.fontBig.draw(batch, layout, cxp - 40, topY - 36);
+            // Dong chi so neo day: baseline tren day 20 (ph=96 -> cyp-28 nhu ban cu)
+            drawCentered(a.fontSmall, it.desc, cxp + 8, botY + 20, Ui.TEXT_DIM);
         }
         batch.end();
     }

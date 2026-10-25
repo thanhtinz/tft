@@ -88,6 +88,13 @@ public class ScreenshotMain {
                     setScreen(matchScreen);
                     break;
                 }
+                case "itempop_comp": case "itempop_long": case "itempop_short": case "iteminfo_long": {
+                    // Chi can man hinh tran o pha chuan bi; popup/bang thong tin se bat bang reflection
+                    Match m = benchShowcase();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
                 case "items": case "iteminfo_comp": case "iteminfo_full": case "itemdrag": case "itemcombined": {
                     // Doi hinh benchShowcase + kho do day: 6 thanh phan + 2 do hoan chinh
                     Match m = benchShowcase();
@@ -211,6 +218,27 @@ public class ScreenshotMain {
                         fB.setBoolean(matchScreen, false);
                         dragSet = true;
                     }
+                }
+                if (("itempop_comp".equals(mode) || "itempop_long".equals(mode) || "itempop_short".equals(mode)) && frames > 50 && matchScreen != null) {
+                    // Bat POPUP NHAN DO bang reflection voi ten dai/ngan de kiem chung loi chong chu:
+                    // comp = thanh phan "Gang Tay Nhung" (loi da bao), long = hoan chinh "Giot Nuoc Mat Sao"
+                    // (ten dai nhat + desc dai), short = hoan chinh "Vuot Rong" (ten ngan, truong hop chuan).
+                    // popupT ghim lai 2.0 MOI frame toi luc chup: delta thuc te duoi Xvfb luc khoi dong
+                    // co the rat lon, dat 1 lan se het han truoc frame chup (100); ghim 2.3 thi elapsed
+                    // ~0 -> pop chua mo het (panel thu nho, noi dung bi an/loi le). 2.0 -> elapsed 0.3
+                    // > 0.18 nen pop = 1 (kich thuoc that) ma popup van con song.
+                    String pid = "itempop_comp".equals(mode) ? "tpgang" : "itempop_long".equals(mode) ? "nuocmat" : "vuot";
+                    Field fPop = MatchScreen.class.getDeclaredField("popupItemId"); fPop.setAccessible(true); fPop.set(matchScreen, pid);
+                    Field fPopT = MatchScreen.class.getDeclaredField("popupT"); fPopT.setAccessible(true); fPopT.setFloat(matchScreen, 2.0f);
+                    dragSet = true;
+                }
+                if ("iteminfo_long".equals(mode) && !dragSet && frames > 50 && matchScreen != null) {
+                    // Bang thong tin do voi ten thanh phan dai nhat "Luoi Kiem Mat Ong": kiem chung
+                    // dong loai/mo ta o vi tri co dinh co bi ten xuong dong de len khong
+                    Field fInfo = MatchScreen.class.getDeclaredField("itemInfoId");
+                    fInfo.setAccessible(true);
+                    fInfo.set(matchScreen, "tpkiem");
+                    dragSet = true;
                 }
                 if (("iteminfo_comp".equals(mode) || "iteminfo_full".equals(mode)) && !dragSet && frames > 50 && matchScreen != null) {
                     // Mo bang thong tin do bang reflection: thanh phan tpgay (4 cong thuc) / hoan chinh vuot (dong GHEP TU)
