@@ -8,6 +8,7 @@ import com.dautruongchibi.game.Profile;
 import com.dautruongchibi.game.Rank;
 import com.dautruongchibi.game.Rng;
 import com.dautruongchibi.game.Stages;
+import com.dautruongchibi.ui.Assets;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -255,6 +256,27 @@ public class HeadlessMain {
             ? "ban=" + boardSummary(dh) + " bench=" + benchOrder(dh)
             : dragFail.toString() + "thuc te: ban=" + boardSummary(dh) + " bench=" + benchOrder(dh);
         check("Keo-tha: bench->ban hoan doi o trung, ban->bench slot hoan doi, sap xep bench, dat tuong thu 2 theo cap", dragOk, dragDetail);
+
+        // 17) Sprite tien hoa theo sao: du 25 tuong x (s2, s3) + logic chon asset dung, fallback dang goc
+        java.io.File unitsDir = new java.io.File("assets/units");
+        Set<String> availStar = new HashSet<>();
+        boolean evoFilesOk = true;
+        StringBuilder evoMiss = new StringBuilder();
+        for (GameData.ChampDef c : GameData.CHAMPIONS) {
+            for (int s = 2; s <= 3; s++) {
+                String fn = c.id + "_s" + s + ".png";
+                if (new java.io.File(unitsDir, fn).isFile()) availStar.add(c.id + "_s" + s);
+                else { evoFilesOk = false; evoMiss.append(fn).append(' '); }
+            }
+        }
+        boolean evoLogicOk = Assets.resolveUnitId("gogo", 1, availStar).equals("gogo")
+            && Assets.resolveUnitId("gogo", 2, availStar).equals("gogo_s2")
+            && Assets.resolveUnitId("gogo", 3, availStar).equals("gogo_s3")
+            && Assets.resolveUnitId("slime", 2, availStar).equals("slime") // quai khong co dang tien hoa -> goc
+            && Assets.resolveUnitId("gogo", 3, new HashSet<>()).equals("gogo"); // thieu file -> fallback, khong crash
+        check("Sprite tien hoa: du 25 tuong x s2/s3, chon asset theo sao dung, fallback dang goc khi thieu",
+            evoFilesOk && evoLogicOk,
+            evoFilesOk ? "file=" + availStar.size() + "/50, logicOk=" + evoLogicOk : "thieu: " + evoMiss);
 
         System.out.println("=== TONG KET: " + pass + " PASS / " + fail + " FAIL ===");
         if (fail > 0) { System.out.println("Muc fail: " + failures); System.exit(1); }

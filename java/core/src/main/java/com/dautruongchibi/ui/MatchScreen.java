@@ -680,8 +680,9 @@ public class MatchScreen extends ScreenAdapter {
 
     private void drawUnitSprite(String artId, float cx, float cy, float size, int star, boolean flip, float alpha, float rotation, Color tint) {
         Assets a = game.assets;
-        com.badlogic.gdx.graphics.Texture tex = a.unit(artId);
-        float scale = star == 2 ? 1.12f : star >= 3 ? 1.26f : 1f;
+        // Len sao = tien hoa doi hinh dang (sprite _s2/_s3) + to hon mot bac: 2 sao x1.06, 3 sao x1.12
+        com.badlogic.gdx.graphics.Texture tex = a.unit(artId, star);
+        float scale = star == 2 ? 1.06f : star >= 3 ? 1.12f : 1f;
         float w = size * scale, h = size * scale;
         if (tint != null) batch.setColor(tint.r, tint.g, tint.b, alpha); else batch.setColor(1, 1, 1, alpha);
         batch.draw(tex, cx - w / 2, cy - h / 2, w / 2, h / 2, w, h, flip ? -1 : 1, 1, rotation, 0, 0, tex.getWidth(), tex.getHeight(), false, false);
@@ -1055,7 +1056,7 @@ public class MatchScreen extends ScreenAdapter {
         for (int i = 0; i < n; i++) {
             Engine.DamageRow r = rows.get(i);
             float ry = py + ph - 48 - i * 26;
-            batch.draw(a.unit(r.artId), px + 10, ry - 15, 20, 20);
+            batch.draw(a.unit(r.artId, r.star), px + 10, ry - 15, 20, 20);
             String nm = r.name + (r.star > 1 ? " (" + r.star + " sao)" : "");
             a.fontSmall.setColor(r.team == 0 ? new Color(0.45f, 0.95f, 0.6f, 1) : new Color(1, 0.55f, 0.55f, 1));
             layout.setText(a.fontSmall, nm, a.fontSmall.getColor(), 118, com.badlogic.gdx.utils.Align.left, true);

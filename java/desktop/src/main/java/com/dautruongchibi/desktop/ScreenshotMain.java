@@ -21,6 +21,8 @@ import java.lang.reflect.Method;
 // Che do: menu | draft (lat the up) | planning (pha chuan bi) | battle (dang giao tranh)
 // | result (announcer THANG!/THUA! dau pha ket qua vong)
 // | drag (gia lap dang keo mot tuong tren ban ve phia o bench: sprite bam tro + 2 vung thung rac hien)
+// | stars (doi chieu 1/2/3 sao cua Gogo dung canh nhau tren ban — sprite tien hoa theo sao)
+// | starbattle (giao tranh PvE voi Gogo 3 sao dang tien hoa trong doi hinh)
 public class ScreenshotMain {
     static class ShotGame extends MainGame {
         final String mode;
@@ -63,6 +65,18 @@ public class ScreenshotMain {
                     setScreen(matchScreen);
                     break;
                 }
+                case "stars": {
+                    Match m = starShowcase();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "starbattle": {
+                    Match m = starBattleMatch();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
                 case "battle4": {
                     // Choi nhanh 3 vong bang logic (khong GUI) de vao vong 4 nhieu tuong hon, roi mo man hinh + danh tiep
                     Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
@@ -99,7 +113,7 @@ public class ScreenshotMain {
                         dragSet = true;
                     }
                 }
-                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode);
+                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "starbattle".equals(mode);
                 if (battleMode && !battleStarted && frames > 30 && matchScreen != null) {
                     Method mb = MatchScreen.class.getDeclaredMethod("startBattle");
                     mb.setAccessible(true);
@@ -157,6 +171,39 @@ public class ScreenshotMain {
             System.out.println("SCREENSHOT_SAVED " + path + " " + w + "x" + h);
             pm.dispose(); flipped.dispose();
         }
+    }
+
+    // Dung doi hinh toan Gogo o ca 3 cap sao: 9 con gop thanh 1 con 3 sao, +3 con thanh 1 con 2 sao, +1 con 1 sao.
+    static Match starShowcase() {
+        Match m = Match.startCampaign(1, 99, "QA Pixel");
+        Match.PlayerState h = m.human();
+        for (int i = 0; i < 9; i++) m.addChampion(h, "gogo");
+        for (int i = 0; i < 3; i++) m.addChampion(h, "gogo");
+        m.addChampion(h, "gogo");
+        h.level = 9;
+        placeByStar(m, h, "gogo", 1, 2, 0);
+        placeByStar(m, h, "gogo", 2, 3, 0);
+        placeByStar(m, h, "gogo", 3, 4, 0);
+        return m;
+    }
+
+    // Doi hinh danh that: Gogo 3 sao (tien hoa) + Lulu 2 sao + Bobi 1 sao, danh man chien dich 3.
+    static Match starBattleMatch() {
+        Match m = Match.startCampaign(3, 99, "QA Pixel");
+        Match.PlayerState h = m.human();
+        for (int i = 0; i < 9; i++) m.addChampion(h, "gogo");
+        for (int i = 0; i < 3; i++) m.addChampion(h, "lulu");
+        m.addChampion(h, "bobi");
+        h.level = 9;
+        placeByStar(m, h, "gogo", 3, 3, 0);
+        placeByStar(m, h, "lulu", 2, 2, 3);
+        placeByStar(m, h, "bobi", 1, 4, 1);
+        return m;
+    }
+
+    static void placeByStar(Match m, Match.PlayerState h, String defId, int star, int x, int y) {
+        for (com.dautruongchibi.game.Engine.PlacedUnit u : new java.util.ArrayList<>(h.bench))
+            if (u.star == star && u.defId.equals(defId)) { m.moveToBoard(u.uid, x, y); return; }
     }
 
     public static void main(String[] args) {

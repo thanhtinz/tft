@@ -109,7 +109,13 @@ java/
      ~1,5s rồi tan, kèm banner nhỏ chứa tóm tắt vòng + máu còn lại; sau đó mới hiện panel kết quả chi tiết.
   4. **Bảng sát thương theo tướng:** nút "Bảng sát thương" ở góc dưới phải bật/tắt panel nổi đè mép phải sân, liệt kê từng tướng
      của **cả 2 bên** kèm thanh ngang theo tổng sát thương gây ra trong trận vừa đấu (dữ liệu `Engine.damageChart` cộng từ sự kiện engine).
-  5. **Lên sao kiểu tiến hóa:** khi gộp sao, 3 chấm sao xoáy bay vào tướng kết quả + vòng sáng nở ở chân + chớp sáng;
+  5. **Lên sao = TIẾN HOÁ ĐỔI HÌNH DẠNG (kiểu Kanto):** mỗi tướng có **3 hình dạng riêng theo cấp sao** — gộp sao là tướng
+     đổi hẳn hình, không chỉ tăng chỉ số: **2 sao = dạng trưởng thành** (thêm giáp vai, viền **bạc**, vũ khí to hơn có đá quý,
+     thêm phụ kiện), **3 sao = dạng tiến hoá cuối** (vương miện/viền **vàng**, áo choàng, vũ khí lớn nhất, thần thái trùm).
+     Sprite riêng tại `assets/units/<id>_s2.png` / `<id>_s3.png` (25 tướng × 2 cấp, sinh bằng `tools/make-evo-assets.py`
+     từ tranh thô khoá nền trong `tools/evo-raw/`); `Assets.unit(artId, star)` chọn đúng dạng, thiếu file thì fallback dạng gốc
+     (quái/Boss không gộp sao nên chỉ có dạng gốc). Kích thước hiển thị cũng lớn dần: 2 sao ×1.06, 3 sao ×1.12.
+     Khoảnh khắc gộp: 3 chấm sao xoáy bay vào tướng kết quả + vòng sáng nở ở chân + chớp sáng bung ra để lộ dạng tiến hoá mới;
      tướng **2 sao có vòng bạc ở chân**, **3 sao có hào quang vàng cháy** nhấp nháy kèm 3 chấm sao bay quanh chân (cả ở pha chuẩn bị lẫn trong trận).
   6. **Popup nhận trang bị kiểu mở quà:** thắng vòng quái PvE (mọi vòng quái trong PvP; Sóng Quái mỗi 3 sóng; Chiến Dịch khi thắng màn Boss)
      rơi 1 trang bị ngẫu nhiên vào kho + thẻ popup (viên ngọc màu theo trang bị + tên + dòng chỉ số) nảy vào giữa-phải sân ~2,3s.
@@ -191,8 +197,9 @@ resize premultiplied-alpha cho viền sạch) — giữ nguyên RGBA nét cao. T
 ## Kiểm chứng đã làm (đợt này)
 
 - `./gradlew :desktop:compileJava` — **BUILD SUCCESSFUL** (core + desktop).
-- `./gradlew :desktop:verifyHeadless` — **16 PASS / 0 FAIL** (15 mục cũ + **mục 16: logic kéo–thả** — hoán đổi
-  bench→bàn ở ô trùng, hoán đổi bàn→bench theo slot, sắp xếp lại bench, đặt tướng thứ 2 theo giới hạn cấp), gồm:
+- `./gradlew :desktop:verifyHeadless` — **17 PASS / 0 FAIL** (16 mục cũ + **mục 17: sprite tiến hoá theo sao** — đủ
+  25 tướng × 2 file `_s2`/`_s3`, logic chọn asset theo sao đúng, fallback dạng gốc khi thiếu file; trước đó mục 16 là
+  logic kéo–thả — hoán đổi bench→bàn ở ô trùng, hoán đổi bàn→bench theo slot, sắp xếp lại bench, đặt tướng thứ 2 theo giới hạn cấp), gồm:
   dữ liệu gốc khớp bản RN; RNG tất định; sinh 5.200 màn; ghép sao; shop/odds; **máu người chơi = 100 + sát thương thua vòng thang 100**;
   bảng rank LP; lật thẻ 8 lá; mô phỏng trận tất định; **bảng sát thương cộng từ sự kiện, cả 2 bên, sắp giảm dần**;
   **quy tắc sân theo chặng (chương/stage/Boss)**; **trận PvP 8 người trọn vẹn tới khi có hạng (3 seed: 17–20 vòng)**;

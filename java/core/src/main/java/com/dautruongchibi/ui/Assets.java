@@ -13,8 +13,10 @@ import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 // Tai nguyen dung chung: font game (Baloo 2 tieu de + Nunito than chu, qua FreeType),
 // sprite pixel, texture canh, va bo texture giao dien "ve" (assets/ui, sinh boi tools/make_ui.py).
@@ -26,6 +28,7 @@ public class Assets {
 
     public BitmapFont font, fontBig, fontSmall, fontTitle;
     private final Map<String, Texture> unitTex = new HashMap<>();
+    private final Set<String> unitStarMiss = new HashSet<>(); // id dang tien hoa da biet la khong co file
     private final Map<String, Texture> sceneTex = new HashMap<>();
     private final Map<String, Texture> iconTex = new HashMap<>();
     private final List<Texture> uiTex = new ArrayList<>();
@@ -171,6 +174,44 @@ public class Assets {
         t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
         unitTex.put(artId, t);
         return t;
+    }
+
+    // Id asset dang TIEN HOA theo cap sao: <id>_s2 (dang bac) / <id>_s3 (dang vang).
+    // Quai/Boss PvE khong gop sao nen khong co file nay -> callers fallback ve dang goc.
+    public static String starArtId(String artId, int star) {
+        return artId + "_s" + (star >= 3 ? 3 : 2);
+    }
+
+    // Logic chon asset theo sao (thuan, HeadlessMain kiem chung duoc):
+    // sao >= 2 va tap available chua id tien hoa thi dung dang tien hoa, nguoc lai dang goc.
+    public static String resolveUnitId(String artId, int star, Set<String> availableStarIds) {
+        if (artId != null && star >= 2 && availableStarIds != null) {
+            String sid = starArtId(artId, star);
+            if (availableStarIds.contains(sid)) return sid;
+        }
+        return artId;
+    }
+
+    // Sprite theo cap sao cua tuong: len sao = TIEN HOA doi hinh dang.
+    // Thieu file cap sao (quai, boss, golem summon...) thi fallback ve sprite goc — khong crash, khong o trong.
+    public Texture unit(String artId, int star) {
+        if (artId != null && star >= 2) {
+            String sid = starArtId(artId, star);
+            if (!unitStarMiss.contains(sid)) {
+                Texture t = unitTex.get(sid);
+                if (t == null) {
+                    try {
+                        t = new Texture(Gdx.files.internal("units/" + sid + ".png"));
+                        t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+                        unitTex.put(sid, t);
+                    } catch (Exception e) {
+                        unitStarMiss.add(sid);
+                    }
+                }
+                if (t != null) return t;
+            }
+        }
+        return unit(artId);
     }
 
     public Texture arenaFor(String themeKey) {
