@@ -82,9 +82,15 @@ java/
 - **Lật thẻ úp mở trận:** đầu trận PvP (và các vòng x-4, sóng 1 ở Sóng Quái) hiện 8 thẻ úp lưng vẽ;
   chọn 1 thẻ → lật mở (420ms, các thẻ khác lật nối tiếp) → nhận tướng về bench + 1 trang bị vào kho.
 - **Bố cục màn trận — sân tràn viền (đợt làm lại theo 2 game mẫu):** tranh sân là MỘT môi trường liền mạch phủ kín
-  1280×720, không còn hai cột hộp tím hai bên. Bàn cờ lớn ở giữa (**ô 84×70px, sprite tướng 100px** — tỉ lệ painted,
-  bóng ellipse mềm dưới chân);
-  lưới ô chỉ hiện mờ ở pha chuẩn bị và mờ hẳn về ~0 khi giao tranh. Bench là hàng **9 mảng đất** ngay dưới bàn cờ
+  1280×720, không còn hai cột hộp tím hai bên. Bàn cờ lớn ở giữa (**ô 84×70px, sprite tướng 100px** — tỉ lệ painted).
+  **Lưới ô mặc định KHÔNG hiện (đợt 2026-10-25):** sân bình thường là một môi trường liền mạch không ô; lưới chỉ
+  **mờ dần hiện (~150ms)** khi đang KÉO một tướng hoặc đang CHỌN một tướng kiểu chạm (ô đích đang nhắm tô vàng +
+  quầng sáng rõ hơn hẳn lưới), thả/huỷ chọn thì mờ dần biến mất; giao tranh/kết quả giữ ~0. **Tướng "tiếp đất"
+  (cùng đợt):** bóng đổ **kéo dài lệch xuống-phải** theo đúng hướng bóng cây trong tranh sân (độ dài theo theme:
+  hoàng hôn dài nhất) + **contact AO** — mảng tối mềm dẹt ngay dưới bàn chân + **gradient tối nhẹ ở dải chân**
+  sprite (bản texture lúc chạy `Assets.unitOnGround`, file tranh gốc không đổi) — hết cảm giác tướng bị dán lên
+  mặt đất; tướng đang bị nhấc lên (kéo) thì bóng nhỏ/mờ lại và AO biến mất. (Đã thử thêm tint hoà sáng ấm theo
+  theme: soi A/B thấy chênh lệch không đáng kể mà làm lệch màu tranh gốc nên KHÔNG giữ.) Bench là hàng **9 mảng đất** ngay dưới bàn cờ
   TRONG sân (texture painted `benchpatch1..3.png` sinh bằng `tools/make_bench_patches.py` — tướng ĐỨNG trên đất với
   bóng chân mềm, không còn ô khung hộp; ô được chọn/đang kéo qua chỉ có quầng sáng mềm bám theo mảng đất). **Ô bench
   ĐÚNG bằng ô bàn 84×70 (dải 357..1113 × 92..162, nằm gọn giữa 2 đĩa tròn góc) và sprite bench ĐÚNG 100px như trên
@@ -381,7 +387,7 @@ tắc neo của tướng trên bàn, không còn bộ số riêng:
 | --- | --- | --- |
 | Ô bench | 64×44 (dải 357..933 × 108..152) | **84×70 (dải 357..1113 × 92..162)** — đúng ô bàn, gọn giữa 2 đĩa tròn (đĩa trái mép phải 116, đĩa phải mép trái 1164) |
 | Sprite bench | 56px, tâm (x+30, y+30) | **100px, tâm = tâm ô** qua helper chung `benchCx(i) = BENCH_X + i·SLOT + SLOT/2`, `benchCy() = BENCH_Y + SLOT_H/2` (=127) |
-| Bóng chân bench | ellipse 46px ở y+5 (lệch chân ~25px) | `drawShadow(cx, cy−45, 78)` — đúng lời gọi của tướng trên bàn |
+| Bóng chân bench | ellipse 46px ở y+5 (lệch chân ~25px) | cùng hệ tiếp đất của tướng trên bàn (nay là `drawUnitGrounding(cx, cy, 100, 0)` — bóng đổ xuống-phải + contact AO, xem mục bố cục màn trận) |
 | Vòng sao bench | không có | `drawGroundRing(cx, cy, …)` — đúng hàm của bàn (vòng bạc 2★/vàng 3★ ở cy−41) |
 | Hàng sao bench | sao 10px vàng ở y+60 | sao 11px ở cy+54, màu như `drawBars` (2★ bạc / 3★ vàng) |
 | Mảng đất | canvas 256×192, vẽ 64×48 | canvas **384×192 (tỉ lệ 2:1)**, vẽ **96×48** tâm (cx, cy−40) — rộng và bẹt, bao quanh vùng chân cy−50; vẫn 3 biến thể + lật ngang |

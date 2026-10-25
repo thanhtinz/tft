@@ -37,7 +37,11 @@ import java.util.Set;
 
 // Man hinh tran dau — BO CUC SAN TRAN VIEN (hoc tu Kanto Tactics + FighterZ Tactics va ban RN):
 // tranh san la MOT moi truong lien mach phu kin 1280x720, moi UI la lop noi ban trong suot TREN san.
-// Ban co lon o giua (o painted 84x70, sprite 100px), luoi chi mo o pha chuan bi va mo han khi giao tranh.
+// Ban co lon o giua (o painted 84x70, sprite 100px). LUOI O mac dinh AN han: chi mo dan
+// hien (~150ms) khi dang KEO tuong hoac dang CHON mot tuong kieu cham (can thay o de dat);
+// tha/huy chon thi mo dan bien mat — binh thuong san la mot moi truong lien mach khong o.
+// Tuong dung tren san co bong do KEO DAI xuong-phai theo huong bong cay trong tranh +
+// contact AO duoi chan + gradient toi nhe o dai chan sprite (ban unitOnGround) de "tiep dat".
 // Bench = hang MANG DAT ngay duoi ban co trong san (tuong DUNG tren dat, khong khung hop).
 // DIEU KHIEN hoc TFT Mobile: nut tron xanh duong goc duoi
 // trai = cap + mua XP, nut tron vang goc duoi phai = vang + mo/dong SHOP (shop la lop mo/dong nam
@@ -89,6 +93,9 @@ public class MatchScreen extends ScreenAdapter {
     // Selection / planning
     private String selUid;
     private boolean selFromBench;
+    // Muc mo dan cua luoi o (0..1): dich = 1 khi dang keo tuong hoac dang chon tuong (planning),
+    // dich = 0 trong moi truong hop con lai — xem cap nhat trong render() va drawBoardBase().
+    private float gridFade = 0f;
     private String armedItem;
     // Keo-tha tuong o pha chuan bi: cham = chon (nhu cu), keo qua nguong 14px = sprite bam tro.
     private String dragUid;
@@ -507,6 +514,11 @@ public class MatchScreen extends ScreenAdapter {
         else if (phase == Phase.PLANNING) msgLabel.setText("Kéo tướng: lên bàn để đặt, về bench để cất, vào thùng rác để bán — hết giờ tự vào trận.");
         else if (phase == Phase.BATTLE) msgLabel.setText("Đang giao tranh với " + (outcome != null ? outcome.opponentName : "") + "...");
         if (returnT >= 0) { returnT += delta; if (returnT >= RETURN_DUR) { returnT = -1; returnUid = null; } }
+        // Luoi o mo dan theo thao tac: chi hien khi dang KEO tuong (dragActive) hoac dang CHON
+        // mot tuong kieu cham (selUid) o pha chuan bi; con lai mo dan ve 0 (san sach khong o).
+        boolean gridWanted = phase == Phase.PLANNING && (dragActive || selUid != null);
+        if (gridWanted && gridFade < 1f) gridFade = Math.min(1f, gridFade + delta / 0.15f);
+        else if (!gridWanted && gridFade > 0f) gridFade = Math.max(0f, gridFade - delta / 0.15f);
         if (announceT > 0) announceT -= delta;
         if (popupT > 0) { popupT -= delta; if (popupT <= 0) popupItemId = null; }
         for (int i = mergeFx.size() - 1; i >= 0; i--) { MergeFx fx = mergeFx.get(i); fx.ttl += delta; if (fx.ttl > 0.9f) mergeFx.remove(i); }
@@ -649,20 +661,23 @@ public class MatchScreen extends ScreenAdapter {
         batch.setColor(Color.WHITE);
     }
 
-    // Luoi o: pha chuan bi hien MO de thay o dat tuong; vao giao tranh mo han ve ~0.
-    // Khong con o nen toi sau ban co — san la mot moi truong lien mach.
+    // Luoi o: BINH THUONG KHONG HIEN (gridFade = 0, san lien mach nhu mot buc tranh).
+    // Chi khi dang keo tuong hoac dang chon tuong kieu cham thi luoi mo dan hien
+    // (alpha chuan bi 0.17/0.09 nhan voi gridFade). Giao tranh/ket qua giu ~0 nhu cu.
     private void drawBoardBase() {
         boolean fighting = phase == Phase.BATTLE || phase == Phase.RESULT;
-        float aEven = fighting ? 0.02f : 0.17f, aOdd = fighting ? 0.01f : 0.09f;
-        Gdx.gl.glEnable(GL20.GL_BLEND);
-        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
-        shapes.begin(ShapeRenderer.ShapeType.Filled);
-        for (int y = 0; y < 7; y++) for (int x = 0; x < 7; x++) {
-            if (y < 4) shapes.setColor(0.35f, 0.55f, 1f, (x + y) % 2 == 0 ? aEven : aOdd);
-            else shapes.setColor(1f, 0.4f, 0.4f, (x + y) % 2 == 0 ? aEven : aOdd);
-            shapes.rect(BX + x * CELLX + 1, BY + y * CELLY + 1, CELLX - 2, CELLY - 2);
+        float aEven = fighting ? 0.02f : 0.17f * gridFade, aOdd = fighting ? 0.01f : 0.09f * gridFade;
+        if (fighting || gridFade > 0.01f) {
+            Gdx.gl.glEnable(GL20.GL_BLEND);
+            Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+            shapes.begin(ShapeRenderer.ShapeType.Filled);
+            for (int y = 0; y < 7; y++) for (int x = 0; x < 7; x++) {
+                if (y < 4) shapes.setColor(0.35f, 0.55f, 1f, (x + y) % 2 == 0 ? aEven : aOdd);
+                else shapes.setColor(1f, 0.4f, 0.4f, (x + y) % 2 == 0 ? aEven : aOdd);
+                shapes.rect(BX + x * CELLX + 1, BY + y * CELLY + 1, CELLX - 2, CELLY - 2);
+            }
+            shapes.end();
         }
-        shapes.end();
         // O dang chon (planning)
         if (phase == Phase.PLANNING && selUid != null && !selFromBench) {
             for (Engine.PlacedUnit u : match.human().board) if (u.uid.equals(selUid)) {
@@ -702,17 +717,50 @@ public class MatchScreen extends ScreenAdapter {
         f.setColor(Color.WHITE);
     }
 
-    // Bong ellipse mem duoi chan tuong + sprite (ve trong cung batch)
-    private void drawShadow(float cx, float cy, float w) {
-        batch.setColor(0, 0, 0, 0.30f);
-        batch.draw(circleTex, cx - w / 2, cy - w * 0.16f, w, w * 0.32f);
+    // He so do DAI cua bong do theo theme san: hoang hon nang thap (bong dai nhat),
+    // sa mac/bang nang cao hon (bong ngan hon mot chut).
+    private float shadowLen() {
+        switch (arenaKey()) {
+            case "sunset": return 1.30f;
+            case "desert": return 0.85f;
+            case "ice": return 0.80f;
+            default: return 1.0f; // rung
+        }
+    }
+
+    // TIEP DAT cho tuong dung tren san — 2 lop, ve ngay truoc vong sao + sprite:
+    // 1) Bong DO keo dai lech XUONG-PHAI, cung huong bong cay do dai trong tranh san
+    //    (anh sang tu tren-trai): ellipse mem xoay -18 do, tam lech +x khoi chan.
+    // 2) CONTACT AO: mang toi mem det ngay duoi ban chan — triet cam giac lo lung/cat cung.
+    // lift > 0 khi tuong dang bi NHAC len (dang keo): bong nho/mo lai, AO bien mat dan.
+    // (Toan bo roster tranh goc deu dung bang chan tren dat — da soi contact sheet 35 sprite —
+    // nen khong can bien the "bong xa chan" cho tuong bay.)
+    private void drawUnitGrounding(float cx, float centerY, float size, float lift) {
+        float footY = centerY - size * 0.46f;
+        float len = shadowLen();
+        float shrink = 1f - 0.25f * lift;
+        float cw = size * 1.6f * len * shrink, ch = size * 0.30f * shrink;
+        float ccx = cx + size * 0.15f * len, ccy = footY - size * 0.015f;
+        batch.setColor(0.02f, 0.05f, 0.02f, 0.30f * (1f - 0.5f * lift));
+        batch.draw(circleTex, ccx - cw / 2, ccy - ch / 2, cw / 2, ch / 2, cw, ch, 1, 1, -18f, 0, 0, 64, 64, false, false);
+        float aoA = 0.48f * Math.max(0f, 1f - lift * 2.2f);
+        if (aoA > 0.01f) {
+            float aw = size * 0.68f, ah = size * 0.19f;
+            batch.setColor(0.01f, 0.03f, 0.01f, aoA);
+            batch.draw(circleTex, cx - aw / 2, footY + size * 0.01f - ah / 2, aw, ah);
+        }
         batch.setColor(Color.WHITE);
     }
 
+    // LUU Y: da THU tint hoa sang moi truong (am nhe theo theme san) va soi A/B cung canh:
+    // chenh lech duoi nguong nhan thay, khong lam tuong "an" vao san hon mot cach dang ke,
+    // trong khi lam lech mau tranh goc da duoc duyet -> BO tint, giu nguyen mau tranh.
+    // Phan "hoa sang" do bong do (huong + tong toi xanh-am nhu bong cay trong tranh) dam nhiem.
     private void drawUnitSprite(String artId, float cx, float cy, float size, int star, boolean flip, float alpha, float rotation, Color tint) {
         Assets a = game.assets;
-        // Len sao = tien hoa doi hinh dang (sprite _s2/_s3) + to hon mot bac: 2 sao x1.06, 3 sao x1.12
-        com.badlogic.gdx.graphics.Texture tex = a.unit(artId, star);
+        // Len sao = tien hoa doi hinh dang (sprite _s2/_s3) + to hon mot bac: 2 sao x1.06, 3 sao x1.12.
+        // Dung ban unitOnGround: dai chan da toi gradient nhe san trong texture (tiep dat).
+        com.badlogic.gdx.graphics.Texture tex = a.unitOnGround(artId, star);
         float scale = star == 2 ? 1.06f : star >= 3 ? 1.12f : 1f;
         float w = size * scale, h = size * scale;
         if (tint != null) batch.setColor(tint.r, tint.g, tint.b, alpha); else batch.setColor(1, 1, 1, alpha);
@@ -754,7 +802,7 @@ public class MatchScreen extends ScreenAdapter {
         if (preview != null) for (Engine.PlacedUnit u : preview) {
             float[] p = cellCenter(u.x, 6 - u.y);
             String art = u.isMonster && u.monster != null ? u.monster.id : u.defId;
-            drawShadow(p[0], p[1] - 42, 70);
+            drawUnitGrounding(p[0], p[1], 88, 0f);
             drawGroundRing(p[0], p[1], u.star, now, u.uid.hashCode());
             drawUnitSprite(art, p[0], p[1], 88, u.star, true, 0.85f, 0, null);
             drawBars(p[0], p[1], 1, 0, 0, 1, u.star, false);
@@ -764,7 +812,7 @@ public class MatchScreen extends ScreenAdapter {
             if (isUnitHidden(u.uid)) continue; // dang bi keo di / dang truot ve sau tha hut
             float[] p = cellCenter(u.x, u.y);
             float bob = (float) Math.sin(now * 3 + (i++) * 1.7) * 2;
-            drawShadow(p[0], p[1] - 45, 78);
+            drawUnitGrounding(p[0], p[1], 100, 0f);
             drawGroundRing(p[0], p[1], u.star, now, u.uid.hashCode());
             drawUnitSprite(u.defId, p[0], p[1] + bob, 100, u.star, false, 1, 0, null);
             drawBars(p[0], p[1], 1, 0, 0, 0, u.star, false);
@@ -820,7 +868,7 @@ public class MatchScreen extends ScreenAdapter {
                         batch.draw(a.glowTex(), cx - 56, cy - 72, 112, 64);
                         batch.setColor(Color.WHITE);
                     }
-                    drawShadow(cx, cy - 45, 78); // bong dat mem duoi chan nhu tuong tren ban
+                    drawUnitGrounding(cx, cy, 100, 0f); // tiep dat giong het tuong tren ban
                     drawGroundRing(cx, cy, u.star, now, u.uid.hashCode());
                     drawUnitSprite(u.defId, cx, cy, 100, u.star, false, 1, 0, null);
                     if (u.star >= 2) { // sao cap tren dau nhu drawBars (2 sao bac, 3 sao vang)
@@ -1289,7 +1337,7 @@ public class MatchScreen extends ScreenAdapter {
             Float lh = lastHitAt.get(uid);
             if (lh != null && playT - lh < 0.15f) tint = new Color(1, 0.5f, 0.5f, 1);
             if (!dying && battleFx.isFrozen(uid, playT)) tint = new Color(0.62f, 0.85f, 1f, 1); // phu tong bang khi bi dong bang (Astro/Boss Bang)
-            if (!dying) { drawShadow(p[0], p[1] - 47, 80); drawGroundRing(p[0], p[1], base.star, now, uid.hashCode()); }
+            if (!dying) { drawUnitGrounding(p[0], p[1], 100, 0f); drawGroundRing(p[0], p[1], base.star, now, uid.hashCode()); }
             drawUnitSprite(base.artId, cx, cy, 100, base.star, base.team == 1, alpha, rotation, tint);
             lastScreenPos.put(uid, new float[]{cx, cy});
             if (!dying) drawBars(cx, cy, hp / Math.max(1, base.maxHp), mana / Math.max(1, base.maxMana), shield / Math.max(1, base.maxHp), base.team, base.star, base.stun > 0);
@@ -1762,7 +1810,7 @@ public class MatchScreen extends ScreenAdapter {
                     float px = returnFromX + (target[0] - returnFromX) * e;
                     float py = returnFromY + (target[1] - returnFromY) * e;
                     float size = 100; // bench va ban cung mot co sprite (100px) — truot ve khong doi co
-                    drawShadow(px, py - size * 0.45f, size * 0.78f);
+                    drawUnitGrounding(px, py, size, 0f);
                     drawUnitSprite(u.defId, px, py, size, u.star, false, 1, 0, null);
                 }
             }
@@ -1772,7 +1820,11 @@ public class MatchScreen extends ScreenAdapter {
             int cx = cellXAt(dragX), cy = cellYAt(dragY);
             if (cx >= 0 && cx < 7 && cy >= 0 && cy < 4) {
                 float x = BX + cx * CELLX, y = BY + cy * CELLY;
-                batch.setColor(1, 0.85f, 0.3f, 0.30f);
+                // O dich phai NOI BAT RO giua luoi mo: quang sang nhip quanh o + nen sang + vien vang
+                float gpulse = 0.30f + 0.10f * (float) Math.sin(now * 6);
+                batch.setColor(1f, 0.85f, 0.3f, gpulse);
+                batch.draw(a.glowTex(), x - 13, y - 11, CELLX + 26, CELLY + 22);
+                batch.setColor(1, 0.85f, 0.3f, 0.36f);
                 batch.draw(a.whiteTex(), x + 2, y + 2, CELLX - 4, CELLY - 4);
                 batch.setColor(Color.WHITE);
                 drawBorder(x + 1, y + 1, CELLX - 2, CELLY - 2, Ui.GOLD, 3);
@@ -1786,7 +1838,7 @@ public class MatchScreen extends ScreenAdapter {
                 }
             }
             float size = 100 * 1.05f; // keo tu bench hay tu ban deu cung co 100px nhu luc dung yen
-            drawShadow(dragX, dragY - 40, 80);
+            drawUnitGrounding(dragX, dragY + 8, size, 0.55f); // dang bi nhac len: bong mo/nho, het AO
             drawUnitSprite(dragUnit.defId, dragX, dragY + 8, size, dragUnit.star, false, 0.96f, 0, null);
         }
         batch.end();

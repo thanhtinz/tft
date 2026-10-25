@@ -63,7 +63,7 @@ public class ScreenshotMain {
                     setScreen(matchScreen);
                     break;
                 }
-                case "planning": case "shopopen": case "battle": case "result": case "resultpanel": case "drag": {
+                case "planning": case "shopopen": case "battle": case "result": case "resultpanel": case "drag": case "dragcell": case "select": {
                     Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
                     m.autoPlan();
                     if ("shopopen".equals(mode)) {
@@ -119,9 +119,10 @@ public class ScreenshotMain {
             super.render();
             frames++;
             try {
-                if ("drag".equals(mode) && !dragSet && frames > 50 && matchScreen != null) {
+                if (("drag".equals(mode) || "dragcell".equals(mode)) && !dragSet && frames > 50 && matchScreen != null) {
                     // Gia lap trang thai dang keo: lay tuong dau tien tren ban, dat cac truong keo-tha
-                    // bang reflection, tro vao giua o bench so 1 (sprite bam tro + thung rac hien o 2 goc duoi)
+                    // bang reflection. "drag": tro vao giua o bench so 1 (o dich = bench).
+                    // "dragcell": tro vao tam o ban (2,1) — kiem chung luoi hien + o dich noi bat.
                     Field fMatch = MatchScreen.class.getDeclaredField("match");
                     fMatch.setAccessible(true);
                     Match mm = (Match) fMatch.get(matchScreen);
@@ -131,8 +132,23 @@ public class ScreenshotMain {
                         Field fUnit = MatchScreen.class.getDeclaredField("dragUnit"); fUnit.setAccessible(true); fUnit.set(matchScreen, u);
                         Field fFrom = MatchScreen.class.getDeclaredField("dragFromBench"); fFrom.setAccessible(true); fFrom.setBoolean(matchScreen, false);
                         Field fAct = MatchScreen.class.getDeclaredField("dragActive"); fAct.setAccessible(true); fAct.setBoolean(matchScreen, true);
-                        Field fX = MatchScreen.class.getDeclaredField("dragX"); fX.setAccessible(true); fX.setFloat(matchScreen, 451f);
-                        Field fY = MatchScreen.class.getDeclaredField("dragY"); fY.setAccessible(true); fY.setFloat(matchScreen, 120f);
+                        Field fX = MatchScreen.class.getDeclaredField("dragX"); fX.setAccessible(true);
+                        Field fY = MatchScreen.class.getDeclaredField("dragY"); fY.setAccessible(true);
+                        if ("dragcell".equals(mode)) { fX.setFloat(matchScreen, 567f); fY.setFloat(matchScreen, 257f); }
+                        else { fX.setFloat(matchScreen, 451f); fY.setFloat(matchScreen, 120f); }
+                        dragSet = true;
+                    }
+                }
+                if ("select".equals(mode) && !dragSet && frames > 50 && matchScreen != null) {
+                    // Gia lap CHAM-CHON mot tuong tren ban (selUid != null): luoi o phai hien
+                    Field fMatch = MatchScreen.class.getDeclaredField("match");
+                    fMatch.setAccessible(true);
+                    Match mm = (Match) fMatch.get(matchScreen);
+                    if (mm != null && !mm.human().board.isEmpty()) {
+                        Field fS = MatchScreen.class.getDeclaredField("selUid"); fS.setAccessible(true);
+                        fS.set(matchScreen, mm.human().board.get(0).uid);
+                        Field fB = MatchScreen.class.getDeclaredField("selFromBench"); fB.setAccessible(true);
+                        fB.setBoolean(matchScreen, false);
                         dragSet = true;
                     }
                 }
@@ -224,7 +240,8 @@ public class ScreenshotMain {
                     boolean powActive = !((java.util.List<?>) fPows.get(matchScreen)).isEmpty();
                     due = (inBattle && (powActive || pt >= 1.6f)) || frames >= 1500;
                 } else {
-                    due = frames >= 100;
+                    // drag/dragcell/select: cho them frame de luoi o mo dan xong (~150ms) truoc khi chup
+                    due = frames >= (("drag".equals(mode) || "dragcell".equals(mode) || "select".equals(mode)) ? 220 : 100);
                 }
                 if (!captured && due) {
                     captured = true;

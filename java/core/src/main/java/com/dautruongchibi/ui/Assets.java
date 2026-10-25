@@ -28,6 +28,7 @@ public class Assets {
 
     public BitmapFont font, fontBig, fontSmall, fontTitle;
     private final Map<String, Texture> unitTex = new HashMap<>();
+    private final Map<String, Texture> unitGroundTex = new HashMap<>(); // ban "tiep dat": gradient toi nhe o dai chan
     private final Set<String> unitStarMiss = new HashSet<>(); // id dang tien hoa da biet la khong co file
     private final Map<String, Texture> sceneTex = new HashMap<>();
     private final Map<String, Texture> iconTex = new HashMap<>();
@@ -217,6 +218,58 @@ public class Assets {
         return unit(artId);
     }
 
+    // Ban TIEP DAT cua sprite (chi dung khi ve tuong DUNG TREN SAN, file tranh goc khong doi):
+    // gradient toi nhe o dai chan (11% duoi cua than, toi da -20% o hang chan) ap dung
+    // thang len tung pixel co alpha — chan "chìm" xuong mat dat thay vi bi cat cung.
+    // Cung thu tu phan giai file nhu unit(artId, star): dang tien hoa truoc, thieu thi dang goc.
+    // Loi nap Pixmap (vd moi truong web) -> fallback ngam ve texture thuong, khong crash.
+    public Texture unitOnGround(String artId, int star) {
+        String base = artId == null ? "slime" : artId;
+        String[] candidates = (artId != null && star >= 2 && !unitStarMiss.contains(starArtId(artId, star)))
+            ? new String[]{starArtId(artId, star), base} : new String[]{base};
+        for (String id : candidates) {
+            Texture t = unitGroundTex.get(id);
+            if (t != null) return t;
+            try {
+                Pixmap pm = new Pixmap(Gdx.files.internal("units/" + id + ".png"));
+                darkenFeet(pm);
+                t = new Texture(pm);
+                pm.dispose();
+                t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+                unitGroundTex.put(id, t);
+                return t;
+            } catch (Exception e) { /* thu ung vien tiep theo / fallback o cuoi */ }
+        }
+        return unit(artId, star);
+    }
+
+    // Toi dan dai chan cua sprite trong Pixmap (toa do Pixmap: y tang XUONG, chan = hang
+    // alpha duoi cung). Chi cham vao pixel co alpha > 0 nen khong tao quang toi quanh chan.
+    private static void darkenFeet(Pixmap pm) {
+        int w = pm.getWidth(), h = pm.getHeight();
+        int top = -1, bottom = -1;
+        for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
+            if ((pm.getPixel(x, y) & 0xFF) > 10) { if (top < 0) top = y; bottom = y; }
+        }
+        if (bottom < 0) return;
+        int band = Math.max(8, Math.min(64, Math.round((bottom - top + 1) * 0.11f)));
+        pm.setBlending(Pixmap.Blending.None);
+        for (int y = Math.max(0, bottom - band + 1); y <= bottom; y++) {
+            float t = (y - (bottom - band)) / (float) band; // 0 o mep tren dai -> 1 o hang chan
+            float f = 1f - 0.20f * t;
+            for (int x = 0; x < w; x++) {
+                int px = pm.getPixel(x, y);
+                int a = px & 0xFF;
+                if (a == 0) continue;
+                int r = (px >>> 24) & 0xFF, g = (px >>> 16) & 0xFF, b = (px >>> 8) & 0xFF;
+                pm.setColor(Math.min(255, Math.round(r * f)) / 255f, Math.min(255, Math.round(g * f)) / 255f,
+                    Math.min(255, Math.round(b * f)) / 255f, a / 255f);
+                pm.drawPixel(x, y);
+            }
+        }
+        pm.setBlending(Pixmap.Blending.SourceOver);
+    }
+
     public Texture arenaFor(String themeKey) {
         switch (themeKey == null ? "" : themeKey) {
             case "sunset": return arenaSunset;
@@ -299,6 +352,7 @@ public class Assets {
         if (fontSmall != null) fontSmall.dispose();
         if (fontTitle != null) fontTitle.dispose();
         for (Texture t : unitTex.values()) t.dispose();
+        for (Texture t : unitGroundTex.values()) t.dispose();
         for (Texture t : sceneTex.values()) t.dispose();
         for (Texture t : uiTex) t.dispose();
         if (whiteTex != null) whiteTex.dispose();
