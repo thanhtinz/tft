@@ -86,7 +86,10 @@ java/
   bóng ellipse mềm dưới chân);
   lưới ô chỉ hiện mờ ở pha chuẩn bị và mờ hẳn về ~0 khi giao tranh. Bench là hàng **9 mảng đất** ngay dưới bàn cờ
   TRONG sân (texture painted `benchpatch1..3.png` sinh bằng `tools/make_bench_patches.py` — tướng ĐỨNG trên đất với
-  bóng chân mềm, không còn ô khung hộp; ô được chọn/đang kéo qua chỉ có quầng sáng mềm bám theo mảng đất). Thông tin
+  bóng chân mềm, không còn ô khung hộp; ô được chọn/đang kéo qua chỉ có quầng sáng mềm bám theo mảng đất). **Ô bench
+  ĐÚNG bằng ô bàn 84×70 (dải 357..1113 × 92..162, nằm gọn giữa 2 đĩa tròn góc) và sprite bench ĐÚNG 100px như trên
+  bàn — bench là một hàng ngang nữa của bàn cờ, neo chân/bóng đất/vòng sao/hàng sao dùng CHUNG quy tắc với tướng
+  trên bàn (đợt cân bằng bench 2026-10-25, mảng đất vẽ lại rộng và bẹt 96×48 bao quanh vùng chân cy−50).** Thông tin
   dồn ra viền: tộc/hệ = chip nhỏ bán trong suốt dọc mép trái, trang bị = nút nổi dưới chip, danh sách người chơi = hàng
   gọn mép phải (avatar + tên + số máu + thanh máu mỏng, hàng của mình phủ vàng rất nhẹ), thanh trên = plaque nổi mỏng ở
   giữa-trên, nhật ký thu thành nút icon cuốn sách nhỏ. **Điều khiển học TFT Mobile (đợt 2026-10-25):** hai NÚT TRÒN ở
@@ -280,7 +283,7 @@ bằng một máy chủ tĩnh (ví dụ `python3 -m http.server`) trên máy th�
 - **Painted hóa toàn game:** asset sinh bởi `tools/make-painted-assets.py` phủ MỌI màn — menu (lobby painted),
   màn trận (sân + tướng painted), lật thẻ (lưng thẻ), chiến dịch/học chơi/hồ sơ (tranh nền sau panel). Không màn nào
   còn lẫn sprite pixel. Tỉ lệ màn trận theo bản mẫu đã chốt: ô bàn 84×70, sprite bàn/trận 100px, xem trước địch 88px,
-  bench 56px.
+  bench 56px (số của đợt này — đợt cân bằng bench 2026-10-25 đã nâng bench lên BẰNG bàn: ô 84×70, sprite 100px).
 - **Nút bấm v2:** `tools/make_ui.py` vẽ nội bộ ở 4x rồi thu LANCZOS — nút **dày có khối**: bo góc lớn, gradient dọc
   (sáng trên → đậm dưới), **viền vàng hai lớp + viên kim cương ở 4 góc**, gloss bóng ở nửa trên; hover sáng hơn,
   nhấn xuống tối rõ, disabled xám hóa; panel/plaque/thẻ shop/ô bench bo góc đồng bộ. Thêm **họ nút vàng** (MUA XP,
@@ -365,3 +368,40 @@ còn không phát tiếng nào). Nay mỗi tướng có **hồ sơ hiệu ứng 
   (panel + bảng sát thương cạnh nhau không chồng). Chưa kiểm chứng: cảm giác chạm thật trên thiết bị, runtime
   web TeaVM (build PASS như mọi đợt), trường hợp shop mở phủ hàng bàn 0 — tướng ở hàng 0 muốn kéo phải đóng
   shop trước (đúng tính chất lớp phủ của TFT).
+
+## Đợt cân bằng kích thước + neo chân hàng chờ (2026-10-25)
+
+User chỉ 2 lỗi: (1) tướng bench NHỎ hơn tướng trên bàn (ô bench 64px/sprite 56px so với ô bàn 84×70/sprite
+100px) — kích thước sảnh chờ và trong sàn phải BẰNG NHAU; (2) tướng bench neo lệch (tâm ô tính lệch
+`(SLOT−4)/2 = 30` thay vì tâm ô thật, sprite neo ở `y+30` và bóng ở `y+5` tách rời chân) nên con cao con
+thấp/lệch tâm so với mảng đất. Xử lý: **bench thành một hàng ngang nữa của bàn cờ** — dùng lại đúng quy
+tắc neo của tướng trên bàn, không còn bộ số riêng:
+
+| Số đo | Trước | Sau |
+| --- | --- | --- |
+| Ô bench | 64×44 (dải 357..933 × 108..152) | **84×70 (dải 357..1113 × 92..162)** — đúng ô bàn, gọn giữa 2 đĩa tròn (đĩa trái mép phải 116, đĩa phải mép trái 1164) |
+| Sprite bench | 56px, tâm (x+30, y+30) | **100px, tâm = tâm ô** qua helper chung `benchCx(i) = BENCH_X + i·SLOT + SLOT/2`, `benchCy() = BENCH_Y + SLOT_H/2` (=127) |
+| Bóng chân bench | ellipse 46px ở y+5 (lệch chân ~25px) | `drawShadow(cx, cy−45, 78)` — đúng lời gọi của tướng trên bàn |
+| Vòng sao bench | không có | `drawGroundRing(cx, cy, …)` — đúng hàm của bàn (vòng bạc 2★/vàng 3★ ở cy−41) |
+| Hàng sao bench | sao 10px vàng ở y+60 | sao 11px ở cy+54, màu như `drawBars` (2★ bạc / 3★ vàng) |
+| Mảng đất | canvas 256×192, vẽ 64×48 | canvas **384×192 (tỉ lệ 2:1)**, vẽ **96×48** tâm (cx, cy−40) — rộng và bẹt, bao quanh vùng chân cy−50; vẫn 3 biến thể + lật ngang |
+| Sprite kéo / trượt-về từ bench | 96px / 56px | **105px / 100px** — cùng cỡ với kéo từ bàn, không đổi cỡ giữa chừng |
+| Chồng dọc | bàn 152..642 → bench 108..152 → odds 86..106 → shop 2..84 | bàn 152..642 (không đổi) → bench **92..162** → odds 86..106 (không đổi) → shop 2..84 (không đổi); plaque 668..716 và dòng thông báo 642..664 không đổi |
+
+Điểm neo dùng chung: `unitScreenPos` (animation trượt-về + hiệu ứng gộp sao) nay trả đúng
+`{benchCx(bi), benchCy()}` thay cho công thức lệch cũ; 3 hit-rect bench tự cập nhật theo hằng số mới.
+Chấp nhận giữ nguyên: dải odds (86..106) vẽ sau bench nên khi shop MỞ nó cắt ngang phần chân dưới của
+tướng bench ô 0–2 (lớp phủ như TFT); đầu tướng bench (tới y 177) chồng vào vùng hàng bàn 0 theo phối cảnh
+hàng-trước giống tướng bàn đứng hàng sau — thanh máu hàng 0 (y 476 trên ảnh) vẫn trên đầu bench, không bị che.
+ScreenshotMain thêm 2 mode `benchshow` (bàn 3 tướng + bench 6 tướng đủ dáng: thấp tròn/cao/váy dài/2★/bay)
+và `benchshop` (cùng trạng thái + shop mở).
+
+- **Kiểm chứng đợt này:** compile desktop PASS, `verifyHeadless` **18/18 PASS**, `:web:buildWeb` PASS.
+  Ảnh `tools/shot10-planning.png`, `tools/shot10-shopopen.png`, `tools/shot10-benchzoom.png` (crop phóng to
+  dải bench) + `tools/shot10-drag.png`, `tools/shot10-battle4.png` (hồi quy). Tự soi 2 vòng: vòng 1 toàn
+  cảnh + zoom dải bench — mọi tướng bench đứng cùng đường chân (game y ≈ 77) trên mảng đất, cỡ bằng tướng
+  bàn đặt cạnh; đo số: tâm mảng đất lệch tâm ô ≤ ±14px (khối đất vẽ tay không đối xứng tuyệt đối, như đợt
+  trước), hàng sao của tướng 2★ trên bench đo tại đúng vị trí công thức vẽ (x 641..660, y 185..189 so với
+  kỳ vọng 639..662 × 181..192); vòng 2 phóng to 2× từng con (toto thấp tròn, queen váy dài, phoenix bay) —
+  chân/váy đều chạm đúng tâm mảng đất, không con nào lơ lửng/chìm/lệch tâm. Chưa kiểm chứng: cảm giác kéo–thả
+  bằng tay thật và runtime web TeaVM (build PASS như mọi đợt).

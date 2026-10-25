@@ -57,11 +57,13 @@ public class MatchScreen extends ScreenAdapter {
 
     // Geometry — ban co lon giua san; thu tu doc dai duoi: ban co -> hang cho (mang dat) -> shop.
     // Ti le PAINTED (chot tu ban mau so sanh): o chu nhat 84x70 (ban 588x490, 357..945 x 152..642),
-    // sprite ban/tran 100px, xem truoc dich 88px, bench o 64 sprite 56px.
+    // sprite ban/tran 100px, xem truoc dich 88px.
     static final float BX = 357, BY = 152, CELLX = 84, CELLY = 70;
-    // Hang cho: 9 MANG DAT (y 108..152, sat day ban co) — tuong dung tren dat + bong chan mem,
-    // khong con o khung hop. SLOT_H = chieu cao mang dat / vung cham cua o cho.
-    static final float BENCH_Y = 108, BENCH_X = 357, SLOT = 64, SLOT_H = 44;
+    // Hang cho: 9 MANG DAT co DUNG kich thuoc o ban (84x70; dai 357..1113 x 92..162, nam gon giua
+    // 2 dia tron goc) — bench la MOT HANG NGANG NUA cua ban co: sprite DUNG 100px va dung CHUNG
+    // quy tac dung tren dat voi tuong tren ban (tam sprite = tam o, bong o cy-45, vong sao o
+    // cy-41, sao cap tren dau). Mang dat (96x48) nam o phan duoi o, bao quanh vung chan cy-50.
+    static final float BENCH_Y = 92, BENCH_X = 357, SLOT = 84, SLOT_H = 70;
     // Shop la LOP MO/DONG (truong shopOpen): hang the nam DUOI hang cho, sat mep duoi man hinh
     // (the y 2..84; dong odds ngay tren hang the y 86..106 — giua hang the va hang cho).
     static final float SHOP_Y = 2, SHOP_X = 254, CARD_W = 148, CARD_H = 82;
@@ -427,7 +429,7 @@ public class MatchScreen extends ScreenAdapter {
     private float[] unitScreenPos(Engine.PlacedUnit u, Match.PlayerState h) {
         if (h.board.contains(u)) return cellCenter(u.x, u.y);
         int bi = h.bench.indexOf(u);
-        if (bi >= 0) return new float[]{BENCH_X + bi * SLOT + (SLOT - 4) / 2f, BENCH_Y + 30};
+        if (bi >= 0) return new float[]{benchCx(bi), benchCy()};
         return null;
     }
 
@@ -472,6 +474,11 @@ public class MatchScreen extends ScreenAdapter {
     private float[] cellCenter(double gx, double gy) {
         return new float[]{BX + (float) gx * CELLX + CELLX / 2f, BY + (float) gy * CELLY + CELLY / 2f};
     }
+
+    // Tam o bench: bench la mot hang ngang nua cua ban co nen tam o bench dung cung cong thuc
+    // tam o ban (o 84x70, tam = goc + nua o) — moi neo chan/bong/sao cua bench tinh tu day.
+    private float benchCx(int i) { return BENCH_X + i * SLOT + SLOT / 2f; }
+    private float benchCy() { return BENCH_Y + SLOT_H / 2f; }
 
     // San doi theo chang (ArenaTheme): Chien Dich theo chuong, PvP/Song Quai theo stage, Boss -> hoang hon
     private String arenaKey() {
@@ -790,32 +797,36 @@ public class MatchScreen extends ScreenAdapter {
         }
     }
 
-    // Hang cho = 9 MANG DAT thuoc mat san (3 bien the luan phien + lat ngang o le cho do giong nhau):
-    // tuong DUNG tren mang dat nhu dung tren ban — chan neo o phan duoi mang dat, bong ellipse mem
-    // duoi chan; o duoc chon/keo qua chi co QUANG SANG MEM bam theo mang dat, khong khung hop.
+    // Hang cho = 9 MANG DAT thuoc mat san (3 bien the luan phien + lat ngang o le cho do giong nhau).
+    // Bench la MOT HANG NGANG NUA CUA BAN CO: o DUNG 84x70, sprite DUNG 100px, va dung CHUNG quy
+    // tac dung tren dat voi tuong tren ban (drawPlanningUnits) — tam sprite = tam o (benchCx/benchCy),
+    // bong ellipse o cy-45 rong 78, vong sao o chan qua drawGroundRing (gy = cy-41), sao cap tren dau
+    // nhu drawBars. Mang dat (96x48, tam o cy-40) nam o phan duoi o, bao quanh vung chan cy-50.
+    // O duoc chon/keo qua chi co QUANG SANG MEM bam theo mang dat, khong khung hop.
     private void drawBench(float now) {
         Assets a = game.assets;
         Match.PlayerState h = match.human();
+        float cy = benchCy();
         for (int i = 0; i < 9; i++) {
-            float x = BENCH_X + i * SLOT, y = BENCH_Y;
+            float cx = benchCx(i);
             com.badlogic.gdx.graphics.Texture patch = a.benchPatchTex[i % 3];
-            batch.draw(patch, x - 2, y - 2, SLOT, SLOT_H + 4, 0, 0, patch.getWidth(), patch.getHeight(), i % 2 == 1, false);
+            batch.draw(patch, cx - 48, cy - 64, 96, 48, 0, 0, patch.getWidth(), patch.getHeight(), i % 2 == 1, false);
             if (i < h.bench.size()) {
                 Engine.PlacedUnit u = h.bench.get(i);
                 if (!isUnitHidden(u.uid)) { // an sprite tai cho khi dang keo / dang truot ve
-                    float cx = x + (SLOT - 4) / 2f;
                     if (u.uid.equals(selUid)) { // quang sang mem bam theo mang dat (thay khung vang cu)
                         float pulse = 0.30f + 0.10f * (float) Math.sin(now * 5);
                         batch.setColor(1f, 0.85f, 0.3f, pulse);
-                        batch.draw(a.glowTex(), x - 8, y - 8, SLOT + 12, SLOT_H + 16);
+                        batch.draw(a.glowTex(), cx - 56, cy - 72, 112, 64);
                         batch.setColor(Color.WHITE);
                     }
-                    drawShadow(cx, y + 5, 46); // bong dat mem duoi chan nhu tuong tren ban
-                    drawUnitSprite(u.defId, cx, y + 30, 56, u.star, false, 1, 0, null);
-                    if (u.star >= 2) {
-                        float sw = 10, total = u.star * (sw + 1) - 1;
-                        batch.setColor(Ui.GOLD);
-                        for (int k = 0; k < u.star; k++) batch.draw(a.icon("star"), cx - total / 2 + k * (sw + 1), y + 60, sw, sw);
+                    drawShadow(cx, cy - 45, 78); // bong dat mem duoi chan nhu tuong tren ban
+                    drawGroundRing(cx, cy, u.star, now, u.uid.hashCode());
+                    drawUnitSprite(u.defId, cx, cy, 100, u.star, false, 1, 0, null);
+                    if (u.star >= 2) { // sao cap tren dau nhu drawBars (2 sao bac, 3 sao vang)
+                        float sw = 11, total = u.star * (sw + 1) - 1;
+                        batch.setColor(u.star >= 3 ? Ui.GOLD : new Color(0.88f, 0.92f, 0.97f, 1));
+                        for (int k = 0; k < u.star; k++) batch.draw(a.icon("star"), cx - total / 2 + k * (sw + 1), cy + 54, sw, sw);
                         batch.setColor(Color.WHITE);
                     }
                 }
@@ -1750,7 +1761,7 @@ public class MatchScreen extends ScreenAdapter {
                     float e = 1 - (1 - k) * (1 - k); // ease-out
                     float px = returnFromX + (target[0] - returnFromX) * e;
                     float py = returnFromY + (target[1] - returnFromY) * e;
-                    float size = returnFromBench ? 56 : 100;
+                    float size = 100; // bench va ban cung mot co sprite (100px) — truot ve khong doi co
                     drawShadow(px, py - size * 0.45f, size * 0.78f);
                     drawUnitSprite(u.defId, px, py, size, u.star, false, 1, 0, null);
                 }
@@ -1768,14 +1779,13 @@ public class MatchScreen extends ScreenAdapter {
             } else {
                 int slot = benchSlotAt(dragX, dragY);
                 if (slot >= 0) { // quang sang mem bam theo mang dat cua o dich (khong khung hop)
-                    float x = BENCH_X + slot * SLOT, y = BENCH_Y;
                     float pulse = 0.42f + 0.15f * (float) Math.sin(now * 6);
                     batch.setColor(1f, 0.85f, 0.3f, pulse);
-                    batch.draw(a.glowTex(), x - 8, y - 8, SLOT + 12, SLOT_H + 16);
+                    batch.draw(a.glowTex(), benchCx(slot) - 56, benchCy() - 72, 112, 64);
                     batch.setColor(Color.WHITE);
                 }
             }
-            float size = (dragFromBench ? 96 : 100) * 1.05f;
+            float size = 100 * 1.05f; // keo tu bench hay tu ban deu cung co 100px nhu luc dung yen
             drawShadow(dragX, dragY - 40, 80);
             drawUnitSprite(dragUnit.defId, dragX, dragY + 8, size, dragUnit.star, false, 0.96f, 0, null);
         }

@@ -76,6 +76,12 @@ public class ScreenshotMain {
                     setScreen(matchScreen);
                     break;
                 }
+                case "benchshow": case "benchshop": {
+                    Match m = benchShowcase();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
                 case "stars": {
                     Match m = starShowcase();
                     matchScreen = new MatchScreen(this, m);
@@ -130,7 +136,7 @@ public class ScreenshotMain {
                         dragSet = true;
                     }
                 }
-                if ("shopopen".equals(mode) && !shopSet && frames > 50 && matchScreen != null) {
+                if (("shopopen".equals(mode) || "benchshop".equals(mode)) && !shopSet && frames > 50 && matchScreen != null) {
                     // Gia lap lop shop dang MO o pha chuan bi (dat thang truong shopOpen bang reflection)
                     Field fShop = MatchScreen.class.getDeclaredField("shopOpen");
                     fShop.setAccessible(true);
@@ -241,6 +247,29 @@ public class ScreenshotMain {
             System.out.println("SCREENSHOT_SAVED " + path + " " + w + "x" + h);
             pm.dispose(); flipped.dispose();
         }
+    }
+
+    // Trang thai chup DOI CHIEU bench <-> ban: ban co 3 tuong (gogo thap chan dat, titan to,
+    // mimi tam xa hang sau), bench 5-6 tuong du dang (toto tron thap, queen cao, lulu 2 sao,
+    // phoenix bay, bobi) — de soi kich thuoc (bench phai bang ban: o 84x70, sprite 100px)
+    // va duong chan bench co thang hang/khong lech tam so voi mang dat khong.
+    static Match benchShowcase() {
+        Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
+        Match.PlayerState h = m.human();
+        if (m.draftPending) m.pickDraft(0); // nhan tuong lat the mo tran vao bench nhu choi that
+        if (m.augmentPending) m.pickAugment(0);
+        h.level = 9;
+        m.addChampion(h, "gogo"); m.addChampion(h, "titan"); m.addChampion(h, "mimi");
+        placeByStar(m, h, "gogo", 1, 2, 0);
+        placeByStar(m, h, "titan", 1, 4, 0);
+        placeByStar(m, h, "mimi", 1, 3, 3);
+        m.addChampion(h, "toto");
+        m.addChampion(h, "queen");
+        for (int i = 0; i < 3; i++) m.addChampion(h, "lulu"); // gop thanh lulu 2 sao tren bench
+        m.addChampion(h, "phoenix");
+        m.addChampion(h, "bobi");
+        h.gold = 50; // de nut reroll o trang thai vang khi chup benchshop
+        return m;
     }
 
     // Dung doi hinh toan Gogo o ca 3 cap sao: 9 con gop thanh 1 con 3 sao, +3 con thanh 1 con 2 sao, +1 con 1 sao.
