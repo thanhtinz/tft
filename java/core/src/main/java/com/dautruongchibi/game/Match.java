@@ -379,10 +379,43 @@ public final class Match {
         if (u == null) u = find(h.bench, uid);
         if (u == null) return "Không tìm thấy tướng.";
         if (!h.inventory.contains(itemId)) return "Không có trang bị này trong kho.";
+        // TU HOP NHAT TREN NGUOI TUONG (kieu TFT): mon dang deo la thanh phan va tren nguoi
+        // tuong da co thanh phan con lai cua cung 1 cong thuc thi 2 mon gop thanh do hoan
+        // chinh chiem DUNG 1 o (ke ca khi tuong da du 3 o van gop duoc vi khong tang so o).
+        if (GameData.isComponent(itemId)) {
+            for (int i = 0; i < u.items.size(); i++) {
+                String worn = u.items.get(i);
+                if (!GameData.isComponent(worn)) continue;
+                String merged = GameData.combineResult(worn, itemId);
+                if (merged != null) {
+                    h.inventory.remove(itemId);
+                    u.items.set(i, merged);
+                    String msg = GameData.itemById(worn).name + " + " + GameData.itemById(itemId).name
+                        + " tự ghép trên người " + GameData.champById(u.defId).name + " thành " + GameData.itemById(merged).name + "!";
+                    log.add(msg);
+                    return msg;
+                }
+            }
+        }
         if (u.items.size() >= 3) return "Tướng đã đeo tối đa 3 trang bị.";
         h.inventory.remove(itemId);
         u.items.add(itemId);
         return "Đã đeo " + GameData.itemById(itemId).name + " cho " + GameData.champById(u.defId).name + ".";
+    }
+
+    // Ghep 2 do thanh phan TRONG KHO (keo icon nay tha len icon kia): ca 2 bien mat,
+    // do hoan chinh xuat hien trong kho. Tra ve thong diep hien cho nguoi choi.
+    public String combineItems(String compA, String compB) {
+        PlayerState h = human();
+        String result = GameData.combineResult(compA, compB);
+        if (result == null) return "Hai món này không ghép được với nhau.";
+        if (!h.inventory.remove(compA)) return "Không có đủ đồ trong kho để ghép.";
+        if (!h.inventory.remove(compB)) { h.inventory.add(compA); return "Không có đủ đồ trong kho để ghép."; }
+        h.inventory.add(result);
+        String msg = "Ghép thành công: " + GameData.itemById(compA).name + " + " + GameData.itemById(compB).name
+            + " = " + GameData.itemById(result).name + "!";
+        log.add(msg);
+        return msg;
     }
 
     private Engine.PlacedUnit find(List<Engine.PlacedUnit> list, String uid) {
@@ -508,9 +541,9 @@ public final class Match {
         return out;
     }
 
-    // Roi trang bi vao kho nguoi choi khi thang tran PvE (hoc tu popup mo qua cua Kanto Tactics)
+    // Roi DO THANH PHAN vao kho nguoi choi khi thang tran PvE (hoc tu popup mo qua cua Kanto Tactics)
     private void grantDrop(FightOutcome out) {
-        String it = Engine.randomItem(rng);
+        String it = Engine.randomComponent(rng);
         human().inventory.add(it);
         out.droppedItem = it;
         log.add("Rơi trang bị: " + GameData.itemById(it).name + "!");

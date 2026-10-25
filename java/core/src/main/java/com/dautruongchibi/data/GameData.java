@@ -134,8 +134,67 @@ public final class GameData {
         new ItemDef("khienvang", "Khiên Vàng", "+35 giáp, +35 kháng phép", 0, 0, 0, 35, 35, 0, 0, 0, 0, "#ffb703"),
         new ItemDef("giay", "Giày Bay", "+20% tốc đánh", 0, 0, 0, 0, 0, 20, 0, 0, 0, "#38b000")
     );
+    // ---------- Do thanh phan + cong thuc ghep (kieu TFT) ----------
+    // Do roi vao kho la DO THANH PHAN (6 loai). Moi trang bi hoan chinh trong ITEMS
+    // ghep tu DUNG 1 cap thanh phan (cap trung nhau duoc phep). Thanh phan deo duoc
+    // nhu do thuong (cong chi so nho cua no); 2 thanh phan tren nguoi tuong hop cong
+    // thuc se tu hop nhat thanh do hoan chinh chiem 1 o.
+    public static final List<ItemDef> COMPONENTS = Arrays.asList(
+        new ItemDef("tpkiem", "Lưỡi Kiếm Mật Ong", "+10 sát thương", 0, 10, 0, 0, 0, 0, 0, 0, 0, "#f4a261"),
+        new ItemDef("tpgay", "Gậy Phép Socola", "+15 SMKN", 0, 0, 15, 0, 0, 0, 0, 0, 0, "#9d6b53"),
+        new ItemDef("tpcung", "Dây Cung Kẹo Dẻo", "+12% tốc đánh", 0, 0, 0, 0, 0, 12, 0, 0, 0, "#ff8fab"),
+        new ItemDef("tpgang", "Găng Tay Nhung", "+10% chí mạng", 0, 0, 0, 0, 0, 0, 10, 0, 0, "#e63946"),
+        new ItemDef("tpgiap", "Mảnh Vỏ Kẹo Cứng", "+12 giáp, +75 máu", 75, 0, 0, 12, 0, 0, 0, 0, 0, "#90e0ef"),
+        new ItemDef("tptim", "Mảnh Tim Kẹo", "+150 máu", 150, 0, 0, 0, 0, 0, 0, 0, 0, "#ef476f")
+    );
+    public static ItemDef componentById(String id) {
+        for (ItemDef i : COMPONENTS) if (i.id.equals(id)) return i;
+        return null;
+    }
+    public static boolean isComponent(String id) { return id != null && componentById(id) != null; }
+
+    // Bang cong thuc: id do hoan chinh -> {thanh phan A, thanh phan B} (khong thu tu).
+    public static final java.util.Map<String, String[]> RECIPES = new java.util.HashMap<>();
+    static {
+        RECIPES.put("kiem", new String[]{"tpkiem", "tpkiem"});       // 2 luoi kiem -> Kiem Banh Quy
+        RECIPES.put("gay", new String[]{"tpgay", "tpgay"});          // 2 dua phep -> Gay Socola
+        RECIPES.put("cung", new String[]{"tpcung", "tpcung"});       // 2 day cung -> Cung Keo Deo
+        RECIPES.put("tim", new String[]{"tptim", "tptim"});          // 2 manh tim -> Trai Tim Am
+        RECIPES.put("gang", new String[]{"tpgang", "tpgang"});        // 2 gang nhung -> Gang Kim Cuong
+        RECIPES.put("khienvang", new String[]{"tpgiap", "tpgiap"});  // 2 manh vo -> Khien Vang
+        RECIPES.put("giap", new String[]{"tpgiap", "tptim"});        // vo keo + tim -> Giap Keo Cung
+        RECIPES.put("aochoang", new String[]{"tpgiap", "tpgay"});    // vo keo + dua phep -> Ao Choang Dem
+        RECIPES.put("vuot", new String[]{"tpkiem", "tptim"});        // luoi kiem + tim (hut mau) -> Vuot Rong
+        RECIPES.put("sachcu", new String[]{"tpgay", "tpgang"});       // dua phep + gang -> Sach Co Ma Thuat
+        RECIPES.put("giay", new String[]{"tpcung", "tpgang"});        // day cung + gang -> Giay Bay
+        RECIPES.put("nuocmat", new String[]{"tpgay", "tptim"});       // dua phep + tim -> Giot Nuoc Mat Sao
+    }
+    // Cong thuc cua 1 do hoan chinh (null neu id khong phai do hoan chinh co cong thuc)
+    public static String[] recipeFor(String itemId) { return RECIPES.get(itemId); }
+    // Ghep 2 thanh phan -> id do hoan chinh, hoac null neu cap nay khong co cong thuc
+    public static String combineResult(String compA, String compB) {
+        if (compA == null || compB == null) return null;
+        for (java.util.Map.Entry<String, String[]> e : RECIPES.entrySet()) {
+            String[] r = e.getValue();
+            if ((r[0].equals(compA) && r[1].equals(compB)) || (r[0].equals(compB) && r[1].equals(compA))) return e.getKey();
+        }
+        return null;
+    }
+    // Cac cong thuc ma 1 thanh phan tham gia: moi phan tu = {thanh phan con lai, id do dich}
+    public static List<String[]> recipesUsing(String compId) {
+        List<String[]> out = new ArrayList<>();
+        for (ItemDef it : ITEMS) {
+            String[] r = RECIPES.get(it.id);
+            if (r == null) continue;
+            if (r[0].equals(compId)) out.add(new String[]{r[1], it.id});
+            else if (r[1].equals(compId)) out.add(new String[]{r[0], it.id});
+        }
+        return out;
+    }
+
     public static ItemDef itemById(String id) {
         for (ItemDef i : ITEMS) if (i.id.equals(id)) return i;
+        for (ItemDef i : COMPONENTS) if (i.id.equals(id)) return i;
         return null;
     }
 

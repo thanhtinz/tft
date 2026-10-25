@@ -57,7 +57,7 @@ public class ScreenshotMain {
                 case "profile":
                     setScreen(new com.dautruongchibi.ui.ProfileScreen(this));
                     break;
-                case "draft": {
+                case "draft": case "draftflip": {
                     Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
                     matchScreen = new MatchScreen(this, m);
                     setScreen(matchScreen);
@@ -84,6 +84,17 @@ public class ScreenshotMain {
                 }
                 case "stars": {
                     Match m = starShowcase();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "items": case "iteminfo_comp": case "iteminfo_full": case "itemdrag": case "itemcombined": {
+                    // Doi hinh benchShowcase + kho do day: 6 thanh phan + 2 do hoan chinh
+                    Match m = benchShowcase();
+                    Match.PlayerState h = m.human();
+                    h.inventory.add("tpkiem"); h.inventory.add("tptim"); h.inventory.add("tpcung");
+                    h.inventory.add("tpgang"); h.inventory.add("tpgiap"); h.inventory.add("tpgay");
+                    h.inventory.add("vuot"); h.inventory.add("tim");
                     matchScreen = new MatchScreen(this, m);
                     setScreen(matchScreen);
                     break;
@@ -152,12 +163,57 @@ public class ScreenshotMain {
                         dragSet = true;
                     }
                 }
+                if (("iteminfo_comp".equals(mode) || "iteminfo_full".equals(mode)) && !dragSet && frames > 50 && matchScreen != null) {
+                    // Mo bang thong tin do bang reflection: thanh phan tpgay (4 cong thuc) / hoan chinh vuot (dong GHEP TU)
+                    Field fInfo = MatchScreen.class.getDeclaredField("itemInfoId");
+                    fInfo.setAccessible(true);
+                    fInfo.set(matchScreen, "iteminfo_comp".equals(mode) ? "tpgay" : "vuot");
+                    dragSet = true;
+                }
+                if ("itemdrag".equals(mode) && !dragSet && frames > 50 && matchScreen != null) {
+                    // Chuan hoa kho de cap keo la cong thuc HOP LE: [tpkiem, tptim, ...]
+                    Field fMatchD = MatchScreen.class.getDeclaredField("match");
+                    fMatchD.setAccessible(true);
+                    Match md = (Match) fMatchD.get(matchScreen);
+                    md.human().inventory.clear();
+                    md.human().inventory.add("tpkiem"); md.human().inventory.add("tptim");
+                    md.human().inventory.add("tpcung"); md.human().inventory.add("tpgang");
+                    // Gia lap dang keo tpkiem (o khay 0) sang o khay 1 (tptim): icon bam tro + vien o dich
+                    Field fIdx = MatchScreen.class.getDeclaredField("dragItemIndex"); fIdx.setAccessible(true); fIdx.setInt(matchScreen, 0);
+                    Field fActI = MatchScreen.class.getDeclaredField("itemDragActive"); fActI.setAccessible(true); fActI.setBoolean(matchScreen, true);
+                    Field fX = MatchScreen.class.getDeclaredField("dragX"); fX.setAccessible(true); fX.setFloat(matchScreen, 95f);
+                    Field fY = MatchScreen.class.getDeclaredField("dragY"); fY.setAccessible(true); fY.setFloat(matchScreen, 410f);
+                    dragSet = true;
+                }
+                if ("itemcombined".equals(mode) && !dragSet && frames > 50 && matchScreen != null) {
+                    // Ghep that qua Match API (tpkiem + tptim -> vuot) roi bat toast + popup + loe sang o khay
+                    Field fMatch = MatchScreen.class.getDeclaredField("match");
+                    fMatch.setAccessible(true);
+                    Match mm = (Match) fMatch.get(matchScreen);
+                    mm.combineItems("tpkiem", "tptim");
+                    Field fToast = MatchScreen.class.getDeclaredField("toast"); fToast.setAccessible(true);
+                    fToast.set(matchScreen, "Ghép thành công: Lưỡi Kiếm Mật Ong + Mảnh Tim Kẹo = Vuốt Rồng!");
+                    Field fToastT = MatchScreen.class.getDeclaredField("toastT"); fToastT.setAccessible(true); fToastT.setFloat(matchScreen, 3.2f);
+                    Field fPop = MatchScreen.class.getDeclaredField("popupItemId"); fPop.setAccessible(true); fPop.set(matchScreen, "vuot");
+                    Field fPopT = MatchScreen.class.getDeclaredField("popupT"); fPopT.setAccessible(true); fPopT.setFloat(matchScreen, 2.3f);
+                    Field fFlash = MatchScreen.class.getDeclaredField("combineFlashIndex"); fFlash.setAccessible(true);
+                    Field fFlashT = MatchScreen.class.getDeclaredField("combineFlashT"); fFlashT.setAccessible(true);
+                    fFlash.setInt(matchScreen, mm.human().inventory.indexOf("vuot"));
+                    fFlashT.setFloat(matchScreen, 99f); // giu loe sang toi luc chup (cong cu chup chu dong dat)
+                    dragSet = true;
+                }
                 if (("shopopen".equals(mode) || "benchshop".equals(mode)) && !shopSet && frames > 50 && matchScreen != null) {
                     // Gia lap lop shop dang MO o pha chuan bi (dat thang truong shopOpen bang reflection)
                     Field fShop = MatchScreen.class.getDeclaredField("shopOpen");
                     fShop.setAccessible(true);
                     fShop.setBoolean(matchScreen, true);
                     shopSet = true;
+                }
+                if ("draftflip".equals(mode) && !dragSet && frames > 30 && matchScreen != null) {
+                    // Chon the 0 va tua thoi gian lat toi luc ca 8 the da mo (nhung chua ap dung chon)
+                    Field fCh = MatchScreen.class.getDeclaredField("draftChosen"); fCh.setAccessible(true); fCh.setInt(matchScreen, 0);
+                    Field fEl = MatchScreen.class.getDeclaredField("draftElapsed"); fEl.setAccessible(true); fEl.setFloat(matchScreen, 1.45f);
+                    dragSet = true;
                 }
                 boolean fxMode = mode.startsWith("fx");
                 boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || fxMode;
@@ -174,7 +230,12 @@ public class ScreenshotMain {
                     }
                 }
                 boolean due;
-                if (fxMode && battleStarted) {
+                if ("draftflip".equals(mode) && dragSet) {
+                    // Chup khi cac the da lat xong (draftElapsed ~1.6s) nhung truoc luc ap dung (2.83s)
+                    Field fEl2 = MatchScreen.class.getDeclaredField("draftElapsed");
+                    fEl2.setAccessible(true);
+                    due = fEl2.getFloat(matchScreen) >= 1.6f || frames >= 900;
+                } else if (fxMode && battleStarted) {
                     // Chup NGAY frame mot tuong tung chieu dung HE can kiem chung:
                     // BattleFx.lastCastFx/castSeq duoc MatchScreen cap nhat trong fireEvents.
                     java.lang.reflect.Field fFx = MatchScreen.class.getDeclaredField("battleFx");

@@ -473,7 +473,7 @@ public final class Engine {
             if (round >= 14 && lcg.next() < 0.4) star = 2;
             else if (round >= 7 && lcg.next() < 0.2) star = 2;
             PlacedUnit u = new PlacedUnit("ai" + round + "-" + i, def.id, star, i % 7, def.range <= 1 ? 0 : 3);
-            if (round >= 12 && i == 0) u.items.add("kiem");
+            if (round >= 12 && i == 0) u.items.add("tpkiem"); // bot cung theo kinh te do thanh phan nhu nguoi choi
             team.add(u);
         }
         return team;
@@ -527,6 +527,9 @@ public final class Engine {
     public static boolean isPveRound(int round) { for (int r : PVE_ROUNDS) if (r == round) return true; return false; }
 
     public static String randomItem(Rng rnd) { return GameData.ITEMS.get(rnd.nextInt(GameData.ITEMS.size())).id; }
+    // Nguon roi do tu tran dau: chi roi DO THANH PHAN (do hoan chinh chi co duoc bang ghep
+    // hoac tu cuong hoa ghi ro tang do hoan chinh) — xem GameData.COMPONENTS/RECIPES.
+    public static String randomComponent(Rng rnd) { return GameData.COMPONENTS.get(rnd.nextInt(GameData.COMPONENTS.size())).id; }
 
     public static int[] stageSub(int round) {
         if (round <= 4) return new int[]{1, round};
@@ -555,7 +558,7 @@ public final class Engine {
             ChampDef tmp = pool.get(i); pool.set(i, pool.get(j)); pool.set(j, tmp);
         }
         List<CarouselOption> out = new ArrayList<>();
-        for (int i = 0; i < CAROUSEL_COUNT; i++) out.add(new CarouselOption(pool.get(i).id, randomItem(rnd)));
+        for (int i = 0; i < CAROUSEL_COUNT; i++) out.add(new CarouselOption(pool.get(i).id, randomComponent(rnd)));
         return out;
     }
 

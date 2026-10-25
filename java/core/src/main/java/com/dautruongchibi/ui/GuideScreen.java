@@ -30,7 +30,7 @@ public class GuideScreen extends ScreenAdapter {
         "",
         "LẬT THẺ ÚP MỞ TRẬN",
         "Đầu trận PvP (và các vòng x-4) có 8 thẻ úp. Chạm 1 thẻ để lật mở: nhận tướng trong thẻ",
-        "về bench kèm 1 trang bị vào kho. Các thẻ còn lại cũng lật mở để bạn thấy mình đã bỏ lỡ gì.",
+        "về bench kèm 1 đồ thành phần vào kho. Các thẻ còn lại cũng lật mở để bạn thấy mình đã bỏ lỡ gì.",
         "",
         "SÂN ĐẤU & HIỆU ỨNG (học từ Kanto Tactics + FighterZ Tactics)",
         "Sân đấu đổi tranh theo chặng: Chiến Dịch theo chương — (chương-1)%3 lần lượt là rừng,",
@@ -40,8 +40,8 @@ public class GuideScreen extends ScreenAdapter {
         "kèm vệt tốc độ, và mục tiêu bị lộn nghiêng. Cuối mỗi vòng, chữ hô lớn THẮNG! / THUA!",
         "(hạ boss: HẠ GỤC BOSS!) phồng lên giữa sân. Bảng sát thương của trận vừa đấu tự hiện",
         "ở phía phải sân trong pha kết quả — không cần bấm nút nào cả.",
-        "Thắng vòng quái PvE sẽ rơi 1 trang bị (Sóng Quái: mỗi 3 sóng; Chiến Dịch: thắng màn Boss)",
-        "— thẻ trang bị nảy lên giữa-phải sân rồi tự vào kho. Gộp sao có vòng xoáy hợp nhất;",
+        "Thắng vòng quái PvE sẽ rơi 1 đồ thành phần (Sóng Quái: mỗi 3 sóng; Chiến Dịch: thắng màn Boss)",
+        "— thẻ đồ nảy lên giữa-phải sân rồi tự vào kho. Gộp sao có vòng xoáy hợp nhất;",
         "tướng 2 sao có vòng bạc ở chân, 3 sao có hào quang vàng cháy kèm chấm sao bay.",
         "LÊN SAO LÀ TIẾN HOÁ: gộp sao không chỉ tăng chỉ số — tướng ĐỔI HẲN HÌNH DẠNG.",
         "2 sao là dạng trưởng thành: thêm giáp vai, viền bạc, vũ khí to hơn có đá. 3 sao là dạng",
@@ -78,8 +78,17 @@ public class GuideScreen extends ScreenAdapter {
         "(tướng ở bench cũng bán bằng kéo vào thùng rác — không còn nút bán riêng).",
         "Thả ra ngoài vùng hợp lệ thì tướng trượt về chỗ cũ. Chạm chọn + chạm ô đích vẫn dùng được",
         "như cách dự phòng.",
-        "Trang bị: chạm 1 món trong kho rồi chạm tướng để đeo (tối đa 3 món).",
-        "Nhật ký trận: nút icon cuốn sách nhỏ ở góc dưới-trái. Thoát: nút nhỏ góc trên-phải."
+        "Nhật ký trận: nút icon cuốn sách nhỏ ở góc dưới-trái. Thoát: nút nhỏ góc trên-phải.",
+        "",
+        "TRANG BỊ — GHÉP ĐỒ KIỂU TFT",
+        "Đồ rơi vào kho là ĐỒ THÀNH PHẦN (6 loại: Lưỡi Kiếm Mật Ong, Gậy Phép Socola, Dây Cung",
+        "Kẹo Dẻo, Găng Tay Nhung, Mảnh Vỏ Kẹo Cứng, Mảnh Tim Kẹo). Kéo 2 đồ thành phần vào nhau",
+        "trong khay để GHÉP thành 1 trang bị hoàn chỉnh mạnh hơn — mỗi đồ hoàn chỉnh có đúng 1",
+        "công thức gồm 2 thành phần (công thức đầy đủ xem trong bảng thông tin của từng món).",
+        "Kéo đồ lên tướng để đeo (tối đa 3 món/tướng); thành phần đeo được như đồ thường. Nếu",
+        "tướng đang đeo sẵn thành phần còn lại của một công thức, hai món TỰ HỢP NHẤT ngay trên",
+        "người tướng thành đồ hoàn chỉnh chiếm 1 ô. Chạm (không kéo) vào 1 món đồ trong khay trái",
+        "để mở bảng thông tin: chỉ số, và với thành phần là danh sách các đồ nó ghép được thành."
     );
 
     public GuideScreen(MainGame game) { this.game = game; }

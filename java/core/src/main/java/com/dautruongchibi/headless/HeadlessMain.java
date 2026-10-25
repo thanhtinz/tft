@@ -302,6 +302,58 @@ public class HeadlessMain {
             fxOk && signatureOk,
             "so he dung: " + usedFx.size() + " " + usedFx + (fxOk && signatureOk ? "" : "; loi: " + fxMiss + "signatureOk=" + signatureOk));
 
+        // 19) Cong thuc ghep do kieu TFT: 6 thanh phan, 12/12 do hoan chinh co dung 1 cong
+        // thuc, moi thanh phan xuat hien trong it nhat 1 cong thuc, ghep doi xung 2 chieu
+        boolean recipeOk = GameData.COMPONENTS.size() == 6 && GameData.RECIPES.size() == 12;
+        StringBuilder recMiss = new StringBuilder();
+        for (GameData.ItemDef it : GameData.ITEMS) {
+            String[] r = GameData.recipeFor(it.id);
+            if (r == null || r.length != 2) { recipeOk = false; recMiss.append(it.id).append(' '); continue; }
+            if (!GameData.isComponent(r[0]) || !GameData.isComponent(r[1])) { recipeOk = false; recMiss.append(it.id).append("(comp?) "); }
+            if (!it.id.equals(GameData.combineResult(r[0], r[1])) || !it.id.equals(GameData.combineResult(r[1], r[0]))) { recipeOk = false; recMiss.append(it.id).append("(2chieu) "); }
+        }
+        for (GameData.ItemDef c : GameData.COMPONENTS) if (GameData.recipesUsing(c.id).isEmpty()) { recipeOk = false; recMiss.append("unused:").append(c.id).append(' '); }
+        if (GameData.combineResult("tpkiem", "tpcung") != null) recipeOk = false; // cap nay khong co cong thuc
+        check("Cong thuc ghep: 6 thanh phan, 12/12 do hoan chinh co dung 1 cong thuc, moi thanh phan duoc dung",
+            recipeOk, recMiss.toString());
+
+        // 20) Ghep trong kho qua Match API + tu hop nhat tren nguoi tuong + tu choi dung luat
+        Match im = Match.startCampaign(1, 5, "ItemTest");
+        Match.PlayerState ih = im.human();
+        ih.inventory.add("tpkiem"); ih.inventory.add("tptim");
+        String combMsg = im.combineItems("tpkiem", "tptim");
+        boolean combOk = ih.inventory.size() == 1 && ih.inventory.contains("vuot") && combMsg.contains("Vuốt Rồng");
+        ih.inventory.add("tpkiem"); ih.inventory.add("tpcung");
+        int invBefore = ih.inventory.size();
+        String failMsg = im.combineItems("tpkiem", "tpcung");
+        boolean failOk = ih.inventory.size() == invBefore && failMsg.contains("không ghép được");
+        im.addChampion(ih, "gogo");
+        Engine.PlacedUnit gu = ih.bench.get(0);
+        im.equipItem(gu.uid, "tpkiem");
+        boolean wornOk = gu.items.size() == 1 && gu.items.contains("tpkiem");
+        ih.inventory.add("tptim");
+        String mergeMsg = im.equipItem(gu.uid, "tptim");
+        boolean mergeOk = gu.items.size() == 1 && gu.items.contains("vuot") && mergeMsg.contains("tự ghép");
+        ih.inventory.add("giap"); ih.inventory.add("tim"); ih.inventory.add("cung");
+        im.equipItem(gu.uid, "giap"); im.equipItem(gu.uid, "tim");
+        int invFull = ih.inventory.size();
+        String fullMsg = im.equipItem(gu.uid, "cung");
+        boolean fullOk = gu.items.size() == 3 && ih.inventory.size() == invFull && fullMsg.contains("tối đa 3");
+        check("Ghep do qua Match: ghep kho dung, cap sai bi tu choi, deo cap thanh phan tu hop nhat tren tuong, du 3 o bi tu choi",
+            combOk && failOk && wornOk && mergeOk && fullOk,
+            "ghep=" + combOk + " sai=" + failOk + " deo=" + wornOk + " hopNhat=" + mergeOk + " day=" + fullOk);
+
+        // 21) Nguon roi do tra THANH PHAN: the lat mo tran + ham roi ngau nhien cua tran PvE
+        boolean dropOk = true;
+        for (long s = 1; s <= 5; s++) {
+            for (Engine.CarouselOption o : Engine.genCarouselOptions(new Rng(s))) if (!GameData.isComponent(o.item)) dropOk = false;
+        }
+        Rng drng = new Rng(99);
+        Set<String> dropped = new HashSet<>();
+        for (int i = 0; i < 300; i++) { String dId = Engine.randomComponent(drng); if (!GameData.isComponent(dId)) dropOk = false; dropped.add(dId); }
+        check("Nguon roi: the lat + roi PvE chi tra do thanh phan, du 6 loai qua 300 lan roi",
+            dropOk && dropped.size() == 6, "so loai roi duoc: " + dropped.size());
+
         System.out.println("=== TONG KET: " + pass + " PASS / " + fail + " FAIL ===");
         if (fail > 0) { System.out.println("Muc fail: " + failures); System.exit(1); }
     }
