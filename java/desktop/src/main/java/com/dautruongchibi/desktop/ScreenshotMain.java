@@ -5,6 +5,7 @@ import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.PixmapIO;
+import com.dautruongchibi.game.Engine;
 import com.dautruongchibi.game.Match;
 import com.dautruongchibi.game.Profile;
 import com.dautruongchibi.ui.Assets;
@@ -58,8 +59,19 @@ public class ScreenshotMain {
                 case "profile":
                     setScreen(new com.dautruongchibi.ui.ProfileScreen(this));
                     break;
-                case "draft": case "draftflip": {
+                case "draft": case "draftflip": case "draftlong": {
                     Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
+                    if ("draftlong".equals(mode)) {
+                        // Ep cac cap ten DAI NHAT (ten tuong + do thanh phan) de kiem chung tran chu tren the lat:
+                        // the 0 chua ca hai ky luc cung luc (Luna Cong Chua Trang + Luoi Kiem Mat Ong)
+                        String[][] pairs = {
+                            {"luna", "tpkiem"}, {"phoenix", "tpgiap"}, {"sumo", "tpcung"},
+                            {"baba", "tptim"}, {"astro", "tpgang"}, {"luna", "tpgiap"},
+                            {"gogo", "tpkiem"}, {"phoenix", "tpkiem"}
+                        };
+                        m.draftOptions = new java.util.ArrayList<>();
+                        for (String[] p : pairs) m.draftOptions.add(new Engine.CarouselOption(p[0], p[1]));
+                    }
                     matchScreen = new MatchScreen(this, m);
                     setScreen(matchScreen);
                     break;
@@ -315,7 +327,7 @@ public class ScreenshotMain {
                     fShop.setBoolean(matchScreen, true);
                     shopSet = true;
                 }
-                if ("draftflip".equals(mode) && !dragSet && frames > 30 && matchScreen != null) {
+                if (("draftflip".equals(mode) || "draftlong".equals(mode)) && !dragSet && frames > 30 && matchScreen != null) {
                     // Chon the 0 va tua thoi gian lat toi luc ca 8 the da mo (nhung chua ap dung chon)
                     Field fCh = MatchScreen.class.getDeclaredField("draftChosen"); fCh.setAccessible(true); fCh.setInt(matchScreen, 0);
                     Field fEl = MatchScreen.class.getDeclaredField("draftElapsed"); fEl.setAccessible(true); fEl.setFloat(matchScreen, 1.45f);
@@ -336,7 +348,7 @@ public class ScreenshotMain {
                     }
                 }
                 boolean due;
-                if ("draftflip".equals(mode) && dragSet) {
+                if (("draftflip".equals(mode) || "draftlong".equals(mode)) && dragSet) {
                     // Chup khi cac the da lat xong (draftElapsed ~1.6s) nhung truoc luc ap dung (2.83s)
                     Field fEl2 = MatchScreen.class.getDeclaredField("draftElapsed");
                     fEl2.setAccessible(true);

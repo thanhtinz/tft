@@ -859,6 +859,27 @@ public class MatchScreen extends ScreenAdapter {
         f.setColor(Color.WHITE);
     }
 
+    // Do be ngang chu tai scale hien tai cua font (khong tu doi scale)
+    private float measureW(BitmapFont f, String text) {
+        layout.setText(f, text);
+        return layout.width;
+    }
+
+    // Tach chuoi thanh 2 dong theo ranh gioi tu sao cho dong dai hon la ngan nhat co the.
+    // Tra ve [dong1, dong2]; dong2 rong neu chuoi chi co 1 tu.
+    private String[] splitTwoLines(BitmapFont f, String text) {
+        String[] words = text.split(" ");
+        String best1 = text, best2 = "";
+        float bestMax = Float.MAX_VALUE;
+        for (int k = 1; k < words.length; k++) {
+            String p1 = String.join(" ", java.util.Arrays.copyOfRange(words, 0, k));
+            String p2 = String.join(" ", java.util.Arrays.copyOfRange(words, k, words.length));
+            float m = Math.max(measureW(f, p1), measureW(f, p2));
+            if (m < bestMax) { bestMax = m; best1 = p1; best2 = p2; }
+        }
+        return new String[]{best1, best2};
+    }
+
     private void drawBorder(float x, float y, float w, float h, Color c, float th) {
         batch.setColor(c);
         batch.draw(game.assets.whiteTex(), x, y, w, th);
@@ -1693,17 +1714,62 @@ public class MatchScreen extends ScreenAdapter {
                 a.patchCardFront.draw(batch, cx - w / 2, r.y, w, r.height);
                 if (sx > 0.55f) {
                     ChampDef d = GameData.champById(opt.defId);
-                    batch.draw(a.unit(d.id), cx - 30, r.y + 74, 60, 66);
-                    drawCentered(a.fontSmall, d.name, cx, r.y + 62, new Color(0.12f, 0.1f, 0.2f, 1));
-                    drawCentered(a.fontSmall, d.cost + " vàng", cx, r.y + 44, new Color(0.45f, 0.35f, 0.05f, 1));
-                    // Do kem theo the: icon that + ten (do thanh phan tu khi doi nguon roi)
-                    String itxt = "+ " + GameData.itemById(opt.item).name;
-                    layout.setText(a.fontSmall, itxt);
-                    float lineW = layout.width + 26;
-                    batch.draw(a.itemIcon(opt.item), cx - lineW / 2, r.y + 10, 22, 22);
-                    a.fontSmall.setColor(new Color(0.2f, 0.4f, 0.75f, 1));
-                    a.fontSmall.draw(batch, itxt, cx - lineW / 2 + 26, r.y + 26);
-                    a.fontSmall.setColor(Color.WHITE);
+                    Color nameCol = new Color(0.12f, 0.1f, 0.2f, 1);
+                    // BO CUC MAT THE theo ngan sach doc do tu texture cardfront that
+                    // (120x160, ve 128x184 qua NinePatch vien 20): phan KEM tren man hinh
+                    // la x [+15..+111] (97px), y [+16..+169] tinh tu r.y. Quy dinh cung:
+                    // moi glyph nam trong vung an toan rong <= 85px, y [+22..+163] —
+                    // dem >= 6px toi khung trong o MOI phia ke ca the xau nhat.
+                    // LUU Y DO THAT tren anh chup: voi font game nay, toa do y truyen vao
+                    // draw() ung xu nhu DINH glyph (khong phai baseline chuan) — glyph
+                    // keo xuong duoi diem ve ~13px (fontSmall) / ~11px (fontTiny, ke ca
+                    // dau xuong dong + bong chu). Ngan sach theo toa do VE (dinh glyph):
+                    //   do dong cuoi (fontTiny 11): ve +34 (day glyph ~+23)
+                    //   do dong 1 (neu 2 dong):     ve +46 (pitch 12)
+                    //   gia (fontSmall):            ve +64
+                    //   ten dong cuoi (fontSmall):  ve +82
+                    //   ten dong 1 (neu 2 dong):    ve +94 (day khoi ten ~+81)
+                    // Sprite CO LINH HOAT nhuong cho chu: ten 2 dong -> day sprite +100,
+                    // co con 54x59; ten 1 dong -> day +90, giu nguyen 60x66.
+                    // (Khong dung BitmapFont.setScale de "co chu": da kiem chung setScale
+                    // khong doi duoc co chu cua font game nay — can nho that thi dung
+                    // font DUC SAN rieng nhu fontTiny 11px cho dong do.)
+                    boolean nameWrap = measureW(a.fontSmall, d.name) > 85;
+                    if (nameWrap) batch.draw(a.unit(d.id), cx - 27, r.y + 100, 54, 59);
+                    else batch.draw(a.unit(d.id), cx - 30, r.y + 90, 60, 66);
+                    if (!nameWrap) {
+                        drawCentered(a.fontSmall, d.name, cx, r.y + 82, nameCol);
+                    } else {
+                        String[] nl = splitTwoLines(a.fontSmall, d.name);
+                        drawCentered(a.fontSmall, nl[0], cx, r.y + 94, nameCol);
+                        if (!nl[1].isEmpty()) drawCentered(a.fontSmall, nl[1], cx, r.y + 82, nameCol);
+                    }
+                    drawCentered(a.fontSmall, d.cost + " vàng", cx, r.y + 64, new Color(0.45f, 0.35f, 0.05f, 1));
+                    // Do kem theo the: icon 16 + ten bang fontTiny DUC SAN 11px (nho hon
+                    // ten tuong 1 bac, van doc ro). Tong khoi (icon 16 + cach 4 + chu)
+                    // phai <= 85px de dem ngang >= 6px; dai hon thi tach 2 dong theo tu
+                    // (dong 1 mang tien to "+ "), toa do ve +46/+34 nhu ngan sach o tren.
+                    String itemName = GameData.itemById(opt.item).name;
+                    String itxt = "+ " + itemName;
+                    Color itemCol = new Color(0.2f, 0.4f, 0.75f, 1);
+                    if (20 + measureW(a.fontTiny, itxt) <= 85) {
+                        float blockW = 20 + measureW(a.fontTiny, itxt);
+                        float left = cx - blockW / 2;
+                        batch.draw(a.itemIcon(opt.item), left, r.y + 20, 16, 16);
+                        a.fontTiny.setColor(itemCol);
+                        a.fontTiny.draw(batch, itxt, left + 20, r.y + 34);
+                        a.fontTiny.setColor(Color.WHITE);
+                    } else {
+                        String[] il = splitTwoLines(a.fontTiny, itemName);
+                        String l1 = "+ " + il[0], l2 = il[1];
+                        float blockW = 20 + Math.max(measureW(a.fontTiny, l1), measureW(a.fontTiny, l2));
+                        float left = cx - blockW / 2;
+                        batch.draw(a.itemIcon(opt.item), left, r.y + 26, 16, 16);
+                        a.fontTiny.setColor(itemCol);
+                        a.fontTiny.draw(batch, l1, left + 20, r.y + 46);
+                        if (!l2.isEmpty()) a.fontTiny.draw(batch, l2, left + 20, r.y + 34);
+                        a.fontTiny.setColor(Color.WHITE);
+                    }
                 }
             }
             if (i == draftChosen && prog >= 1) drawBorder(r.x - 4, r.y - 4, r.width + 8, r.height + 8, Ui.GOLD, 4);

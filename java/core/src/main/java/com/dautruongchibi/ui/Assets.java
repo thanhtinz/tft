@@ -29,7 +29,7 @@ public class Assets {
         + "•…—–·×"
         + "ĩũĨŨ"; // thieu 4 glyph nay: "Hiep Si" (i~) bi tofu o chip toc/he + the tuong, "Dua" (u~) tung phai doi ten mon do
 
-    public BitmapFont font, fontBig, fontSmall, fontTitle;
+    public BitmapFont font, fontBig, fontSmall, fontTitle, fontTiny;
     private final Map<String, Texture> unitTex = new HashMap<>();
     private final Map<String, Texture> unitGroundTex = new HashMap<>(); // ban "tiep dat": gradient toi nhe o dai chan
     private final Set<String> unitStarMiss = new HashSet<>(); // id dang tien hoa da biet la khong co file
@@ -59,6 +59,10 @@ public class Assets {
         fontBig = makeFont(genBaloo, 23, 1.3f, new Color(0.13f, 0.08f, 0.22f, 1));
         font = makeFont(genNunito, 17, 0, null);
         fontSmall = makeFont(genNunitoB, 14, 0, null);
+        // Font nho DUC SAN 11px cho cac dong phu chat hep (dong do tren the lat):
+        // BitmapFont.setScale() khong doi duoc co chu cua font game nay (da kiem chung),
+        // nen muon chu nho that phai sinh mot font rieng nhu the nay.
+        fontTiny = makeFont(genNunitoB, 11, 0, null);
         genBaloo.dispose(); genNunito.dispose(); genNunitoB.dispose();
 
         Pixmap pm = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
@@ -393,6 +397,7 @@ public class Assets {
         if (font != null) font.dispose();
         if (fontBig != null) fontBig.dispose();
         if (fontSmall != null) fontSmall.dispose();
+        if (fontTiny != null) fontTiny.dispose();
         if (fontTitle != null) fontTitle.dispose();
         for (Texture t : unitTex.values()) t.dispose();
         for (Texture t : unitGroundTex.values()) t.dispose();
