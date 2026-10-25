@@ -108,7 +108,7 @@ java/
   trên bàn (đợt cân bằng bench 2026-10-25, mảng đất vẽ lại rộng và bẹt 96×48 bao quanh vùng chân cy−50).** Thông tin
   dồn ra viền: tộc/hệ = chip nhỏ bán trong suốt dọc mép trái, trang bị = khay icon vẽ tay dưới chip (chạm = bảng thông tin, kéo = ghép/đeo), danh sách người chơi = hàng
   gọn mép phải (avatar + tên + số máu + thanh máu mỏng, hàng của mình phủ vàng rất nhẹ), thanh trên = plaque nổi mỏng ở
-  giữa-trên, nhật ký thu thành nút icon cuốn sách nhỏ. **Điều khiển học TFT Mobile (đợt 2026-10-25):** hai NÚT TRÒN ở
+  giữa-trên. **Điều khiển học TFT Mobile (đợt 2026-10-25):** hai NÚT TRÒN ở
   hai góc dưới — tròn XANH DƯƠNG dưới-trái vừa là cấp (huy hiệu "Lv.") vừa là nút MUA XP (tiến trình "XP a/b" + vòng
   cung tiến trình quanh nút, giá 4 + icon xu; chạm = mua XP), tròn VÀNG dưới-phải hiện số vàng (+ huy hiệu lửa khi có
   chuỗi thắng) và là nút MỞ/ĐÓNG SHOP. Shop là lớp mở/đóng nằm DƯỚI hàng chờ, sát mép dưới màn hình (thứ tự dọc:
@@ -503,3 +503,22 @@ và `benchshop` (cùng trạng thái + shop mở).
   kỳ vọng 639..662 × 181..192); vòng 2 phóng to 2× từng con (toto thấp tròn, queen váy dài, phoenix bay) —
   chân/váy đều chạm đúng tâm mảng đất, không con nào lơ lửng/chìm/lệch tâm. Chưa kiểm chứng: cảm giác kéo–thả
   bằng tay thật và runtime web TeaVM (build PASS như mọi đợt).
+
+## Đợt gỡ nhật ký trận (2026-10-25)
+
+User chỉ ra TFT thật không có panel nhật ký chữ (thông tin trận bên TFT đi qua số sát thương bay +
+bảng sát thương) — **gỡ toàn bộ UI nhật ký cho giống TFT**: nút icon sách 42×42 ở góc trái
+(trên đĩa MUA XP), panel `logBox` "NHẬT KÝ" + nhãn log + trạng thái `showLog` và listener bật/tắt,
+khối nạp 8 dòng log cuối trong `refreshPlanning`, mode chụp `logopen` trong ScreenshotMain, và câu
+mô tả nút sách trong GuideScreen. Rà soát dữ liệu trước khi gỡ sâu: danh sách `Match.log` chỉ có
+**đúng 1 nơi đọc** là panel này (mọi `log.add(msg)` đều chạy song song với `return msg` cho
+toast/popup — thông tin không mất đường hiển thị nào khác) nên **gỡ luôn cả phần ghi log**:
+field `log` + 7 lệnh `log.add(...)` trong `Match.java`. Giữ nguyên tuyệt đối: bảng sát thương tự
+hiện ở pha kết quả, số sát thương bay/cụm pow, announcer, toast, danh sách người chơi.
+
+- **Kiểm chứng đợt này:** compile desktop PASS, `verifyHeadless` **22/22 PASS**, `:web:buildWeb` PASS.
+  Grep sau gỡ: không còn `logBox`/`logBtn`/`showLog`/`logLabel`/`logopen`/`Match.log` ở đâu trong
+  code (icon "book" trong Assets/MenuScreen vẫn dùng cho nút Học Chơi — không thuộc panel nhật ký).
+  Ảnh `tools/shot17-planning.png`, `tools/shot17-battle4.png`, `tools/shot17-resultpanel.png` đã tự
+  soi: không còn nút sách ở góc trái, không khoảng trống bất thường (đĩa MUA XP và khay trang bị giữ
+  nguyên vị trí), bảng sát thương vẫn tự hiện ở pha kết quả.

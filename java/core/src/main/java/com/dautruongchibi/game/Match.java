@@ -38,7 +38,6 @@ public final class Match {
     public boolean over = false;
     public int humanPlacement = 0;
     public String endMessage = "";
-    public final List<String> log = new ArrayList<>();
 
     // Trang thai pha chuan bi cua nguoi choi
     public List<String> shop = new ArrayList<>();
@@ -130,7 +129,6 @@ public final class Match {
         addChampion(h, opt.defId);
         h.inventory.add(opt.item);
         String msg = "Lật thẻ: nhận " + GameData.champById(opt.defId).name + " kèm " + GameData.itemById(opt.item).name + "!";
-        log.add(msg);
         return msg;
     }
 
@@ -146,7 +144,6 @@ public final class Match {
         else if ("xp".equals(a.kind)) addXp(h, a.value);
         else if ("healPlayer".equals(a.kind)) h.hp = Math.min(Engine.HP_MAX, h.hp + a.value);
         String msg = "Cường hóa: " + a.name + " — " + a.desc;
-        log.add(msg);
         return msg;
     }
 
@@ -258,7 +255,6 @@ public final class Match {
                         merged.items.addAll(items);
                         if (onBoard != null) { merged.x = onBoard.x; merged.y = onBoard.y; p.board.add(merged); }
                         else p.bench.add(merged);
-                        log.add(GameData.champById(e.getKey()).name + " đã lên " + (star + 1) + " sao!");
                         again = true;
                         break;
                     }
@@ -403,7 +399,6 @@ public final class Match {
                     u.items.set(i, merged);
                     String msg = GameData.itemById(worn).name + " + " + GameData.itemById(itemId).name
                         + " tự ghép trên người " + GameData.champById(u.defId).name + " thành " + GameData.itemById(merged).name + "!";
-                    log.add(msg);
                     return msg;
                 }
             }
@@ -425,7 +420,6 @@ public final class Match {
         h.inventory.add(result);
         String msg = "Ghép thành công: " + GameData.itemById(compA).name + " + " + GameData.itemById(compB).name
             + " = " + GameData.itemById(result).name + "!";
-        log.add(msg);
         return msg;
     }
 
@@ -557,7 +551,6 @@ public final class Match {
         String it = Engine.randomComponent(rng);
         human().inventory.add(it);
         out.droppedItem = it;
-        log.add("Rơi trang bị: " + GameData.itemById(it).name + "!");
     }
 
     private void applyHpDamage(PlayerState p, int dmgHp) {
@@ -578,7 +571,6 @@ public final class Match {
         int place = aliveBefore;
         for (PlayerState p : dead) {
             p.alive = false; p.hp = 0; p.placement = place--;
-            log.add(p.name + " bị loại ở hạng " + p.placement + ".");
         }
     }
 

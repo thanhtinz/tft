@@ -76,24 +76,6 @@ public class ScreenshotMain {
                     setScreen(matchScreen);
                     break;
                 }
-                case "logopen": {
-                    // Pha chuan bi + nhat ky DAI (8 dong cuoi deu dai, quan nhieu dong con)
-                    // de kiem chung panel NHAT KY ghim tu dinh: noi dung dai chi duoc tran
-                    // XUONG duoi, khong tran LEN de tieu de "NHAT KY" nhu loi can le cu.
-                    Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
-                    m.autoPlan();
-                    m.log.add("Vòng 3-1 bắt đầu: đối thủ Bé Na — đội hình Nana Thỏ, Vivi Tiên, Toto Rùa, Fifi Cáo");
-                    m.log.add("Gogo Hiệp Sĩ tung Chém Công Lý làm choáng Nữ Hoàng Kẹo (2 sao) trong 1,5 giây!");
-                    m.log.add("Rơi trang bị thành phần: Lưỡi Kiếm Mật Ong rơi vào khay trang bị của bạn");
-                    m.log.add("Lulu Phù Thủy đã lên 3 sao! Đội hình của bạn nhận thêm sức mạnh phép thuật");
-                    m.log.add("Ghép thành công: Lưỡi Kiếm Mật Ong + Mảnh Tim Kẹo = Vuốt Rồng (+20% hút máu)");
-                    m.log.add("Bé Bắp bị loại ở hạng 8. Ông Kẹo thắng vòng và gây 14 sát thương lên đối thủ");
-                    m.log.add("Nhận cường hoá vòng 3-2: chọn 1 trong 3 cường hoá để tăng sức mạnh đội hình");
-                    m.log.add("Titan Khổng Lồ chịu 342 sát thương chí mạng từ Zaza Sấm và bị hạ gục ở tuyến đầu");
-                    matchScreen = new MatchScreen(this, m);
-                    setScreen(matchScreen);
-                    break;
-                }
                 case "benchshow": case "benchshop": {
                     Match m = benchShowcase();
                     matchScreen = new MatchScreen(this, m);
@@ -188,13 +170,6 @@ public class ScreenshotMain {
                         else { fX.setFloat(matchScreen, 451f); fY.setFloat(matchScreen, 120f); }
                         dragSet = true;
                     }
-                }
-                if ("logopen".equals(mode) && !dragSet && frames > 50 && matchScreen != null) {
-                    // Mo panel NHAT KY bang reflection (nut icon sach khong bam duoc bang cong cu chup)
-                    Field fShow = MatchScreen.class.getDeclaredField("showLog"); fShow.setAccessible(true); fShow.setBoolean(matchScreen, true);
-                    Field fBox = MatchScreen.class.getDeclaredField("logBox"); fBox.setAccessible(true);
-                    ((com.badlogic.gdx.scenes.scene2d.ui.Table) fBox.get(matchScreen)).setVisible(true);
-                    dragSet = true;
                 }
                 if (("unitcard".equals(mode) || "unitcardbench".equals(mode)) && !dragSet && frames > 50 && matchScreen != null) {
                     // Mo THE TUONG bang reflection: chon gogo tren ban (deo 3 mon) hoac

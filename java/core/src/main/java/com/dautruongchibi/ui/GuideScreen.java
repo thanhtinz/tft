@@ -78,7 +78,7 @@ public class GuideScreen extends ScreenAdapter {
         "(tướng ở bench cũng bán bằng kéo vào thùng rác — không còn nút bán riêng).",
         "Thả ra ngoài vùng hợp lệ thì tướng trượt về chỗ cũ. Chạm chọn + chạm ô đích vẫn dùng được",
         "như cách dự phòng.",
-        "Nhật ký trận: nút icon cuốn sách nhỏ ở góc dưới-trái. Thoát: nút nhỏ góc trên-phải.",
+        "Thoát: nút nhỏ góc trên-phải.",
         "",
         "TRANG BỊ — GHÉP ĐỒ KIỂU TFT",
         "Đồ rơi vào kho là ĐỒ THÀNH PHẦN (6 loại: Lưỡi Kiếm Mật Ong, Gậy Phép Socola, Dây Cung",

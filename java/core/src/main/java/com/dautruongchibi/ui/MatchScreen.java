@@ -81,10 +81,8 @@ public class MatchScreen extends ScreenAdapter {
     static final float PLAN_TIME = 45f;
 
     // HUD labels
-    private Label roundLabel, goldVal, lvlVal, hpVal, msgLabel, timerLabel, logLabel, oppInfo;
-    private Table playersBox, logBox;
-    private Ui.GameButton logBtn;
-    private boolean showLog = false;
+    private Label roundLabel, goldVal, lvlVal, hpVal, msgLabel, timerLabel, oppInfo;
+    private Table playersBox;
     private boolean shopOpen = false; // lop shop dang mo hay dong (mac dinh dong nhu TFT Mobile)
     private float resultT = 0;        // dem giay o pha RESULT sau announcer: ~4s thi tu chuyen tiep
     // Chip toc/he ve tay o mep trai: {noi dung, "1" neu bac dang kich hoat}
@@ -281,33 +279,10 @@ public class MatchScreen extends ScreenAdapter {
         invTitle.setSize(120, 18);
         stage.addActor(invTitle);
 
-        // Nhat ky: panel noi nho bat/tat bang nut icon, mac dinh tat de giua san thoang — ShadowTable: tu do bong mem
-        logBox = Ui.shadowTable(a);
-        logBox.setPosition(8, 168);
-        logBox.setSize(336, 190);
-        logBox.background(Ui.bg(a, Ui.PANEL));
-        logBox.pad(8);
-        // LUU Y: giong playersBox — KHONG viet .top().align(left): align() GHI DE mat na
-        // can le lam MAT co top, noi dung bi CAN GIUA doc; nhat ky dai se tran ca hai
-        // phia va de len tieu de "NHAT KY". Phai gop co trong 1 lan align().
-        logBox.align(com.badlogic.gdx.utils.Align.top | com.badlogic.gdx.utils.Align.left);
-        logBox.add(Ui.labelBig(a, "NHẬT KÝ", Ui.GOLD)).align(com.badlogic.gdx.utils.Align.left).row();
-        logLabel = Ui.labelSmall(a, "", Ui.TEXT_DIM);
-        logLabel.setWrap(true);
-        logBox.add(logLabel).width(320).align(com.badlogic.gdx.utils.Align.left).row();
-        logBox.setVisible(false);
-        stage.addActor(logBox);
-
         // SO DO DIEU KHIEN MOI (TFT Mobile): khong con cum nut chu nhat o 2 goc duoi.
         // Nut tron mua XP (duoi-trai) + nut tron vang/mo shop (duoi-phai) + nut reroll tron trong
         // shop deu VE TAY bang batch (drawRoundButtons/drawShop) va xu ly cham trong BoardInput.
         // KHONG con nut "Cat ve bench": keo tuong tren ban tha vao o bench de cat (xem BoardInput keo-tha).
-        // Nhat ky thu thanh nut ICON nho kin dao o mep trai (khong chu), bam de bat/tat panel.
-        logBtn = Ui.iconButton(a, "book", "", Ui.BTN, a.fontSmall);
-        logBtn.setPosition(14, 120);
-        logBtn.setSize(42, 42);
-        logBtn.addListener(changed(() -> { showLog = !showLog; logBox.setVisible(showLog); }));
-        stage.addActor(logBtn);
         // Thoat: nut nho do o goc tren phai
         TextButton exitBtn = Ui.button(a, "Thoát", Ui.RED, a.fontSmall);
         exitBtn.setPosition(1186, 678);
@@ -424,11 +399,6 @@ public class MatchScreen extends ScreenAdapter {
               .append("\nSức mạnh địch: ").append(def.power).append("\nThưởng: ").append(def.reward).append(" điểm");
         }
         oppInfo.setText(ob.toString());
-        // Log (8 dong cuoi — panel bat/tat rieng, khong chiem cot co dinh)
-        List<String> lg = match.log;
-        StringBuilder lb = new StringBuilder();
-        for (int i = Math.max(0, lg.size() - 8); i < lg.size(); i++) lb.append(lg.get(i)).append("\n");
-        logLabel.setText(lb.toString());
         detectMerges();
     }
 
