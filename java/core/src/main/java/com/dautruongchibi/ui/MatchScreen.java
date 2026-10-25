@@ -141,6 +141,17 @@ public class MatchScreen extends ScreenAdapter {
     private float draftElapsed = 0;
     private boolean draftApplied = false;
 
+    // THE TUONG PHA TRAN (kieu TFT Mobile): dang giao tranh, cham vao bat ky tuong nao
+    // tren san (phe minh lan phe dich) -> the noi o mep phai phan anh trang thai SONG
+    // (mau/mana hien tai, chi so hieu dung gom do + buff toc/he, 3 o do); tran VAN chay
+    // phia sau, khong pause, KHONG co nut BAN. battleCardUid = uid cua FightUnit dang xem.
+    private String battleCardUid;
+    // Vi tri man hinh MOI FRAME cua tuong dang song (do drawBattleUnits cap nhat) — dung
+    // hit-test cham trong tran (sprite di chuyen lien tuc nen khong the tinh tu o ban co).
+    private final Map<String, float[]> battleUnitPos = new HashMap<>();
+    private Rectangle battleCardItemRect(int i) { return new Rectangle(CARD.x + 63 + i * 66, CARD.y + 16, 56, 56); }
+    private Rectangle battleCardCloseRect() { return new Rectangle(CARD.x + CARD.width - 48, CARD.y + 16, 36, 36); }
+
     // Battle playback
     private Match.FightOutcome outcome;
     private float playT = 0, speed = 1;
@@ -643,6 +654,159 @@ public class MatchScreen extends ScreenAdapter {
         batch.end();
     }
 
+    // Trang thai SONG cua mot FightUnit tai thoi diem phat playT: noi suy mau/mana/khien
+    // giua 2 khung hinh bao quanh (cung cong thuc drawBattleUnits dung de ve). Tra null
+    // neu tuong khong con trong khung hien tai hoac da bi ha o ca 2 khung.
+    private static final class LiveUnit { Engine.FightUnit unit; double hp, mana, shield; }
+    private LiveUnit liveUnit(String uid) {
+        if (uid == null || outcome == null || outcome.result == null) return null;
+        List<Engine.BattleFrame> frames = outcome.result.frames;
+        if (frames.isEmpty()) return null;
+        int idx = 0;
+        while (idx < frames.size() - 1 && frames.get(idx + 1).t <= playT) idx++;
+        Engine.BattleFrame f1 = frames.get(idx);
+        Engine.BattleFrame f2 = frames.get(Math.min(idx + 1, frames.size() - 1));
+        Engine.FightUnit u1 = null, u2 = null;
+        for (Engine.FightUnit u : f1.units) if (u.uid.equals(uid)) u1 = u;
+        for (Engine.FightUnit u : f2.units) if (u.uid.equals(uid)) u2 = u;
+        Engine.FightUnit base = u2 != null ? u2 : u1;
+        if (base == null) return null;
+        if (!((u1 != null && u1.alive) || (u2 != null && u2.alive))) return null;
+        double span = Math.max(0.0001, f2.t - f1.t);
+        double al = f2 == f1 ? 0 : Math.max(0, Math.min(1, (playT - f1.t) / span));
+        LiveUnit lu = new LiveUnit();
+        lu.unit = base;
+        lu.hp = u1 == null ? u2.hp : u2 == null ? u1.hp : u1.hp + (u2.hp - u1.hp) * al;
+        lu.mana = u1 == null ? u2.mana : u2 == null ? u1.mana : u1.mana + (u2.mana - u1.mana) * al;
+        lu.shield = u1 == null ? u2.shield : u2 == null ? u1.shield : u1.shield + (u2.shield - u1.shield) * al;
+        return lu;
+    }
+
+    // ChampDef cua mot FightUnit (quai -> dung Engine.defOf nhu mo phong, tuong -> GameData)
+    private GameData.ChampDef fightDef(Engine.FightUnit u) {
+        if (u.isMonster) {
+            Engine.PlacedUnit pu = new Engine.PlacedUnit(u.uid, u.defId, u.star, u.x, u.y);
+            pu.isMonster = true;
+            pu.monster = GameData.monsterById(u.defId);
+            return Engine.defOf(pu);
+        }
+        return GameData.champById(u.defId);
+    }
+
+    // THE TUONG PHA TRAN (kieu TFT Mobile): cung khung CARD mep phai nhu the chuan bi
+    // (khong che ban co/bench/khay do), nhung noi dung la trang thai SONG cua FightUnit:
+    // thanh mau/mana thoi gian thuc + so lieu noi suy, luoi chi so HIEU DUNG lay thang tu
+    // khung hinh (FightUnit.ad/ap/... = statsOf + do + buff toc/he da gap san trong sim),
+    // 3 o do (cham o van mo bang thong tin mon nhu pha chuan bi). KHONG nut BAN — thay
+    // vao do la nut DONG (dia do goc duoi-phai, canh hang o do). Ngan sach doc theo hop
+    // glyph do that (glyph treo xuong ~13px duoi diem ve): thanh mau top-144..top-129,
+    // thanh mana top-162..top-153, dong trang thai top-178, luoi chi so tu top-204
+    // (buoc 26), ky nang top-312/333/352 (ngan sach ~52px nhu the chuan bi), nhan
+    // TRANG BI o py+92, o do py+16..py+72 — moi vung cach nhau >= 6px.
+    private void drawBattleUnitCard() {
+        LiveUnit lu = liveUnit(battleCardUid);
+        if (lu == null) { battleCardUid = null; return; }
+        Engine.FightUnit u = lu.unit;
+        Assets a = game.assets;
+        GameData.ChampDef def = fightDef(u);
+        float px = CARD.x, py = CARD.y, pw = CARD.width, top = py + CARD.height;
+        batch.begin();
+        drawShadowRect(px, py, pw, CARD.height, 0.45f);
+        batch.setColor(0.03f, 0.02f, 0.08f, 0.88f);
+        batch.draw(a.whiteTex(), px, py, pw, CARD.height);
+        batch.setColor(Color.WHITE);
+        a.patchPanel.draw(batch, px, py, pw, CARD.height);
+        // Chan dung + ten + sao + chip toc/he (giong the chuan bi)
+        batch.draw(a.unitOnGround(u.artId, u.star), px + 16, top - 104, 88, 88);
+        layout.setText(a.fontBig, u.name, Color.WHITE, pw - 126, com.badlogic.gdx.utils.Align.left, true);
+        a.fontBig.setColor(Color.WHITE);
+        a.fontBig.draw(batch, layout, px + 116, top - 30);
+        a.fontBig.setColor(Color.WHITE);
+        float sw = 14;
+        batch.setColor(u.star >= 3 ? Ui.GOLD : new Color(0.88f, 0.92f, 0.97f, 1));
+        for (int i = 0; i < u.star; i++) batch.draw(a.icon("star"), px + 116 + i * (sw + 2), top - 62, sw, sw);
+        batch.setColor(Color.WHITE);
+        for (int i = 0; i < def.traits.length; i++) {
+            float cxp = px + 116 + i * 100;
+            batch.setColor(0.07f, 0.05f, 0.15f, 0.75f);
+            batch.draw(a.whiteTex(), cxp, top - 94, 94, 22);
+            batch.setColor(Color.WHITE);
+            drawCentered(a.fontSmall, GameData.traitName(def.traits[i]), cxp + 47, top - 79, Ui.TEXT_DIM);
+        }
+        batch.setColor(1, 1, 1, 0.22f);
+        batch.draw(a.whiteTex(), px + 16, top - 118, pw - 32, 1);
+        batch.setColor(Color.WHITE);
+        // Thanh mau SONG (so noi suy theo playT) + khien phu trang neu co
+        float bw = pw - 32;
+        batch.setColor(0, 0, 0, 0.7f);
+        batch.draw(a.whiteTex(), px + 16, top - 144, bw, 15);
+        batch.setColor(u.team == 0 ? new Color(0.2f, 0.85f, 0.45f, 1) : new Color(0.95f, 0.3f, 0.3f, 1));
+        batch.draw(a.whiteTex(), px + 16, top - 144, bw * (float) Math.max(0, Math.min(1, lu.hp / Math.max(1, u.maxHp))), 15);
+        if (lu.shield > 0.5) {
+            batch.setColor(0.95f, 0.95f, 1, 0.85f);
+            float sx = px + 16 + bw * (float) Math.max(0, Math.min(1, lu.hp / Math.max(1, u.maxHp)));
+            batch.draw(a.whiteTex(), sx, top - 144, bw * (float) Math.min(1, lu.shield / Math.max(1, u.maxHp)), 15);
+        }
+        batch.setColor(Color.WHITE);
+        String hpTxt = (int) Math.round(lu.hp) + " / " + (int) Math.round(u.maxHp) + (lu.shield > 0.5 ? "  +khiên " + (int) Math.round(lu.shield) : "");
+        drawCentered(a.fontTiny, hpTxt, px + pw / 2, top - 131, Color.WHITE);
+        // Thanh mana SONG
+        batch.setColor(0, 0, 0, 0.7f);
+        batch.draw(a.whiteTex(), px + 16, top - 162, bw, 9);
+        batch.setColor(0.25f, 0.5f, 1, 1);
+        batch.draw(a.whiteTex(), px + 16, top - 162, bw * (float) Math.max(0, Math.min(1, lu.mana / Math.max(1, u.maxMana))), 9);
+        batch.setColor(Color.WHITE);
+        // Dong trang thai: mana hien tai (trai) + phe (phai)
+        drawLeft(a.fontTiny, "Mana " + (int) Math.round(lu.mana) + "/" + (int) Math.round(u.maxMana) + (u.stun > 0 ? "  •  Đang choáng" : ""), px + 16, top - 176, Ui.TEXT_DIM);
+        String teamTxt = u.team == 0 ? "ĐỒNG MINH" : "ĐỊCH";
+        layout.setText(a.fontTiny, teamTxt);
+        a.fontTiny.setColor(u.team == 0 ? new Color(0.45f, 0.95f, 0.6f, 1) : new Color(1, 0.55f, 0.55f, 1));
+        a.fontTiny.draw(batch, teamTxt, px + pw - 16 - layout.width, top - 176);
+        a.fontTiny.setColor(Color.WHITE);
+        // Luoi chi so HIEU DUNG (da gom do deo + buff toc/he, lay tu khung hinh)
+        float ly = top - 204;
+        drawStat("Máu tối đa", String.valueOf((int) Math.round(u.maxHp)), px + 16, ly, 140);
+        drawStat("Sát thương", String.valueOf((int) Math.round(u.ad)), px + 166, ly, 134);
+        ly -= 26;
+        drawStat("SMKN", String.valueOf((int) Math.round(u.ap)), px + 16, ly, 140);
+        drawStat("Tốc đánh", String.format("%.2f", u.as), px + 166, ly, 134);
+        ly -= 26;
+        drawStat("Giáp", String.valueOf((int) Math.round(u.armor)), px + 16, ly, 140);
+        drawStat("Kháng phép", String.valueOf((int) Math.round(u.mr)), px + 166, ly, 134);
+        ly -= 26;
+        drawStat("Tầm đánh", String.valueOf(u.range), px + 16, ly, 140);
+        drawStat("Chí mạng", (int) Math.round(u.crit) + "%", px + 166, ly, 134);
+        // Ky nang
+        drawLeft(a.font, "KỸ NĂNG", px + 16, top - 312, Ui.GOLD);
+        drawLeft(a.font, def.skill.name, px + 16, top - 333, Color.WHITE);
+        layout.setText(a.fontSmall, def.skill.desc, Ui.TEXT_DIM, pw - 32, com.badlogic.gdx.utils.Align.left, true);
+        a.fontSmall.setColor(Ui.TEXT_DIM);
+        a.fontSmall.draw(batch, layout, px + 16, top - 352);
+        a.fontSmall.setColor(Color.WHITE);
+        // 3 o trang bi (vien vang = hoan chinh, bac = thanh phan) — cham o mo bang thong tin
+        drawLeft(a.font, "TRANG BỊ (" + u.items.size() + "/3)", px + 16, py + 92, Ui.GOLD);
+        for (int i = 0; i < 3; i++) {
+            Rectangle r = battleCardItemRect(i);
+            if (i < u.items.size()) {
+                drawShadowRect(r.x, r.y, r.width, r.height, 0.35f);
+                batch.draw(a.itemIcon(u.items.get(i)), r.x + 4, r.y + 4, r.width - 8, r.height - 8);
+                drawBorder(r.x, r.y, r.width, r.height, GameData.isComponent(u.items.get(i)) ? new Color(0.75f, 0.82f, 0.95f, 1) : Ui.GOLD, 2);
+            } else {
+                batch.setColor(0.05f, 0.04f, 0.12f, 0.35f);
+                batch.draw(a.whiteTex(), r.x, r.y, r.width, r.height);
+                batch.setColor(Color.WHITE);
+                drawBorder(r.x, r.y, r.width, r.height, new Color(1, 1, 1, 0.20f), 1);
+            }
+        }
+        // Nut DONG: dia do + chu X o goc duoi-phai (thay cho nut BAN cua the chuan bi)
+        Rectangle close = battleCardCloseRect();
+        batch.setColor(0.62f, 0.12f, 0.12f, 1);
+        batch.draw(discTex, close.x, close.y, close.width, close.height);
+        batch.setColor(Color.WHITE);
+        drawCentered(a.fontBig, "X", close.x + close.width / 2, close.y + 25, Color.WHITE);
+        batch.end();
+    }
+
     // Tuong co nhan duoc mon do nay khong — dung luat cua Match.equipItem: con o trong,
     // HOAC mon dang keo la thanh phan hop nhat duoc voi 1 thanh phan tuong dang deo
     // (hop nhat khong tang so o nen tuong du 3 o van nhan duoc).
@@ -720,6 +884,10 @@ public class MatchScreen extends ScreenAdapter {
         if (gridWanted && gridFade < 1f) gridFade = Math.min(1f, gridFade + delta / 0.15f);
         else if (!gridWanted && gridFade > 0f) gridFade = Math.max(0f, gridFade - delta / 0.15f);
         if (announceT > 0) announceT -= delta;
+        // The tran chi song trong pha BATTLE: roi pha la tu dong (ke ca bang thong tin do
+        // mo tu the tran — tranh de sot sang pha ket qua/chuan bi cua vong sau).
+        if (phase != Phase.BATTLE) { battleCardUid = null; if (phase == Phase.RESULT || phase == Phase.OVER) itemInfoId = null; }
+        else if (battleCardUid != null && liveUnit(battleCardUid) == null) battleCardUid = null; // tuong dang xem da bi ha
         if (popupT > 0) { popupT -= delta; if (popupT <= 0) popupItemId = null; }
         if (combineFlashT > 0) { combineFlashT -= delta; if (combineFlashT <= 0) combineFlashIndex = -1; }
         for (int i = mergeFx.size() - 1; i >= 0; i--) { MergeFx fx = mergeFx.get(i); fx.ttl += delta; if (fx.ttl > 0.9f) mergeFx.remove(i); }
@@ -808,10 +976,13 @@ public class MatchScreen extends ScreenAdapter {
         if (phase == Phase.PLANNING) drawRoundButtons(now);
         // Lop keo-tha ve sau HUD de sprite bam tro + vung thung rac nam tren cung (chi pha chuan bi)
         if (phase == Phase.PLANNING) drawDragOverlay(now);
-        // Bang thong tin do (modal nhe o pha chuan bi): ve tren lop keo-tha, duoi popup mo qua
-        if (phase == Phase.PLANNING && itemInfoId != null) drawItemInfoPanel();
+        // Bang thong tin do (modal nhe): mo tu khay/the o pha chuan bi, hoac tu o do cua
+        // THE TRAN trong luc dang dau — ca hai pha deu ve duoc.
+        if ((phase == Phase.PLANNING || phase == Phase.BATTLE) && itemInfoId != null) drawItemInfoPanel();
         // The tuong (cham-chon): ve cung lop modal; an trong luc dang keo tuong (dragUid/dragActive)
         if (phase == Phase.PLANNING && selUid != null && !dragActive && dragUid == null) drawUnitCard();
+        // The tuong PHA TRAN: tran van chay phia sau (khong pause) — ve sau HUD nhu the chuan bi
+        if (phase == Phase.BATTLE && battleCardUid != null) drawBattleUnitCard();
         // --- Overlay tren cung: announcer/ket qua, popup trang bi ---
         if (phase == Phase.DRAFT) drawDraftOverlay(now);
         else if (phase == Phase.AUGMENT) drawAugmentOverlay();
@@ -1527,6 +1698,7 @@ public class MatchScreen extends ScreenAdapter {
     }
 
     private void drawBattleUnits(float now) {
+        battleUnitPos.clear(); // vi tri cham chi co nghia trong frame dang ve
         if (outcome == null || outcome.result == null) return;
         List<Engine.BattleFrame> frames = outcome.result.frames;
         if (frames.isEmpty()) return;
@@ -1590,6 +1762,7 @@ public class MatchScreen extends ScreenAdapter {
             if (!dying) { drawUnitGrounding(p[0], p[1], 100, 0f); drawGroundRing(p[0], p[1], base.star, now, uid.hashCode()); }
             drawUnitSprite(base.artId, cx, cy, 100, base.star, base.team == 1, alpha, rotation, tint);
             lastScreenPos.put(uid, new float[]{cx, cy});
+            if (!dying) battleUnitPos.put(uid, new float[]{cx, cy}); // dich cham de mo the tran
             if (!dying) drawBars(cx, cy, hp / Math.max(1, base.maxHp), mana / Math.max(1, base.maxMana), shield / Math.max(1, base.maxHp), base.team, base.star, base.stun > 0);
             if (!dying) drawUnitItems(cx, cy, base.items); // trong tran ca 2 phe deu hien do dang deo
             if (!dying && base.stun > 0) battleFx.drawStunStars(batch, game.assets.icon("star"), cx, cy + 70, now); // sao xoay quanh dau khi choang/dong bang
@@ -1616,6 +1789,20 @@ public class MatchScreen extends ScreenAdapter {
         drawCentered(a.font, sub, 640, 306, Color.WHITE);
     }
 
+    // Cat ten cho bang sat thuong: hau to sao " (N sao)" LUON nguyen ven. Neu ten + hau
+    // to vuot be rong cot thi noi cot truoc (xem drawDamageColumn), van khong vua thi cat
+    // phan TEN kem "..." o ngay truoc hau to — khong bao gio cat giua hau to nhu ban cu
+    // (vd "Pipo Chim Se (2" mat dau dong ngoac). measure = ham do be ngang chu that.
+    public static String fitDamageName(String name, int star, float maxW, java.util.function.ToDoubleFunction<String> measure) {
+        String suffix = star > 1 ? " (" + star + " sao)" : "";
+        String full = name + suffix;
+        if (measure.applyAsDouble(full) <= maxW) return full;
+        String base = name;
+        while (base.length() > 0 && measure.applyAsDouble(base + "..." + suffix) > maxW)
+            base = base.substring(0, base.length() - 1);
+        return base + "..." + suffix;
+    }
+
     // Cot sat thuong theo tuong cua tran vua dau (ca 2 ben) — ve BEN TRONG the ket qua
     // (cung mot khoi voi cot ket qua, cach nhau mot vach chia mo; khong con panel roi o
     // goc phai nhu truoc). Goi trong luc batch dang begin cua drawResultOverlay.
@@ -1629,20 +1816,17 @@ public class MatchScreen extends ScreenAdapter {
             Engine.DamageRow r = rows.get(i);
             float ry = top - 66 - i * 26;
             batch.draw(a.unit(r.artId, r.star), px + 10, ry - 15, 20, 20);
-            String nm = r.name + (r.star > 1 ? " (" + r.star + " sao)" : "");
-            // Ten dai PHAI cat theo do rong do that — truoc day layout wrap=true lam ten
-            // xuong dong de len hang duoi (vd "Pipo Chim Se (2 sao)" -> "sao)" de "Drago...")
-            layout.setText(a.fontSmall, nm);
-            while (layout.width > 118 && nm.length() > 1) {
-                nm = nm.substring(0, nm.length() - 1);
-                layout.setText(a.fontSmall, nm);
-            }
+            // Cot ten NOI RONG: thanh sat thuong lui sang phai (px+178, rong 74 — van ket
+            // thuc o px+252 nhu cu, so sat thuong giu nguyen o px+258) -> ngan sach ten
+            // 134px. Ten van dai hon thi fitDamageName cat phan ten kem "..." nhung GIU
+            // NGUYEN hau to sao (ban cu cat mu tu cuoi chuoi lam mat "sao)").
+            String nm = fitDamageName(r.name, r.star, 134, s -> { layout.setText(a.fontSmall, s); return layout.width; });
             a.fontSmall.setColor(r.team == 0 ? new Color(0.45f, 0.95f, 0.6f, 1) : new Color(1, 0.55f, 0.55f, 1));
             a.fontSmall.draw(batch, nm, px + 36, ry + 4);
             batch.setColor(0, 0, 0, 0.55f);
-            batch.draw(a.whiteTex(), px + 160, ry - 10, 92, 10);
+            batch.draw(a.whiteTex(), px + 178, ry - 10, 74, 10);
             batch.setColor(r.team == 0 ? new Color(0.3f, 0.85f, 0.45f, 1) : new Color(0.95f, 0.35f, 0.35f, 1));
-            batch.draw(a.whiteTex(), px + 160, ry - 10, 92 * (float) (r.damage / max), 10);
+            batch.draw(a.whiteTex(), px + 178, ry - 10, 74 * (float) (r.damage / max), 10);
             batch.setColor(Color.WHITE);
             a.fontSmall.setColor(Color.WHITE);
             a.fontSmall.draw(batch, String.valueOf((int) r.damage), px + 258, ry + 4);
@@ -1938,6 +2122,7 @@ public class MatchScreen extends ScreenAdapter {
         if (outcome != null && outcome.result != null) for (Engine.BattleFrame f : outcome.result.frames) for (Engine.FightUnit u : f.units) unitIndex.put(u.uid, u);
         selUid = null; itemInfoId = null; dragItemIndex = -1; itemDragActive = false;
         dragUid = null; dragUnit = null; dragActive = false; returnT = -1; returnUid = null;
+        battleCardUid = null; battleUnitPos.clear();
         if (outcome == null || outcome.result == null) { phase = Phase.RESULT; return; }
         game.sound().sfx("start");
         phase = Phase.BATTLE;
@@ -2022,7 +2207,7 @@ public class MatchScreen extends ScreenAdapter {
                     if (overAgainBtn.contains(x, y)) { playAgain(); return true; }
                     return true;
                 }
-                case BATTLE: return false;
+                case BATTLE: return battlePress(x, y); // cham tuong -> mo/chuyen/dong THE TRAN
                 case PLANNING: return planningPress(x, y);
                 default: return false;
             }
@@ -2068,6 +2253,49 @@ public class MatchScreen extends ScreenAdapter {
             dragUid = null; dragUnit = null; dragActive = false;
             return true;
         }    }
+
+    // Tuong dang song GAN NHAT diem cham trong ban kinh 56px (tam sprite do drawBattleUnits
+    // ghi moi frame) — dung de mo/chuyen THE TRAN. Khong co tuong nao gan -> null.
+    private String battleUnitAt(float x, float y) {
+        String best = null;
+        float bestD = 56f;
+        for (Map.Entry<String, float[]> e : battleUnitPos.entrySet()) {
+            float d = (float) Math.hypot(x - e.getValue()[0], y - e.getValue()[1]);
+            if (d < bestD) { bestD = d; best = e.getKey(); }
+        }
+        return best;
+    }
+
+    // Cham trong pha GIAO TRANH (khong co keo-tha nen chi xu ly touchDown):
+    // 1) Bang thong tin do dang mo (tu o do cua the tran): nut X / cham ra ngoai = dong,
+    //    cham trong bang = nuot cham.
+    // 2) The tran dang mo: nut DONG -> dong; o do -> mo bang thong tin mon; phan con lai
+    //    cua the -> nuot cham; cham sang tuong KHAC -> the chuyen sang tuong do; cham
+    //    vung trong -> dong the.
+    // 3) Chua co the: cham trung tuong (bat ky phe nao) -> mo the cua tuong do.
+    private boolean battlePress(float x, float y) {
+        if (itemInfoId != null) {
+            if (INFO_CLOSE.contains(x, y) || !INFO_PANEL.contains(x, y)) { itemInfoId = null; game.sound().sfx("click"); }
+            return true;
+        }
+        if (battleCardUid != null) {
+            if (battleCardCloseRect().contains(x, y)) { battleCardUid = null; game.sound().sfx("click"); return true; }
+            LiveUnit lu = liveUnit(battleCardUid);
+            if (lu != null && CARD.contains(x, y)) {
+                for (int i = 0; i < lu.unit.items.size() && i < 3; i++) {
+                    if (battleCardItemRect(i).contains(x, y)) { itemInfoId = lu.unit.items.get(i); game.sound().sfx("click"); return true; }
+                }
+                return true; // cham trong the: nuot, khong roi xuong san
+            }
+            String hit = battleUnitAt(x, y);
+            if (hit != null && !hit.equals(battleCardUid)) { battleCardUid = hit; game.sound().sfx("click"); return true; }
+            if (hit == null) { battleCardUid = null; return true; }
+            return true; // cham lai dung tuong dang xem: giu nguyen the
+        }
+        String hit = battleUnitAt(x, y);
+        if (hit != null) { battleCardUid = hit; game.sound().sfx("click"); return true; }
+        return false;
+    }
 
     // Nhan xuong o pha chuan bi theo SO DO DIEU KHIEN MOI, thu tu uu tien:
     // 1) Lop shop (chi khi dang mo): the tuong -> mua ngay (shop van mo sau khi mua);

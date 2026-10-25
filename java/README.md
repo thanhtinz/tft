@@ -203,6 +203,16 @@ kiểm chứng headless mục 19–21):
   chip tộc/hệ, lưới chỉ số (`Engine.statsOf`: sao × chỉ số gốc + đồ đang đeo), tên + mô tả kỹ năng, **3 ô
   trang bị** (chạm 1 ô có đồ mở bảng thông tin của món đó) và **nút BÁN kèm giá** (`Engine.sellValue`).
   Thẻ đóng khi bỏ chọn/chạm ra ngoài/bắt đầu kéo; bán qua thẻ chạy cùng `Match.sell` như kéo vào thùng rác.
+- **Thẻ tướng PHA TRẬN (kiểu TFT Mobile):** đang giao tranh, chạm vào bất kỳ tướng nào trên sân (phe mình
+  lẫn phe địch — do thám giữa trận) mở cùng khung thẻ ở mép phải, trận **vẫn chạy phía sau** không pause.
+  Nội dung phản ánh trạng thái **sống**: thanh máu/mana thời gian thực (nội suy theo khung hình), lưới chỉ
+  số **hiệu dụng** (`FightUnit` mang `ad/ap/armor/mr/as/crit` = `statsOf` + đồ + buff tộc/hệ đã gấp sẵn
+  trong mô phỏng), kỹ năng, 3 ô đồ (chạm ô vẫn mở bảng thông tin món). **Không có nút BÁN** — đóng bằng
+  nút X góc dưới-phải, chạm ra ngoài, hoặc chạm sang tướng khác để chuyển thẻ; tướng đang xem bị hạ thì
+  thẻ tự đóng. Kiểm chứng headless mục 23 (helper cắt tên) + ảnh `tools/shot22-battlecard*.png`.
+- **Tên tướng trong bảng sát thương:** cột tên được nới rộng (thanh sát thương lùi sang phải) và tên dài
+  được cắt bằng `MatchScreen.fitDamageName`: phần tên bị rút gọn kèm "..." nhưng **hậu tố sao "(N sao)"
+  luôn nguyên vẹn** (bản cũ cắt mù từ cuối chuỗi thành "Pipo Chim Sẻ (2").
 - **Đồ đã đeo là CỐ ĐỊNH:** không có đường tháo/dời đồ khỏi tướng. Đường duy nhất lấy đồ lại là **bán
   tướng** — `Match.sell` trả **toàn bộ** đồ trên người tướng về khay (kể cả đồ đã tự hợp nhất trên người:
   trả nguyên đồ hoàn chỉnh, không tách lại thành phần) và thông báo bán liệt kê các món được trả

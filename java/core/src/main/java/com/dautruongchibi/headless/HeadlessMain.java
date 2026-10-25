@@ -10,6 +10,7 @@ import com.dautruongchibi.game.Rank;
 import com.dautruongchibi.game.Rng;
 import com.dautruongchibi.game.Stages;
 import com.dautruongchibi.ui.Assets;
+import com.dautruongchibi.ui.MatchScreen;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -386,6 +387,21 @@ public class HeadlessMain {
         check("Ban tuong tra do ve khay: do hop nhat tren nguoi tra nguyen do hoan chinh, ban tu bench lan tren ban",
             sWorn && sellBenchOk && sellBoardOk,
             "deoTruoc=" + sWorn + " banBench=" + sellBenchOk + " banBan=" + sellBoardOk + " | msg: " + sellMsg);
+
+        // 23) Cat ten bang sat thuong: hau to sao LUON nguyen ven — do gia lap moi ky tu
+        // 10px: vua cot thi giu nguyen, qua cot thi cat phan ten kem "..." truoc hau to,
+        // khong bao gio cat giua hau to (loi cu "Pipo Chim Se (2").
+        java.util.function.ToDoubleFunction<String> fakeW = s -> s.length() * 10.0;
+        String fitShort = MatchScreen.fitDamageName("Pipo", 1, 134, fakeW);
+        String fitFull = MatchScreen.fitDamageName("Pipo Chim Se", 2, 250, fakeW);
+        String fitCut = MatchScreen.fitDamageName("Pipo Chim Se", 2, 150, fakeW);
+        String fitCut3 = MatchScreen.fitDamageName("Gogo Hiep Si", 3, 134, fakeW);
+        boolean fitOk = fitShort.equals("Pipo")
+            && fitFull.equals("Pipo Chim Se (2 sao)")
+            && fitCut.equals("Pipo... (2 sao)") && fakeW.applyAsDouble(fitCut) <= 150
+            && fitCut3.endsWith(" (3 sao)") && fitCut3.contains("...") && fakeW.applyAsDouble(fitCut3) <= 134;
+        check("Cat ten bang sat thuong: giu nguyen hau to sao, ten dai cat kem '...' truoc hau to",
+            fitOk, "ngan='" + fitShort + "' vua='" + fitFull + "' cat='" + fitCut + "' cat3='" + fitCut3 + "'");
 
         System.out.println("=== TONG KET: " + pass + " PASS / " + fail + " FAIL ===");
         if (fail > 0) { System.out.println("Muc fail: " + failures); System.exit(1); }

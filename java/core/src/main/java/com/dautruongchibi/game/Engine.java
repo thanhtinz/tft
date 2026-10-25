@@ -150,6 +150,10 @@ public final class Engine {
         public int team, star, x, y, range;
         public double hp, maxHp, mana, maxMana, shield, stun;
         public boolean alive, isMonster;
+        // Chi so HIEU DUNG trong tran (statsOf + buff toc/he da gap vao khi tao SimUnit;
+        // ban sao khung hinh mang theo de lop render hien THE TUONG PHA TRAN phan anh dung
+        // suc manh dang dau — as co the lech tam thoi khi dang buff toc danh).
+        public double ad, ap, armor, mr, as, crit;
         // Id cac trang bi dang deo (chi de HIEN icon duoi thanh mau trong tran kieu TFT;
         // chi so that da duoc statsOf gap vao tu PlacedUnit.items khi tao SimUnit)
         public List<String> items = new ArrayList<>();
@@ -159,6 +163,7 @@ public final class Engine {
             f.team = team; f.star = star; f.x = x; f.y = y; f.range = range;
             f.hp = hp; f.maxHp = maxHp; f.mana = mana; f.maxMana = maxMana; f.shield = shield; f.stun = stun;
             f.alive = alive; f.isMonster = isMonster;
+            f.ad = ad; f.ap = ap; f.armor = armor; f.mr = mr; f.as = as; f.crit = crit;
             f.items.addAll(items);
             return f;
         }
@@ -180,7 +185,10 @@ public final class Engine {
 
     // ---------- Don vi trong mo phong ----------
     static final class SimUnit extends FightUnit {
-        double ad, ap, armor, mr, as, crit, lifesteal, dodge, manaRegen, poison, buffAsUntil, baseAs;
+        // ad/ap/armor/mr/as/crit khai bao o FightUnit (public) de khung hinh tran mang theo
+        // cho lop render — KHONG khai bao lai o day (field hiding se lam ban sao khung hinh
+        // doc phai ban 0 cua lop cha).
+        double lifesteal, dodge, manaRegen, poison, buffAsUntil, baseAs;
         double atkCd;
         SkillKind skillKind; double skillPower; String skillName;
         SimUnit copySim() {

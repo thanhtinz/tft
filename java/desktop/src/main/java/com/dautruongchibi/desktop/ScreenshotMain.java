@@ -24,6 +24,8 @@ import java.lang.reflect.Method;
 // | drag (gia lap dang keo mot tuong tren ban ve phia o bench: sprite bam tro + 2 vung thung rac hien)
 // | stars (doi chieu 1/2/3 sao cua Gogo dung canh nhau tren ban — sprite tien hoa theo sao)
 // | starbattle (giao tranh PvE voi Gogo 3 sao dang tien hoa trong doi hinh)
+// | battlecard (tran dang chay + THE TUONG PHA TRAN mo tren Gogo 3 sao deo 3 mon)
+// | battlecardinfo (nhu battlecard + bang thong tin mon hoan chinh mo tu o do cua the)
 // | fxfire/fxice/fxlightning/fxheal/fxbeam (chup dung khung hinh mot tuong tung chieu theo
 //   HE chi dinh — doi BattleFx.lastCastFx trung he roi chup ngay frame do)
 public class ScreenshotMain {
@@ -129,6 +131,15 @@ public class ScreenshotMain {
                 case "battleitems": {
                     // Tran danh that: ca 2 phe deu co tuong mang do (dich cua makeAiTeam vong 13)
                     Match m = battleItemsMatch();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "battlecard": case "battlecardinfo": {
+                    // Tran dang chay + THE TUONG PHA TRAN mo san tren Gogo 3 sao deo 3 mon
+                    // (2 hoan chinh + 1 thanh phan) bang reflection (battleCardUid);
+                    // battlecardinfo mo them bang thong tin cua mon hoan chinh "vuot" tu o do cua the.
+                    Match m = battleCardMatch();
                     matchScreen = new MatchScreen(this, m);
                     setScreen(matchScreen);
                     break;
@@ -334,7 +345,7 @@ public class ScreenshotMain {
                     dragSet = true;
                 }
                 boolean fxMode = mode.startsWith("fx");
-                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || "battleitems".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode) || fxMode;
+                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || "battleitems".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode) || "battlecard".equals(mode) || "battlecardinfo".equals(mode) || fxMode;
                 if (battleMode && !battleStarted && frames > 30 && matchScreen != null) {
                     Method mb = MatchScreen.class.getDeclaredMethod("startBattle");
                     mb.setAccessible(true);
@@ -347,8 +358,35 @@ public class ScreenshotMain {
                         fs.setFloat(matchScreen, 3f);
                     }
                 }
+                if (("battlecard".equals(mode) || "battlecardinfo".equals(mode)) && battleStarted && !dragSet && matchScreen != null) {
+                    // Mo THE TRAN tren Gogo 3 sao (uid FightUnit trung uid PlacedUnit) sau khi
+                    // tran da chay; battlecardinfo mo them bang thong tin mon "vuot" tu o do.
+                    Field fMatch = MatchScreen.class.getDeclaredField("match");
+                    fMatch.setAccessible(true);
+                    Match mm = (Match) fMatch.get(matchScreen);
+                    for (com.dautruongchibi.game.Engine.PlacedUnit u : mm.human().board) {
+                        if (u.defId.equals("gogo") && u.star == 3) {
+                            Field fCard = MatchScreen.class.getDeclaredField("battleCardUid"); fCard.setAccessible(true);
+                            fCard.set(matchScreen, u.uid);
+                        }
+                    }
+                    if ("battlecardinfo".equals(mode)) {
+                        Field fInfo = MatchScreen.class.getDeclaredField("itemInfoId"); fInfo.setAccessible(true);
+                        fInfo.set(matchScreen, "vuot");
+                    }
+                    dragSet = true;
+                }
                 boolean due;
-                if (("draftflip".equals(mode) || "draftlong".equals(mode)) && dragSet) {
+                if (("battlecard".equals(mode) || "battlecardinfo".equals(mode)) && battleStarted) {
+                    // Chup GIUA tran khi the tran da mo va playT ~2.4s (tuong da tru mau,
+                    // the phan anh trang thai song); phong ngu o frame 1500.
+                    java.lang.reflect.Field fp = MatchScreen.class.getDeclaredField("phase");
+                    fp.setAccessible(true);
+                    java.lang.reflect.Field ft = MatchScreen.class.getDeclaredField("playT");
+                    ft.setAccessible(true);
+                    boolean inBattle = "BATTLE".equals(String.valueOf(fp.get(matchScreen)));
+                    due = (inBattle && dragSet && ft.getFloat(matchScreen) >= 2.4f) || frames >= 1500;
+                } else if (("draftflip".equals(mode) || "draftlong".equals(mode)) && dragSet) {
                     // Chup khi cac the da lat xong (draftElapsed ~1.6s) nhung truoc luc ap dung (2.83s)
                     Field fEl2 = MatchScreen.class.getDeclaredField("draftElapsed");
                     fEl2.setAccessible(true);
@@ -528,6 +566,34 @@ public class ScreenshotMain {
         for (com.dautruongchibi.game.Engine.PlacedUnit u : new java.util.ArrayList<>(h.board)) {
             if (u.defId.equals("gogo")) { h.inventory.add("vuot"); h.inventory.add("tim"); m.equipItem(u.uid, "vuot"); m.equipItem(u.uid, "tim"); }
             if (u.defId.equals("lulu")) { h.inventory.add("gay"); m.equipItem(u.uid, "gay"); }
+        }
+        m.round = 13;
+        return m;
+    }
+
+    // Doi hinh chup THE TRAN: Gogo 3 sao deo 3 mon (vuot + tim hoan chinh, tpkiem thanh
+    // phan) o hang truoc, Lulu 2 sao deo gay, Titan 1 sao; vong 13 de dich makeAiTeam
+    // cung co tuong mang do (do tham/cham dich van kiem chung duoc bang the).
+    static Match battleCardMatch() {
+        Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
+        Match.PlayerState h = m.human();
+        if (m.draftPending) m.pickDraft(0);
+        if (m.augmentPending) m.pickAugment(0);
+        h.level = 9;
+        for (int i = 0; i < 9; i++) m.addChampion(h, "gogo");
+        for (int i = 0; i < 3; i++) m.addChampion(h, "lulu");
+        m.addChampion(h, "titan");
+        placeByStar(m, h, "gogo", 3, 3, 0);
+        placeByStar(m, h, "lulu", 2, 2, 3);
+        placeByStar(m, h, "titan", 1, 4, 0);
+        for (com.dautruongchibi.game.Engine.PlacedUnit u : new java.util.ArrayList<>(h.board)) {
+            if (u.defId.equals("gogo")) {
+                h.inventory.add("vuot"); h.inventory.add("tim"); h.inventory.add("tpkiem");
+                m.equipItem(u.uid, "vuot"); m.equipItem(u.uid, "tim"); m.equipItem(u.uid, "tpkiem");
+            } else if (u.defId.equals("lulu")) {
+                h.inventory.add("gay");
+                m.equipItem(u.uid, "gay");
+            }
         }
         m.round = 13;
         return m;
