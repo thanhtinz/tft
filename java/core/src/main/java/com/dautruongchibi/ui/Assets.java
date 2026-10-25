@@ -33,7 +33,7 @@ public class Assets {
     public Texture bannerForest, bannerDesert, bannerIce;
     // Bo texture UI ve (9-patch + khung + icon) — xem tools/make_ui.py
     public NinePatch patchPanel, patchPanelLight, patchPlaque, patchCardFront;
-    public NinePatch[] patchBtn, patchBtnPrimary, patchBtnGreen, patchBtnRed;
+    public NinePatch[] patchBtn, patchBtnPrimary, patchBtnGreen, patchBtnRed, patchBtnGold;
     public Texture[] shopFrames = new Texture[5];
     public Texture benchSlotTex, avatarTex;
     private Texture whiteTex;
@@ -100,10 +100,11 @@ public class Assets {
         patchBtnPrimary = btnPatches("btn_primary");
         patchBtnGreen = btnPatches("btn_green");
         patchBtnRed = btnPatches("btn_red");
+        patchBtnGold = btnPatches("btn_gold");
         for (int i = 0; i < 5; i++) shopFrames[i] = uiTexture("shopcard" + (i + 1));
         benchSlotTex = uiTexture("benchslot");
         avatarTex = uiTexture("avatar");
-        for (String n : new String[]{"coin", "heart", "star", "sword", "shield", "trophy", "book", "flag", "waves"})
+        for (String n : new String[]{"coin", "heart", "star", "sword", "shield", "trophy", "book", "flag", "waves", "trash", "chart", "speed"})
             iconTex.put(n, uiTexture(n));
     }
 
@@ -119,6 +120,7 @@ public class Assets {
             case "primary": return patchBtnPrimary;
             case "green": return patchBtnGreen;
             case "red": return patchBtnRed;
+            case "gold": return patchBtnGold;
             default: return patchBtn;
         }
     }
@@ -141,7 +143,7 @@ public class Assets {
         if (t != null) return t;
         try {
             t = new Texture(Gdx.files.internal("scenes/" + name + ".png"));
-            t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+            t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
         } catch (Exception e) {
             Pixmap pm = new Pixmap(64, 64, Pixmap.Format.RGBA8888);
             pm.setColor(new Color(0.16f, 0.12f, 0.28f, 1)); pm.fill();
@@ -165,7 +167,8 @@ public class Assets {
                 t = new Texture(pm); pm.dispose();
             }
         }
-        t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        // Painted (khong con pixel): loc Linear de tranh net cao khong bi vo hat khi thu nho
+        t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
         unitTex.put(artId, t);
         return t;
     }

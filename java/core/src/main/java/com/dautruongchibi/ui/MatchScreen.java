@@ -49,17 +49,17 @@ public class MatchScreen extends ScreenAdapter {
     private ShapeRenderer shapes;
     private Phase phase = Phase.PLANNING;
 
-    // Geometry — ban co lon giua san, bench + shop la dai duoi TREN san
-    // O 66 -> 70px: ban rong 490 (395..885), cao 490 (158..648) — van cach plaque tren (y>=668),
-    // chip trai (x<=210) va cot phai (x>=1092) rat xa nen khong chong lan. Sprite ban 74 -> 80px.
-    static final float BX = 395, BY = 158, CELL = 70;
-    static final float BENCH_Y = 98, BENCH_X = 388, SLOT = 56;
+    // Geometry — ban co lon giua san, bench + shop la dai duoi TREN san.
+    // Ti le PAINTED (chot tu ban mau so sanh): o chu nhat 84x70 (ban 588x490, 357..945 x 152..642),
+    // sprite ban/tran 100px, xem truoc dich 88px, bench o 64 sprite 56px.
+    static final float BX = 357, BY = 152, CELLX = 84, CELLY = 70;
+    static final float BENCH_Y = 94, BENCH_X = 357, SLOT = 64;
     static final float SHOP_Y = 6, SHOP_X = 254, CARD_W = 148, CARD_H = 82;
 
     // HUD labels
     private Label roundLabel, goldVal, lvlVal, hpVal, msgLabel, timerLabel, logLabel, oppInfo;
     private Table invBox, playersBox, logBox;
-    private TextButton fightBtn, speedBtn, dmgBtn, logBtn;
+    private Ui.GameButton fightBtn, speedBtn, dmgBtn, logBtn;
     private boolean showLog = false;
     // Chip toc/he ve tay o mep trai: {noi dung, "1" neu bac dang kich hoat}
     private final List<String[]> synChips = new ArrayList<>();
@@ -68,6 +68,20 @@ public class MatchScreen extends ScreenAdapter {
     private String selUid;
     private boolean selFromBench;
     private String armedItem;
+    // Keo-tha tuong o pha chuan bi: cham = chon (nhu cu), keo qua nguong 14px = sprite bam tro.
+    private String dragUid;
+    private Engine.PlacedUnit dragUnit;
+    private boolean dragFromBench, dragActive;
+    private float pressX, pressY, dragX, dragY;
+    private static final float DRAG_THRESHOLD = 14f;
+    // Tuong vua tha hut: truot ve vi tri cu trong RETURN_DUR giay (ve thay sprite tai cho trong luc truot)
+    private String returnUid;
+    private boolean returnFromBench;
+    private float returnFromX, returnFromY, returnT = -1;
+    private static final float RETURN_DUR = 0.22f;
+    // Hai vung thung rac o 2 goc duoi: chi hien khi dang keo tuong TU BAN (tha vao = ban)
+    private static final Rectangle TRASH_L = new Rectangle(10, 8, 190, 108);
+    private static final Rectangle TRASH_R = new Rectangle(1080, 8, 190, 108);
     private float planTimeLeft = 90;
     private String toast = "";
     private float toastT = 0;
@@ -212,45 +226,40 @@ public class MatchScreen extends ScreenAdapter {
         stage.addActor(logBox);
 
         // Cum nut goc duoi phai: DAU! to, tren no la Toc do + Bang sat thuong
-        fightBtn = Ui.buttonBig(a, "ĐẤU!", Ui.ACCENT);
+        fightBtn = Ui.iconButtonBig(a, "sword", "ĐẤU!", Ui.ACCENT);
         fightBtn.setPosition(1052, 8);
         fightBtn.setSize(220, 84);
         fightBtn.addListener(changed(() -> startBattle()));
         stage.addActor(fightBtn);
-        speedBtn = Ui.button(a, "Tốc độ: x1");
+        speedBtn = Ui.iconButton(a, "speed", "Tốc độ: x1", Ui.BTN, a.font);
         speedBtn.setPosition(1052, 144);
         speedBtn.setSize(220, 36);
         speedBtn.addListener(changed(() -> { speed = speed == 1 ? 2 : 1; speedBtn.setText("Tốc độ: x" + (int) speed); }));
         stage.addActor(speedBtn);
-        dmgBtn = Ui.button(a, "Bảng sát thương: Tắt");
+        dmgBtn = Ui.iconButton(a, "chart", "Bảng sát thương: Tắt", Ui.BTN, a.font);
         dmgBtn.setPosition(1052, 100);
         dmgBtn.setSize(220, 36);
         dmgBtn.addListener(changed(() -> { showDmgChart = !showDmgChart; dmgBtn.setText(showDmgChart ? "Bảng sát thương: Bật" : "Bảng sát thương: Tắt"); }));
         stage.addActor(dmgBtn);
 
         // Cum nut goc duoi trai: Mua XP nut lon (kieu TFT mobile) + Lam moi + Ban tuong
-        TextButton xpBtn = Ui.button(a, "MUA XP\n4 vàng", Ui.BTN, a.font);
+        Ui.GameButton xpBtn = Ui.iconButton(a, "star", "MUA XP\n4 vàng", Ui.BTN_GOLD, a.font);
         xpBtn.setPosition(8, 6);
         xpBtn.setSize(88, 84);
         xpBtn.addListener(changed(() -> { if (phase == Phase.PLANNING) { int g0 = match.human().gold, lv0 = match.human().level; toast(match.buyXp()); if (match.human().level > lv0) game.sound().sfx("levelup"); else if (match.human().gold < g0) game.sound().sfx("coin"); } refreshPlanning(); }));
         stage.addActor(xpBtn);
-        TextButton rerollBtn = Ui.button(a, "Làm mới (2 vàng)", Ui.BTN, a.fontSmall);
+        Ui.GameButton rerollBtn = Ui.iconButton(a, "coin", "Làm mới (2 vàng)", Ui.BTN_GOLD, a.fontSmall);
         rerollBtn.setPosition(104, 48);
         rerollBtn.setSize(150, 40);
         rerollBtn.addListener(changed(() -> { if (phase == Phase.PLANNING) { int g0 = match.human().gold; toast(match.reroll()); if (match.human().gold < g0) game.sound().sfx("reroll"); } refreshPlanning(); }));
         stage.addActor(rerollBtn);
-        TextButton sellBtn = Ui.button(a, "Bán tướng chọn", Ui.BTN, a.fontSmall);
+        Ui.GameButton sellBtn = Ui.iconButton(a, "trash", "Bán tướng chọn", Ui.BTN, a.fontSmall);
         sellBtn.setPosition(104, 6);
         sellBtn.setSize(150, 40);
         sellBtn.addListener(changed(() -> { if (phase == Phase.PLANNING && selUid != null) { int g0 = match.human().gold; toast(match.sell(selUid)); if (match.human().gold > g0) game.sound().sfx("sell"); selUid = null; refreshPlanning(); } }));
         stage.addActor(sellBtn);
-        // Nut Cat ve bench nam sat mep trai cua hang bench; nut Nhat ky o goc trai cung hang
-        TextButton benchBtn = Ui.button(a, "Cất về bench", Ui.BTN, a.fontSmall);
-        benchBtn.setPosition(262, 106);
-        benchBtn.setSize(118, 38);
-        benchBtn.addListener(changed(() -> { if (phase == Phase.PLANNING && selUid != null && !selFromBench) { int b0 = match.human().board.size(); toast(match.moveToBench(selUid)); if (match.human().board.size() < b0) game.sound().sfx("place"); selUid = null; refreshPlanning(); } }));
-        stage.addActor(benchBtn);
-        logBtn = Ui.button(a, "Nhật ký: Tắt", Ui.BTN, a.fontSmall);
+        // KHONG con nut "Cat ve bench": keo tuong tren ban tha vao o bench de cat (xem BoardInput keo-tha).
+        logBtn = Ui.iconButton(a, "book", "Nhật ký: Tắt", Ui.BTN, a.fontSmall);
         logBtn.setPosition(8, 106);
         logBtn.setSize(110, 38);
         logBtn.addListener(changed(() -> { showLog = !showLog; logBox.setVisible(showLog); logBtn.setText(showLog ? "Nhật ký: Bật" : "Nhật ký: Tắt"); }));
@@ -452,7 +461,7 @@ public class MatchScreen extends ScreenAdapter {
     private final Map<String, float[]> lastScreenPos = new HashMap<>();
 
     private float[] cellCenter(double gx, double gy) {
-        return new float[]{BX + (float) gx * CELL + CELL / 2f, BY + (float) gy * CELL + CELL / 2f};
+        return new float[]{BX + (float) gx * CELLX + CELLX / 2f, BY + (float) gy * CELLY + CELLY / 2f};
     }
 
     // San doi theo chang (ArenaTheme): Chien Dich theo chuong, PvP/Song Quai theo stage, Boss -> hoang hon
@@ -479,8 +488,9 @@ public class MatchScreen extends ScreenAdapter {
         float now = com.badlogic.gdx.utils.TimeUtils.nanoTime() / 1e9f;
         // --- Cap nhat trang thai ---
         if (toastT > 0) { toastT -= delta; msgLabel.setText(toast); }
-        else if (phase == Phase.PLANNING) msgLabel.setText("Chạm tướng bench rồi chạm ô để đặt.");
+        else if (phase == Phase.PLANNING) msgLabel.setText("Kéo tướng để xếp đội hình: lên bàn để đặt, về bench để cất, xuống góc thùng rác để bán.");
         else if (phase == Phase.BATTLE) msgLabel.setText("Đang giao tranh với " + (outcome != null ? outcome.opponentName : "") + "...");
+        if (returnT >= 0) { returnT += delta; if (returnT >= RETURN_DUR) { returnT = -1; returnUid = null; } }
         if (announceT > 0) announceT -= delta;
         if (popupT > 0) { popupT -= delta; if (popupT <= 0) popupItemId = null; }
         for (int i = mergeFx.size() - 1; i >= 0; i--) { MergeFx fx = mergeFx.get(i); fx.ttl += delta; if (fx.ttl > 0.9f) mergeFx.remove(i); }
@@ -553,6 +563,8 @@ public class MatchScreen extends ScreenAdapter {
         // --- HUD Scene2D (plaque, nut noi, danh sach gon) ---
         stage.act(delta);
         stage.draw();
+        // Lop keo-tha ve sau HUD de sprite bam tro + vung thung rac nam tren cung (chi pha chuan bi)
+        if (phase == Phase.PLANNING) drawDragOverlay(now);
         // --- Overlay tren cung: bang sat thuong, announcer/ket qua, popup trang bi ---
         if (showDmgChart && outcome != null && outcome.result != null && (phase == Phase.BATTLE || phase == Phase.RESULT)) drawDamageChart();
         if (phase == Phase.DRAFT) drawDraftOverlay(now);
@@ -617,7 +629,7 @@ public class MatchScreen extends ScreenAdapter {
         for (int y = 0; y < 7; y++) for (int x = 0; x < 7; x++) {
             if (y < 4) shapes.setColor(0.35f, 0.55f, 1f, (x + y) % 2 == 0 ? aEven : aOdd);
             else shapes.setColor(1f, 0.4f, 0.4f, (x + y) % 2 == 0 ? aEven : aOdd);
-            shapes.rect(BX + x * CELL + 1, BY + y * CELL + 1, CELL - 2, CELL - 2);
+            shapes.rect(BX + x * CELLX + 1, BY + y * CELLY + 1, CELLX - 2, CELLY - 2);
         }
         shapes.end();
         // O dang chon (planning)
@@ -625,9 +637,9 @@ public class MatchScreen extends ScreenAdapter {
             for (Engine.PlacedUnit u : match.human().board) if (u.uid.equals(selUid)) {
                 shapes.begin(ShapeRenderer.ShapeType.Filled);
                 shapes.setColor(Ui.GOLD);
-                float x = BX + u.x * CELL, y = BY + u.y * CELL;
-                shapes.rect(x, y, CELL, 3); shapes.rect(x, y + CELL - 3, CELL, 3);
-                shapes.rect(x, y, 3, CELL); shapes.rect(x + CELL - 3, y, 3, CELL);
+                float x = BX + u.x * CELLX, y = BY + u.y * CELLY;
+                shapes.rect(x, y, CELLX, 3); shapes.rect(x, y + CELLY - 3, CELLX, 3);
+                shapes.rect(x, y, 3, CELLY); shapes.rect(x + CELLX - 3, y, 3, CELLY);
                 shapes.end();
             }
         }
@@ -678,7 +690,7 @@ public class MatchScreen extends ScreenAdapter {
 
     private void drawBars(float cx, float cy, double hpFrac, double manaFrac, double shieldFrac, int team, int star, boolean stunned) {
         Assets a = game.assets;
-        float w = 50, x = cx - w / 2, y = cy + 44;
+        float w = 50, x = cx - w / 2, y = cy + 57;
         batch.setColor(0, 0, 0, 0.7f); batch.draw(a.whiteTex(), x - 1, y - 1, w + 2, 9);
         batch.setColor(team == 0 ? new Color(0.2f, 0.85f, 0.45f, 1) : new Color(0.95f, 0.3f, 0.3f, 1));
         batch.draw(a.whiteTex(), x, y, w * (float) Math.max(0, hpFrac), 7);
@@ -710,18 +722,19 @@ public class MatchScreen extends ScreenAdapter {
         if (preview != null) for (Engine.PlacedUnit u : preview) {
             float[] p = cellCenter(u.x, 6 - u.y);
             String art = u.isMonster && u.monster != null ? u.monster.id : u.defId;
-            drawShadow(p[0], p[1] - 34, 56);
+            drawShadow(p[0], p[1] - 42, 70);
             drawGroundRing(p[0], p[1], u.star, now, u.uid.hashCode());
-            drawUnitSprite(art, p[0], p[1], 74, u.star, true, 0.85f, 0, null);
+            drawUnitSprite(art, p[0], p[1], 88, u.star, true, 0.85f, 0, null);
             drawBars(p[0], p[1], 1, 0, 0, 1, u.star, false);
         }
         int i = 0;
         for (Engine.PlacedUnit u : h.board) {
+            if (isUnitHidden(u.uid)) continue; // dang bi keo di / dang truot ve sau tha hut
             float[] p = cellCenter(u.x, u.y);
             float bob = (float) Math.sin(now * 3 + (i++) * 1.7) * 2;
-            drawShadow(p[0], p[1] - 36, 62);
+            drawShadow(p[0], p[1] - 45, 78);
             drawGroundRing(p[0], p[1], u.star, now, u.uid.hashCode());
-            drawUnitSprite(u.defId, p[0], p[1] + bob, 80, u.star, false, 1, 0, null);
+            drawUnitSprite(u.defId, p[0], p[1] + bob, 100, u.star, false, 1, 0, null);
             drawBars(p[0], p[1], 1, 0, 0, 0, u.star, false);
         }
     }
@@ -731,8 +744,8 @@ public class MatchScreen extends ScreenAdapter {
     private void drawGroundRing(float cx, float cy, int star, float now, int seed) {
         if (star < 2) return;
         Assets a = game.assets;
-        float w = star >= 3 ? 66 : 54, h = w * 0.42f;
-        float gy = cy - 32;
+        float w = star >= 3 ? 80 : 66, h = w * 0.42f;
+        float gy = cy - 41;
         if (star >= 3) {
             float pulse = 0.55f + 0.3f * (float) Math.sin(now * 5 + seed);
             batch.setColor(1f, 0.72f, 0.15f, pulse);
@@ -760,15 +773,17 @@ public class MatchScreen extends ScreenAdapter {
             batch.draw(a.benchSlotTex, x, y, SLOT - 4, 52);
             if (i < h.bench.size()) {
                 Engine.PlacedUnit u = h.bench.get(i);
-                boolean sel = u.uid.equals(selUid);
-                drawUnitSprite(u.defId, x + (SLOT - 4) / 2f, y + 27, 46, u.star, false, 1, 0, null);
-                if (u.star >= 2) {
-                    float sw = 10, total = u.star * (sw + 1) - 1;
-                    batch.setColor(Ui.GOLD);
-                    for (int k = 0; k < u.star; k++) batch.draw(a.icon("star"), x + (SLOT - 4) / 2f - total / 2 + k * (sw + 1), y + 50, sw, sw);
-                    batch.setColor(Color.WHITE);
+                if (!isUnitHidden(u.uid)) { // an sprite tai cho khi dang keo / dang truot ve
+                    boolean sel = u.uid.equals(selUid);
+                    drawUnitSprite(u.defId, x + (SLOT - 4) / 2f, y + 27, 56, u.star, false, 1, 0, null);
+                    if (u.star >= 2) {
+                        float sw = 10, total = u.star * (sw + 1) - 1;
+                        batch.setColor(Ui.GOLD);
+                        for (int k = 0; k < u.star; k++) batch.draw(a.icon("star"), x + (SLOT - 4) / 2f - total / 2 + k * (sw + 1), y + 50, sw, sw);
+                        batch.setColor(Color.WHITE);
+                    }
+                    if (sel) drawBorder(x, y, SLOT - 4, 52, Ui.GOLD, 3);
                 }
-                if (sel) drawBorder(x, y, SLOT - 4, 52, Ui.GOLD, 3);
             }
         }
         // (Phan hoi chon tuong di qua toast o dong thong bao — khong ve them dong chu de san thoang.)
@@ -996,8 +1011,8 @@ public class MatchScreen extends ScreenAdapter {
             Color tint = null;
             Float lh = lastHitAt.get(uid);
             if (lh != null && playT - lh < 0.15f) tint = new Color(1, 0.5f, 0.5f, 1);
-            if (!dying) { drawShadow(p[0], p[1] - 38, 64); drawGroundRing(p[0], p[1], base.star, now, uid.hashCode()); }
-            drawUnitSprite(base.artId, cx, cy, 80, base.star, base.team == 1, alpha, rotation, tint);
+            if (!dying) { drawShadow(p[0], p[1] - 47, 80); drawGroundRing(p[0], p[1], base.star, now, uid.hashCode()); }
+            drawUnitSprite(base.artId, cx, cy, 100, base.star, base.team == 1, alpha, rotation, tint);
             lastScreenPos.put(uid, new float[]{cx, cy});
             if (!dying) drawBars(cx, cy, hp / Math.max(1, base.maxHp), mana / Math.max(1, base.maxMana), shield / Math.max(1, base.maxHp), base.team, base.star, base.stun > 0);
         }
@@ -1216,6 +1231,7 @@ public class MatchScreen extends ScreenAdapter {
         unitIndex.clear();
         if (outcome != null && outcome.result != null) for (Engine.BattleFrame f : outcome.result.frames) for (Engine.FightUnit u : f.units) unitIndex.put(u.uid, u);
         selUid = null; armedItem = null;
+        dragUid = null; dragUnit = null; dragActive = false; returnT = -1; returnUid = null;
         if (outcome == null || outcome.result == null) { phase = Phase.RESULT; return; }
         game.sound().sfx("start");
         phase = Phase.BATTLE;
@@ -1301,10 +1317,184 @@ public class MatchScreen extends ScreenAdapter {
                     return true;
                 }
                 case BATTLE: return false;
-                case PLANNING: return planningClick(x, y);
+                case PLANNING: return planningPress(x, y);
                 default: return false;
             }
         }
+
+        @Override
+        public boolean touchDragged(int screenX, int screenY, int pointer) {
+            if (pointer != 0 || phase != Phase.PLANNING || dragUid == null) return false;
+            Vector3 v = stage.getViewport().unproject(new Vector3(screenX, screenY, 0));
+            dragX = v.x; dragY = v.y;
+            if (!dragActive && Math.hypot(dragX - pressX, dragY - pressY) > DRAG_THRESHOLD) dragActive = true;
+            return dragActive;
+        }
+
+        @Override
+        public boolean touchUp(int screenX, int screenY, int pointer, int button) {
+            if (pointer != 0 || phase != Phase.PLANNING || dragUid == null) return false;
+            Vector3 v = stage.getViewport().unproject(new Vector3(screenX, screenY, 0));
+            dragX = v.x; dragY = v.y;
+            if (dragActive) resolveDragDrop(); else applyTapSelection();
+            dragUid = null; dragUnit = null; dragActive = false;
+            return true;
+        }
+    }
+
+    // Nhan xuong o pha chuan bi: shop mua ngay nhu cu; dang cam do -> luong cham cu;
+    // cham vao tuong (bench/ban) -> ghi nhan UNG VIEN KEO (cham thuong se chon o touchUp,
+    // keo qua nguong thi BoardInput.touchDragged bat dau keo that).
+    private boolean planningPress(float x, float y) {
+        for (int i = 0; i < 5; i++) {
+            Rectangle r = new Rectangle(SHOP_X + i * (CARD_W + 8), SHOP_Y, CARD_W, CARD_H);
+            if (r.contains(x, y)) { toast(match.buy(i)); if (match.shop.get(i) == null) game.sound().sfx("coin"); refreshPlanning(); return true; }
+        }
+        if (armedItem != null) return planningClick(x, y);
+        Match.PlayerState h = match.human();
+        for (int i = 0; i < 9; i++) {
+            Rectangle r = new Rectangle(BENCH_X + i * SLOT, BENCH_Y, SLOT - 4, 52);
+            if (r.contains(x, y) && i < h.bench.size()) { beginDragCandidate(h.bench.get(i), true, x, y); return true; }
+        }
+        int cx = cellXAt(x), cy = cellYAt(y);
+        if (cx >= 0 && cx < 7 && cy >= 0 && cy < 4) {
+            for (Engine.PlacedUnit u : h.board) if (u.x == cx && u.y == cy) {
+                // Dang co tuong khac dang chon ma cham vao o co tuong: giu hanh vi cu (doi cho theo cham)
+                if (selUid != null && !selUid.equals(u.uid)) return planningClick(x, y);
+                beginDragCandidate(u, false, x, y);
+                return true;
+            }
+            if (selUid != null) return planningClick(x, y); // o trong + dang co tuong chon: dat theo cham nhu cu
+            return true;
+        }
+        return planningClick(x, y);
+    }
+
+    private void beginDragCandidate(Engine.PlacedUnit u, boolean fromBench, float x, float y) {
+        dragUid = u.uid; dragUnit = u; dragFromBench = fromBench;
+        pressX = dragX = x; pressY = dragY = y; dragActive = false;
+    }
+
+    // Cham thuong (khong keo) vao tuong: chon tuong nhu hanh vi cu
+    private void applyTapSelection() {
+        if (dragUnit == null) return;
+        selUid = dragUnit.uid; selFromBench = dragFromBench;
+        String nm = GameData.champById(dragUnit.defId).name;
+        toast(dragFromBench
+            ? "Đã chọn " + nm + " (bench) — kéo lên bàn hoặc chạm ô bàn cờ để đặt."
+            : "Đã chọn " + nm + " — kéo để xếp lại (về bench = cất, xuống góc thùng rác = bán), hoặc chạm ô khác để dời.");
+        refreshPlanning();
+    }
+
+    // Quy toa do man hinh -> o ban: PHAI dung floor (khong dung (int) cat ve 0,
+    // neu khong diem nam tren/tren hang bench se bi nhan nham thanh o ban hang 0)
+    private int cellXAt(float x) { return (int) Math.floor((x - BX) / CELLX); }
+    private int cellYAt(float y) { return (int) Math.floor((y - BY) / CELLY); }
+
+    private int benchSlotAt(float x, float y) {
+        for (int i = 0; i < 9; i++) {
+            Rectangle r = new Rectangle(BENCH_X + i * SLOT, BENCH_Y, SLOT - 4, 52);
+            if (r.contains(x, y)) return i;
+        }
+        return -1;
+    }
+
+    private boolean trashContains(float x, float y) { return TRASH_L.contains(x, y) || TRASH_R.contains(x, y); }
+
+    // Tha tuong dang keo: thu tu uu tien thung rac (chi tu ban) -> o ban -> o bench; hut thi truot ve cho cu
+    private void resolveDragDrop() {
+        Match.PlayerState h = match.human();
+        Engine.PlacedUnit u = dragUnit;
+        if (u == null) return;
+        boolean ok = false;
+        if (!dragFromBench && trashContains(dragX, dragY)) {
+            int g0 = h.gold;
+            toast(match.sell(u.uid));
+            if (h.gold > g0) { game.sound().sfx("sell"); ok = true; }
+        }
+        if (!ok) {
+            int cx = cellXAt(dragX), cy = cellYAt(dragY);
+            if (cx >= 0 && cx < 7 && cy >= 0 && cy < 4) {
+                if (dragFromBench) { toast(match.moveBenchToBoard(u.uid, cx, cy)); ok = h.board.contains(u); }
+                else { toast(match.moveOnBoard(u.uid, cx, cy)); ok = h.board.contains(u); }
+                if (ok) game.sound().sfx("place");
+            } else {
+                int slot = benchSlotAt(dragX, dragY);
+                if (slot >= 0) {
+                    if (dragFromBench) { toast(match.moveOnBench(u.uid, slot)); ok = h.bench.contains(u); }
+                    else { toast(match.moveBoardToBenchSlot(u.uid, slot)); ok = h.bench.contains(u); }
+                    if (ok) game.sound().sfx("place");
+                }
+            }
+        }
+        if (ok) selUid = null;
+        else { returnUid = u.uid; returnFromBench = dragFromBench; returnFromX = dragX; returnFromY = dragY; returnT = 0; }
+        refreshPlanning();
+    }
+
+    private boolean isUnitHidden(String uid) {
+        return (dragActive && uid.equals(dragUid)) || (returnT >= 0 && uid.equals(returnUid));
+    }
+
+    // Lop ve keo-tha (sau stage.draw): sprite truot ve khi tha hut, o dich to sang,
+    // 2 vung thung rac (chi khi keo tu ban), sprite bam con tro nhac len + phong to nhe.
+    private void drawDragOverlay(float now) {
+        Assets a = game.assets;
+        batch.begin();
+        if (returnT >= 0 && returnUid != null) {
+            Engine.PlacedUnit u = null;
+            for (Engine.PlacedUnit x2 : match.human().board) if (x2.uid.equals(returnUid)) u = x2;
+            if (u == null) for (Engine.PlacedUnit x2 : match.human().bench) if (x2.uid.equals(returnUid)) u = x2;
+            if (u != null) {
+                float[] target = unitScreenPos(u, match.human());
+                if (target != null) {
+                    float k = Math.min(1, returnT / RETURN_DUR);
+                    float e = 1 - (1 - k) * (1 - k); // ease-out
+                    float px = returnFromX + (target[0] - returnFromX) * e;
+                    float py = returnFromY + (target[1] - returnFromY) * e;
+                    float size = returnFromBench ? 56 : 100;
+                    drawShadow(px, py - size * 0.45f, size * 0.78f);
+                    drawUnitSprite(u.defId, px, py, size, u.star, false, 1, 0, null);
+                }
+            }
+        }
+        if (dragActive && dragUnit != null) {
+            if (!dragFromBench) { drawTrashZone(TRASH_L, now); drawTrashZone(TRASH_R, now); }
+            int cx = cellXAt(dragX), cy = cellYAt(dragY);
+            if (cx >= 0 && cx < 7 && cy >= 0 && cy < 4) {
+                float x = BX + cx * CELLX, y = BY + cy * CELLY;
+                batch.setColor(1, 0.85f, 0.3f, 0.30f);
+                batch.draw(a.whiteTex(), x + 2, y + 2, CELLX - 4, CELLY - 4);
+                batch.setColor(Color.WHITE);
+                drawBorder(x + 1, y + 1, CELLX - 2, CELLY - 2, Ui.GOLD, 3);
+            } else {
+                int slot = benchSlotAt(dragX, dragY);
+                if (slot >= 0) {
+                    float x = BENCH_X + slot * SLOT, y = BENCH_Y;
+                    batch.setColor(1, 0.85f, 0.3f, 0.30f);
+                    batch.draw(a.whiteTex(), x + 1, y + 1, SLOT - 6, 50);
+                    batch.setColor(Color.WHITE);
+                    drawBorder(x, y, SLOT - 4, 52, Ui.GOLD, 3);
+                }
+            }
+            float size = (dragFromBench ? 96 : 100) * 1.05f;
+            drawShadow(dragX, dragY - 40, 80);
+            drawUnitSprite(dragUnit.defId, dragX, dragY + 8, size, dragUnit.star, false, 0.96f, 0, null);
+        }
+        batch.end();
+    }
+
+    private void drawTrashZone(Rectangle r, float now) {
+        Assets a = game.assets;
+        boolean hover = r.contains(dragX, dragY);
+        float pulse = 0.72f + 0.25f * (float) Math.sin(now * 6);
+        drawShadowRect(r.x, r.y, r.width, r.height, 0.4f);
+        batch.setColor(0.45f, 0.08f, 0.12f, hover ? 0.94f : 0.80f);
+        batch.draw(a.whiteTex(), r.x, r.y, r.width, r.height);
+        batch.setColor(Color.WHITE);
+        drawBorder(r.x, r.y, r.width, r.height, hover ? new Color(1, 0.45f, 0.45f, 1) : new Color(1, 0.72f, 0.42f, pulse), hover ? 4 : 3);
+        batch.draw(a.icon("trash"), r.x + r.width / 2 - 17, r.y + r.height - 54, 34, 34);
+        drawCentered(a.fontBig, "BÁN", r.x + r.width / 2, r.y + 36, Color.WHITE);
     }
 
     private boolean planningClick(float x, float y) {
@@ -1321,14 +1511,14 @@ public class MatchScreen extends ScreenAdapter {
                 if (i < h.bench.size()) {
                     Engine.PlacedUnit u = h.bench.get(i);
                     if (armedItem != null) { int inv0 = h.inventory.size(); toast(match.equipItem(u.uid, armedItem)); if (h.inventory.size() < inv0) game.sound().sfx("equip"); armedItem = null; }
-                    else { selUid = u.uid; selFromBench = true; toast("Đã chọn " + GameData.champById(u.defId).name + " (bench) — chạm ô bàn cờ để đặt."); }
+                    else { selUid = u.uid; selFromBench = true; toast("Đã chọn " + GameData.champById(u.defId).name + " (bench) — kéo lên bàn hoặc chạm ô bàn cờ để đặt."); }
                     refreshPlanning();
                 }
                 return true;
             }
         }
         // Ban co (chi hang 0..3 la vung dat tuong cua minh)
-        int cx = (int) ((x - BX) / CELL), cy = (int) ((y - BY) / CELL);
+        int cx = cellXAt(x), cy = cellYAt(y);
         if (cx >= 0 && cx < 7 && cy >= 0 && cy < 4) {
             Engine.PlacedUnit at = null;
             for (Engine.PlacedUnit u : h.board) if (u.x == cx && u.y == cy) at = u;
@@ -1346,7 +1536,7 @@ public class MatchScreen extends ScreenAdapter {
                 selUid = null;
             } else if (at != null) {
                 selUid = at.uid; selFromBench = false;
-                toast("Đã chọn " + GameData.champById(at.defId).name + " — chạm ô khác để dời, hoặc nút Cất/Bán.");
+                toast("Đã chọn " + GameData.champById(at.defId).name + " — kéo để xếp lại (về bench = cất, xuống góc thùng rác = bán), hoặc chạm ô khác để dời.");
             }
             refreshPlanning();
             return true;

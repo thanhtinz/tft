@@ -39,7 +39,7 @@ public class MenuScreen extends ScreenAdapter {
 
         Label title = Ui.title(a, "ĐẤU TRƯỜNG CHIBI", Ui.GOLD);
         root.add(title).colspan(2).padBottom(2).row();
-        root.add(Ui.label(a, "Bản Java — đồ họa pixel 2D (LibGDX)", Ui.TEXT_DIM)).colspan(2).padBottom(14).row();
+        root.add(Ui.label(a, "Bản Java — đồ họa vẽ tay 2D (LibGDX)", Ui.TEXT_DIM)).colspan(2).padBottom(14).row();
 
         // Cot trai: ho so — ShadowTable (helper chung voi MatchScreen): tu do bong mem noi khoi san/lobby
         Table profileBox = Ui.shadowTable(a);

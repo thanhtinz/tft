@@ -59,8 +59,11 @@ public class GuideScreen extends ScreenAdapter {
         "PvP Đấu Tập: bot yếu hơn, thuần luyện tập. (PvP online người thật: mở khi có Supabase.)",
         "",
         "ĐIỀU KHIỂN TRONG TRẬN",
-        "Chạm tướng ở bench rồi chạm ô trên bàn để đặt. Chạm tướng trên bàn để chọn, chạm ô khác để dời,",
-        "hoặc dùng nút Về bench / Bán. Trang bị: chạm 1 món trong kho rồi chạm tướng để đeo (tối đa 3 món)."
+        "Kéo–thả là chính: kéo tướng từ bench lên bàn để đặt; kéo tướng trên bàn sang ô khác để dời",
+        "(ô có tướng sẽ hoán đổi), kéo về ô bench để cất, kéo xuống thùng rác ở góc dưới để bán.",
+        "Thả ra ngoài vùng hợp lệ thì tướng trượt về chỗ cũ. Chạm chọn + chạm ô đích vẫn dùng được",
+        "như cách dự phòng; tướng ở bench cũng bán được bằng nút 'Bán tướng chọn'.",
+        "Trang bị: chạm 1 món trong kho rồi chạm tướng để đeo (tối đa 3 món)."
     );
 
     public GuideScreen(MainGame game) { this.game = game; }

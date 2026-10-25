@@ -4,6 +4,8 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.NinePatch;
+import com.badlogic.gdx.scenes.scene2d.ui.Button;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
@@ -23,6 +25,7 @@ public final class Ui {
     public static final Color PANEL = new Color(0.10f, 0.08f, 0.20f, 0.92f);
     public static final Color PANEL_LIGHT = new Color(0.20f, 0.16f, 0.36f, 0.95f);
     public static final Color BTN = new Color(0.24f, 0.18f, 0.45f, 1);
+    public static final Color BTN_GOLD = new Color(0.80f, 0.55f, 0.14f, 1);
     public static final Color BTN_DOWN = new Color(0.45f, 0.32f, 0.72f, 1);
     public static final Color BTN_OVER = new Color(0.32f, 0.24f, 0.58f, 1);
     public static final Color ACCENT = new Color(0.85f, 0.25f, 0.45f, 1);
@@ -51,7 +54,10 @@ public final class Ui {
 
     public static void drawShadow(Batch batch, Assets a, float x, float y, float w, float h, float alpha) {
         if (a == null || a.shadowTex() == null || w <= 0 || h <= 0) return;
-        Color old = batch.getColor();
+        // PHAI copy mau: Batch.getColor() tra ve chinh object noi bo cua batch, gan thang vao
+        // bien "old" thi lenh khoi phuc o cuoi la vo hieu (batch ket mau den alpha thap,
+        // phan tu ve ngay sau bi nhuom den — loi lam mat lung the up o overlay lat the).
+        Color old = new Color(batch.getColor());
         batch.setColor(0, 0, 0, alpha * old.a);
         batch.draw(a.shadowTex(), x - 9, y - 9 - 6, w + 18, h + 18);
         batch.setColor(old);
@@ -102,6 +108,7 @@ public final class Ui {
         if (base == ACCENT) return "primary";
         if (base == GREEN) return "green";
         if (base == RED) return "red";
+        if (base == BTN_GOLD) return "gold";
         return "btn";
     }
 
@@ -128,6 +135,51 @@ public final class Ui {
     // Nut lon dung font Baloo (nut che do o menu, nut DAU trong tran...)
     public static TextButton buttonBig(Assets a, String text, Color base) {
         return button(a, text, base, a.fontBig);
+    }
+
+    // ---------- Nut co icon ve cung phong cach (icon nam trai nhan, cung bo texture nut moi) ----------
+    // Dung Button + Image + Label de icon la mot phan cua nut (sang/lun theo trang thai nut),
+    // thay cho cach dat Image rieng canh nut. Tu do bong mem giong ShadowTextButton.
+    public static final class GameButton extends Button {
+        private final Assets assets;
+        private final Label label;
+        GameButton(Assets assets, ButtonStyle style, String icon, String text, BitmapFont font, float iconSize) {
+            super(style);
+            this.assets = assets;
+            if (icon != null) {
+                Image im = new Image(new com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable(
+                    new com.badlogic.gdx.graphics.g2d.TextureRegion(assets.icon(icon))));
+                add(im).width(iconSize).height(iconSize).padRight(7);
+            }
+            label = new Label(text, new Label.LabelStyle(font, Color.WHITE));
+            label.setAlignment(com.badlogic.gdx.utils.Align.center);
+            add(label).align(com.badlogic.gdx.utils.Align.center);
+            pad(4, 12, 4, 12);
+        }
+        public void setText(String text) { label.setText(text); }
+        public String getText() { return label.getText().toString(); }
+        @Override public void draw(Batch batch, float parentAlpha) {
+            drawShadow(batch, assets, getX(), getY(), getWidth(), getHeight());
+            super.draw(batch, parentAlpha);
+        }
+    }
+
+    public static GameButton iconButton(Assets a, String icon, String text, Color base, BitmapFont font) {
+        return iconButton(a, icon, text, base, font, 20);
+    }
+
+    public static GameButton iconButtonBig(Assets a, String icon, String text, Color base) {
+        return iconButton(a, icon, text, base, a.fontBig, 30);
+    }
+
+    private static GameButton iconButton(Assets a, String icon, String text, Color base, BitmapFont font, float iconSize) {
+        NinePatch[] p = a.btnPatchesFor(kindOf(base));
+        Button.ButtonStyle s = new Button.ButtonStyle();
+        s.up = new NinePatchDrawable(p[0]);
+        s.over = new NinePatchDrawable(p[1]);
+        s.down = new NinePatchDrawable(p[2]);
+        s.disabled = new NinePatchDrawable(p[2]).tint(new Color(0.42f, 0.42f, 0.48f, 0.85f));
+        return new GameButton(a, s, icon, text, font, iconSize);
     }
 
     public static TextField textField(Assets a, String text) {

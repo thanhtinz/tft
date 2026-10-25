@@ -28,6 +28,24 @@ public class HeadlessMain {
     static Engine.PlacedUnit pu(String defId, int star, int x, int y) {
         return new Engine.PlacedUnit("t-" + defId + "-" + x + "-" + y + "-" + star, defId, star, x, y);
     }
+    static Engine.PlacedUnit unitByDef(List<Engine.PlacedUnit> list, String defId) {
+        for (Engine.PlacedUnit u : list) if (u.defId.equals(defId)) return u;
+        return null;
+    }
+    static String benchOrder(Match.PlayerState p) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < p.bench.size(); i++) { if (i > 0) sb.append(", "); sb.append(p.bench.get(i).defId); }
+        return sb.append("]").toString();
+    }
+    static String boardSummary(Match.PlayerState p) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < p.board.size(); i++) {
+            Engine.PlacedUnit u = p.board.get(i);
+            if (i > 0) sb.append(", ");
+            sb.append(u.defId).append("(").append(u.x).append(",").append(u.y).append(")");
+        }
+        return sb.append("]").toString();
+    }
     static Engine.PlacedUnit mu(String monsterId, int x, int y) {
         Engine.PlacedUnit u = new Engine.PlacedUnit("tm-" + monsterId + "-" + x, monsterId, 1, x, y);
         u.isMonster = true;
@@ -186,6 +204,57 @@ public class HeadlessMain {
         boolean profOk = back.name.equals(prof.name) && back.level == 7 && back.xp == 33 && back.campaignCleared == 12
             && back.wavesBest == 9 && back.rank.tier == 3 && back.rank.division == 2 && back.rank.lp == 55 && back.matches == 10;
         check("Ho so JSON: luu/doc vong lap giu nguyen du lieu", profOk, "rank=" + back.rankLabel());
+
+        // 16) Keo-tha: hoan doi bench<->ban + sap xep trong bench
+        Match dm = Match.startCampaign(1, 99, "DragTest");
+        Match.PlayerState dh = dm.human();
+        dm.addChampion(dh, "gogo");
+        dm.addChampion(dh, "lulu");
+        dm.addChampion(dh, "bobi");
+        boolean dragOk = dh.level == 2 && dh.bench.size() == 3 && dh.board.isEmpty()
+            && benchOrder(dh).equals("[gogo, lulu, bobi]");
+        StringBuilder dragFail = new StringBuilder();
+        if (!dragOk) dragFail.append("khoi tao sai (level=").append(dh.level).append(", bench=").append(benchOrder(dh)).append("); ");
+        String gogoUid = unitByDef(dh.bench, "gogo") == null ? "" : unitByDef(dh.bench, "gogo").uid;
+        String luluUid = unitByDef(dh.bench, "lulu") == null ? "" : unitByDef(dh.bench, "lulu").uid;
+        String bobiUid = unitByDef(dh.bench, "bobi") == null ? "" : unitByDef(dh.bench, "bobi").uid;
+        if (gogoUid.isEmpty() || luluUid.isEmpty() || bobiUid.isEmpty()) { dragOk = false; dragFail.append("thieu uid; "); }
+
+        // Buoc 1: gogo bench -> ban (0,0)
+        dm.moveToBoard(gogoUid, 0, 0);
+        Engine.PlacedUnit g1 = unitByDef(dh.board, "gogo");
+        boolean step1 = g1 != null && g1.x == 0 && g1.y == 0 && benchOrder(dh).equals("[lulu, bobi]");
+        if (!step1) { dragOk = false; dragFail.append("buoc1 moveToBoard gogo: ban=").append(boardSummary(dh)).append(" bench=").append(benchOrder(dh)).append("; "); }
+
+        // Buoc 2: lulu bench -> o (0,0) dang co gogo: hoan doi, gogo ve bench dung index cu cua lulu (0)
+        dm.moveBenchToBoard(luluUid, 0, 0);
+        Engine.PlacedUnit l2 = unitByDef(dh.board, "lulu");
+        boolean step2 = l2 != null && l2.x == 0 && l2.y == 0 && dh.board.size() == 1 && benchOrder(dh).equals("[gogo, bobi]");
+        if (!step2) { dragOk = false; dragFail.append("buoc2 moveBenchToBoard lulu->(0,0): ban=").append(boardSummary(dh)).append(" bench=").append(benchOrder(dh)).append("; "); }
+
+        // Buoc 3: lulu tren ban -> bench slot 1 (dang co bobi): hoan doi, bobi len ban dung o (0,0)
+        dm.moveBoardToBenchSlot(luluUid, 1);
+        Engine.PlacedUnit b3 = unitByDef(dh.board, "bobi");
+        boolean step3 = b3 != null && b3.x == 0 && b3.y == 0 && dh.board.size() == 1 && benchOrder(dh).equals("[gogo, lulu]");
+        if (!step3) { dragOk = false; dragFail.append("buoc3 moveBoardToBenchSlot lulu->slot1: ban=").append(boardSummary(dh)).append(" bench=").append(benchOrder(dh)).append("; "); }
+
+        // Buoc 4: gogo trong bench -> index 1
+        dm.moveOnBench(gogoUid, 1);
+        boolean step4 = benchOrder(dh).equals("[lulu, gogo]");
+        if (!step4) { dragOk = false; dragFail.append("buoc4 moveOnBench gogo->1: bench=").append(benchOrder(dh)).append("; "); }
+
+        // Buoc 5: gogo bench -> ban (1,0) (cap 2 -> toi da 2 tuong tren ban)
+        dm.moveToBoard(gogoUid, 1, 0);
+        Engine.PlacedUnit b5 = unitByDef(dh.board, "bobi");
+        Engine.PlacedUnit g5 = unitByDef(dh.board, "gogo");
+        boolean step5 = b5 != null && b5.x == 0 && b5.y == 0 && g5 != null && g5.x == 1 && g5.y == 0
+            && dh.board.size() == 2 && benchOrder(dh).equals("[lulu]");
+        if (!step5) { dragOk = false; dragFail.append("buoc5 moveToBoard gogo->(1,0): ban=").append(boardSummary(dh)).append(" bench=").append(benchOrder(dh)).append("; "); }
+
+        String dragDetail = dragOk
+            ? "ban=" + boardSummary(dh) + " bench=" + benchOrder(dh)
+            : dragFail.toString() + "thuc te: ban=" + boardSummary(dh) + " bench=" + benchOrder(dh);
+        check("Keo-tha: bench->ban hoan doi o trung, ban->bench slot hoan doi, sap xep bench, dat tuong thu 2 theo cap", dragOk, dragDetail);
 
         System.out.println("=== TONG KET: " + pass + " PASS / " + fail + " FAIL ===");
         if (fail > 0) { System.out.println("Muc fail: " + failures); System.exit(1); }

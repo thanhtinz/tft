@@ -315,6 +315,64 @@ public final class Match {
         return "Đã cất tướng về bench.";
     }
 
+    // Keo-tha: tuong o bench -> o ban (x,y). O trong: nhu moveToBoard (co gioi han cap).
+    // O co tuong khac: HOAN DOI — tuong o o dich xuong bench DUNG index tuong keo vua roi khoi,
+    // tuong keo len o dich (so tuong tren ban khong doi nen khong ap gioi han cap).
+    public String moveBenchToBoard(String uid, int x, int y) {
+        PlayerState h = human();
+        Engine.PlacedUnit u = find(h.bench, uid);
+        if (u == null) return "Tướng không ở bench.";
+        Engine.PlacedUnit occ = occupied(h, x, y);
+        if (occ == null) return moveToBoard(uid, x, y);
+        int benchIdx = h.bench.indexOf(u);
+        h.bench.remove(benchIdx);
+        h.board.remove(occ);
+        h.bench.add(benchIdx, occ);
+        u.x = x; u.y = y;
+        h.board.add(u);
+        return "Đã đổi vị trí: " + GameData.champById(u.defId).name + " lên bàn, "
+            + GameData.champById(occ.defId).name + " về bench.";
+    }
+
+    // Keo-tha: tuong tren ban -> o bench so slot (0..8, clamp).
+    // slot >= bench.size(): nhu moveToBench (them cuoi, van kiem tra bench day 9).
+    // slot < bench.size(): HOAN DOI — tuong bench o slot len ban DUNG o (x,y) cua tuong keo,
+    // tuong keo vao bench tai index slot (bench day van hoan doi duoc vi so luong khong doi).
+    public String moveBoardToBenchSlot(String uid, int slot) {
+        PlayerState h = human();
+        Engine.PlacedUnit u = find(h.board, uid);
+        if (u == null) return "Tướng không ở trên bàn.";
+        int s = Math.max(0, Math.min(8, slot));
+        if (s >= h.bench.size()) {
+            if (h.bench.size() >= 9) return "Bench đã đầy.";
+            h.board.remove(u);
+            h.bench.add(u);
+            return "Đã cất tướng về bench.";
+        }
+        Engine.PlacedUnit benchUnit = h.bench.get(s);
+        int ox = u.x, oy = u.y;
+        h.board.remove(u);
+        h.bench.remove(s);
+        benchUnit.x = ox; benchUnit.y = oy;
+        h.board.add(benchUnit);
+        h.bench.add(s, u);
+        return "Đã đổi vị trí: " + GameData.champById(u.defId).name + " về bench, "
+            + GameData.champById(benchUnit.defId).name + " lên bàn.";
+    }
+
+    // Keo-tha trong bench: doi tuong toi index dich (clamp [0, size-1]): remove roi insert.
+    public String moveOnBench(String uid, int targetIndex) {
+        PlayerState h = human();
+        Engine.PlacedUnit u = find(h.bench, uid);
+        if (u == null) return "Tướng không ở bench.";
+        int from = h.bench.indexOf(u);
+        int to = Math.max(0, Math.min(h.bench.size() - 1, targetIndex));
+        if (from == to) return "Tướng đã ở vị trí đó rồi.";
+        h.bench.remove(from);
+        h.bench.add(to, u);
+        return "Đã dời " + GameData.champById(u.defId).name + " trong bench.";
+    }
+
     public String equipItem(String uid, String itemId) {
         PlayerState h = human();
         Engine.PlacedUnit u = find(h.board, uid);

@@ -1,6 +1,7 @@
-# Đấu Trường Chibi — Bản Java + Pixel 2D (LibGDX)
+# Đấu Trường Chibi — Bản Java + Đồ họa vẽ tay 2D (LibGDX)
 
-Bản chuyển đổi của game "Đấu Trường Chibi" từ React Native sang **Java + LibGDX** với đồ họa **pixel 2D**,
+Bản chuyển đổi của game "Đấu Trường Chibi" từ React Native sang **Java + LibGDX** với đồ họa **vẽ tay 2D**,
+(trước đây là pixel 2D — xem đợt painted hóa bên dưới),
 theo quyết định của chủ dự án (đợt 1, 2026-10-23). **Đợt hoàn thiện (cùng ngày):** nâng LibGDX 1.14.0 +
 bản web TeaVM dựng thành công, trau chuốt giao diện desktop, nối âm thanh đầy đủ, do thám đội hình đối thủ,
 nội suy vị trí mượt (smoothstep), module Android đã nối sẵn (xem mục Android về giới hạn build trong sandbox).
@@ -8,6 +9,11 @@ nội suy vị trí mượt (smoothstep), module Android đã nối sẵn (xem m
 đồng thời bổ sung lớp trình diễn học từ 2 game mẫu **Kanto Tactics** + **FighterZ Tactics**: sân đổi theo chặng,
 đòn nặng nổ "pow" truyện tranh, announcer cuối vòng, bảng sát thương theo tướng, xoáy gộp sao + vòng chân theo sao,
 popup nhận trang bị kiểu mở quà (chi tiết ở mục Gameplay).
+**Đợt kéo–thả + painted hóa + làm lại nút bấm (2026-10-25):** theo chốt của chủ dự án, toàn bộ đồ họa chuyển sang
+**tranh vẽ nét cao (painted)** — sân 1280×720 từ tranh gốc, 35 sprite tướng/quái giữ alpha nét cao, tướng trên bàn
+phóng to 100px, ô bàn 84×70; **kéo–thả tướng đầy đủ thay nút "Cất về bench"** (kéo bench→bàn, bàn→bench, hoán đổi,
+kéo xuống thùng rác góc dưới để bán, thả hụt thì trượt về chỗ cũ); **toàn bộ nút bấm làm lại kiểu dày có khối**
+(bo góc lớn, viền vàng hai lớp + kim cương 4 góc, gloss, thêm họ nút vàng và icon vẽ nét cao) — chi tiết ở mục cuối.
 
 > **Quan trọng:** Bản React Native ở thư mục gốc của repo **vẫn giữ nguyên** và demo Vercel
 > (https://dau-truong-chibi.vercel.app) vẫn chạy bản RN. Bản Java này nằm trong thư mục `java/`
@@ -24,7 +30,7 @@ popup nhận trang bị kiểu mở quà (chi tiết ở mục Gameplay).
 | Backend web | **backend-teavm 1.4.0** (TeaVM 0.13) — build ra HTML/JS hoàn chỉnh |
 | Backend Android | AGP **8.5.2**, compileSdk/targetSdk **35**, minSdk 24 |
 | Font tiếng Việt | **Baloo 2** ExtraBold (tiêu đề) + **Nunito** ExtraBold/Bold (thân chữ) qua FreeType (gdx-freetype) — font game tròn đậm, đủ dấu tiếng Việt; DejaVu giữ làm dự phòng |
-| Texture giao diện | Bộ 9-patch vẽ bằng PIL trong `assets/ui/` (panel, plaque, 4 họ nút × 3 trạng thái, thẻ shop theo bậc giá 1–5, mặt thẻ, ô bench, avatar) + 9 icon pixel (coin, tim, sao, kiếm, khiên, cúp, sách, cờ, sóng) |
+| Texture giao diện | Bộ 9-patch vẽ bằng PIL trong `assets/ui/` — **v2 (đợt painted hóa)**: nút dày có khối, bo góc lớn, viền vàng 2 lớp + kim cương 4 góc, gloss nửa trên; **5 họ nút × 3 trạng thái** (thường/hồng ngọc/xanh lá/đỏ/**vàng mới**), panel, plaque, thẻ shop theo bậc giá 1–5, mặt thẻ, ô bench, avatar + **12 icon vẽ nét cao 96×96** (coin, tim, sao, kiếm, khiên, cúp, sách, cờ, sóng, thùng rác, biểu đồ, tốc độ) |
 
 ## Cấu trúc project
 
@@ -38,20 +44,23 @@ java/
 │       ├── game/                # Engine (mo phong tat dinh theo seed), Match (dieu phoi tran),
 │       │                        # ArenaTheme (quy tac san theo chang), Rank (10 bac + bang LP), Stages (5.200 man),
 │       │                        # Profile (luu JSON local), Rng (mulberry32 giong ban RN)
-│       ├── headless/HeadlessMain.java  # bo kiem tra khong giao dien (15 muc)
+│       ├── headless/HeadlessMain.java  # bo kiem tra khong giao dien (16 muc, muc 16 = logic keo-tha)
 │       └── ui/                  # MenuScreen, CampaignScreen, MatchScreen, GuideScreen, ProfileScreen, Sound (am thanh)
 ├── desktop/                 # DesktopLauncher (LWJGL3 1280x720) + ScreenshotMain (cong cu kiem chung GUI)
 ├── android/                 # Module Android day du (AGP 8.5.2, SDK 35) — xem muc Android ve gioi han build APK
 ├── web/                     # Backend TeaVM 1.4.0 — build thanh cong ra web/build/webapp (index.html + game.js + assets)
-├── assets/                  # units/ (35 sprite pixel), scenes/ (arena, lobby, card-back...), fonts/ (Baloo 2 + Nunito), ui/ (33 texture giao diện + icon pixel), audio/ (22 file WAV)
+├── assets/                  # units/ (35 sprite PAINTED 512x512 giu alpha), scenes/ (arena 1280x720 + lobby + card-back painted), fonts/ (Baloo 2 + Nunito), ui/ (texture giao diện v2 + icon vẽ nét cao), audio/ (22 file WAV)
 └── tools/
-    ├── pixelize.py          # pipeline chuyen tranh goc -> sprite pixel (chay lai duoc)
-    ├── make_ui.py           # sinh lai toan bo texture assets/ui/ bang PIL (panel/plaque/nut/the shop/icon pixel) — chay: python3 tools/make_ui.py
+    ├── make-painted-assets.py # pipeline painted hoa: sinh lai 35 sprite + 4 san 1280x720 tu tranh goc (chay lai duoc)
+    ├── pixelize.py          # pipeline pixel cu (legacy, khong con dung cho ban chinh)
+    ├── make_ui.py           # sinh lai toan bo texture assets/ui/ bang PIL (nut v2 day co khoi + icon net cao) — chay: python3 tools/make_ui.py
+    ├── ui-preview.png       # bang xem truoc bo texture nut/icon v2
     ├── preview-sheet.png    # bang xem truoc toan bo sprite (phong to nearest-neighbor)
     ├── fetch-deps.sh / fetch_deps.py  # tai dependency bang curl vao local-maven (moi truong han che mang)
     └── shot-*.png           # anh chup kiem chung GUI (menu, lat the, chuan bi, giao tranh)
     └── shot2-*.png          # anh chup dot bo Yu-Gi-Oh (menu, chuan bi khong con panel bay, giao tranh co pow, announcer + popup do)
     └── shot3-*.png          # anh chup dot lam lai bo cuc san tran vien (menu, lat the, chuan bi, giao tranh, ket qua)
+    └── shot6-*.png          # anh chup dot painted hoa + keo-tha + nut moi (menu, lat the, chuan bi, DANG KEO, giao tranh, chien dich, hoc choi, ho so)
 ```
 
 ## Gameplay đã port (khớp bản RN)
@@ -70,16 +79,26 @@ java/
   nhiều thì trừ càng đau) — kiểm chứng headless: trận PvP trọn vẹn kéo dài **17–20 vòng** ở 3 seed. Máu về 0 = bị loại;
   thanh trên hiện máu kèm icon tim, danh sách người chơi hiện máu 0–100. (Điểm **rank LP** của chế độ Hạng là điểm
   xếp hạng kiểu TFT — giữ nguyên, không liên quan máu trong trận. Hồ sơ cũ chỉ lưu rank/thống kê nên tương thích nguyên vẹn.)
-- **Lật thẻ úp mở trận:** đầu trận PvP (và các vòng x-4, sóng 1 ở Sóng Quái) hiện 8 thẻ úp lưng pixel;
+- **Lật thẻ úp mở trận:** đầu trận PvP (và các vòng x-4, sóng 1 ở Sóng Quái) hiện 8 thẻ úp lưng vẽ;
   chọn 1 thẻ → lật mở (420ms, các thẻ khác lật nối tiếp) → nhận tướng về bench + 1 trang bị vào kho.
 - **Bố cục màn trận — sân tràn viền (đợt làm lại theo 2 game mẫu):** tranh sân là MỘT môi trường liền mạch phủ kín
-  1280×720, không còn hai cột hộp tím hai bên. Bàn cờ lớn ở giữa (ô 66px, sprite tướng 74px, bóng ellipse mềm dưới chân);
+  1280×720, không còn hai cột hộp tím hai bên. Bàn cờ lớn ở giữa (**ô 84×70px, sprite tướng 100px** — tỉ lệ painted,
+  bóng ellipse mềm dưới chân);
   lưới ô chỉ hiện mờ ở pha chuẩn bị và mờ hẳn về ~0 khi giao tranh. Bench là hàng ô ngay mép dưới TRONG sân, shop là
   hàng 5 thẻ ở dải dưới TRÊN sân. Thông tin dồn ra viền: tộc/hệ = chip nhỏ bán trong suốt dọc mép trái, trang bị = nút
   nổi dưới chip, danh sách người chơi = hàng gọn mép phải (avatar + tên + số máu + thanh máu mỏng, hàng của mình phủ
   vàng rất nhẹ), thanh trên = plaque nổi mỏng ở giữa-trên, nhật ký thu thành panel nhỏ bật/tắt bằng nút. Nút hành động
   ở các góc: ĐẤU! to ở góc dưới phải (trên nó là Tốc độ + Bảng sát thương), MUA XP là nút lớn góc dưới trái kiểu
   TFT mobile (cạnh Làm mới / Bán tướng), Thoát là nút nhỏ góc trên phải.
+- **Kéo–thả tướng (đợt 2026-10-25, thay nút "Cất về bench" — nút đã XOÁ khỏi giao diện):** ở pha chuẩn bị, kéo quá
+  ngưỡng 14px thì sprite bám theo con trỏ (nhấc nhẹ, phóng to ~1,05, có bóng dưới); chạm nhẹ vẫn là chọn/xem như cũ
+  và luồng chạm-chọn + chạm-ô đặt vẫn dùng được làm dự phòng. Các hướng kéo: **bench → ô bàn** (đặt tướng; ô có tướng
+  thì HOÁN ĐỔI, tướng kia về đúng ô bench vừa trống — `Match.moveBenchToBoard`), **bàn → ô bàn khác** (dời/hoán đổi),
+  **bàn → ô bench** (cất về bench; ô bench có tướng thì hoán đổi, tướng bench lên đúng ô bàn vừa trống —
+  `Match.moveBoardToBenchSlot`), **bench → ô bench khác** (dời chỗ — `Match.moveOnBench`), **bàn → thùng rác**:
+  khi kéo tướng từ bàn, hai vùng thùng rác đỏ ở 2 góc dưới hiện ra, thả vào = bán tướng theo luật hoàn vàng hiện tại.
+  Ô đích hợp lệ được tô vàng khi kéo qua; thả ra ngoài mọi vùng hợp lệ thì tướng **trượt về vị trí cũ** (animation 0,22s).
+  Tướng ở bench vẫn bán được bằng nút "Bán tướng chọn" như mô hình đã chốt.
 - **Trình diễn theo 2 game mẫu (Kanto Tactics + FighterZ Tactics)** — chỉ học bố cục/kỹ thuật trình diễn, không sao chép asset:
   1. **Sân đấu đổi theo chặng** (`game/ArenaTheme.java`): Chiến Dịch theo chương — `(chương-1)%3` lần lượt rừng / sa mạc / băng
      (khớp tông banner chương), vòng Boss → hoàng hôn; PvP + Sóng Quái theo stage: 1 rừng, 2 hoàng hôn, 3 sa mạc, ≥4 băng
@@ -111,7 +130,7 @@ Máy có mạng bình thường (Gradle tự tải dependency từ Maven Central
 ```bash
 cd java
 ./gradlew :desktop:run            # chay ban desktop
-./gradlew :desktop:verifyHeadless # chay bo kiem tra logic (phai dat 15 PASS / 0 FAIL)
+./gradlew :desktop:verifyHeadless # chay bo kiem tra logic (phai dat 16 PASS / 0 FAIL)
 ./gradlew :web:buildWeb           # dung ban web TeaVM -> web/build/webapp (index.html + game.js + assets)
 ./gradlew :android:assembleDebug  # build APK debug (can Android SDK; module chi kich hoat khi co
                                   # local.properties chua sdk.dir hoac bien ANDROID_HOME)
@@ -139,22 +158,22 @@ xvfb-run -a ./gradlew :desktop:screenshot -PscreenshotMode=battle4 -PscreenshotO
 - JDK dùng ở máy Muse: Temurin 17 tại `~/workspace/tools/jdk17` (`source ~/workspace/tools/env.sh`),
   `GRADLE_USER_HOME=~/workspace/tft-java-game/.gradle-home` (bản sao cấu hình proxy của máy).
 
-## Pipeline pixel art
+## Pipeline đồ họa painted (bản chính hiện tại)
 
 ```bash
-python3 tools/pixelize.py   # tai tao toan bo sprite + preview sheet tu tranh goc cua ban RN
+python3 tools/make-painted-assets.py   # sinh lai 35 sprite painted + 4 san 1280x720 tu tranh goc
 ```
 
-Pipeline v2 (đợt nâng chất lượng hình ảnh): sprite — cắt theo hộp alpha → tăng bão hòa thích ứng
-(tướng nhạt được tăng mạnh hơn) → thu nhỏ premultiplied-alpha (LANCZOS) về tối đa 108px chiều cao →
-làm sắc nét → cắt alpha cứng + xóa mảnh bụi rời rạc → lượng tử hóa palette tối đa 48 màu (MEDIANCUT,
-không dither) → vẽ viền đậm 1px quanh silhouette → canvas 128×128 neo đáy giữa.
-Sân đấu dùng TRANH VẼ MỚI giàu chi tiết trong `tools/new-art/` (vùng chơi có kết cấu mặt đất, vật thể
-kể chuyện quanh viền, ao nhỏ lệch góc — thay tranh RN cũ có ao phẳng giữa sân): pixel-hóa ở 640×360,
-palette 128 màu, không dither (dither Floyd–Steinberg của v1 là nguồn làm tranh "bùn"), nướng sẵn
-vignette nhẹ vào tranh. Lobby 640×360/128 màu, lưng thẻ 128×179, banner rộng 320px.
-Kết quả: 35 sprite tướng/quái + arena 4 biến thể (rừng/hoàng hôn/sa mạc/băng).
-Xem trước: `tools/preview-sheet.png`, `tools/arena-sheet.png`, `tools/arena-before-after.png`.
+Theo chốt của chủ dự án (sau bản mẫu đối chiếu), bản chính dùng **tranh vẽ nét cao trực tiếp, không pixel-hóa**:
+sân = tranh gốc `tools/new-art/arena-*.webp` cắt 16:9 theo đúng neo của pipeline cũ, resize LANCZOS về 1280×720
+(không quantize, không nướng vignette — vignette/quầng sáng vẫn do code vẽ); tướng/quái = tranh raster gốc của dự án RN,
+chỉ chuẩn hóa khung (trim alpha, thân về tỉ lệ 432/512 chiều cao canvas, neo đáy, căn giữa trên canvas 512×512,
+resize premultiplied-alpha cho viền sạch) — giữ nguyên RGBA nét cao. Texture scene/unit trong `Assets` dùng filter
+**Linear** để thu nhỏ mượt. Kết quả: 35 sprite painted + arena 4 biến thể (rừng/hoàng hôn/sa mạc/băng).
+
+`tools/pixelize.py` là pipeline pixel cũ (v1/v2: palette 48 màu, viền đậm 1px, sân 640×360/128 màu không dither) —
+**legacy, không còn dùng cho bản chính**; chỉ giữ để tham khảo. Xem trước lịch sử: `tools/preview-sheet.png`,
+`tools/arena-sheet.png`.
 
 ## Android — module đã nối, APK chưa build được TRONG SANDBOX này
 
@@ -172,8 +191,8 @@ Xem trước: `tools/preview-sheet.png`, `tools/arena-sheet.png`, `tools/arena-b
 ## Kiểm chứng đã làm (đợt này)
 
 - `./gradlew :desktop:compileJava` — **BUILD SUCCESSFUL** (core + desktop).
-- `./gradlew :desktop:verifyHeadless` — **15 PASS / 0 FAIL** (đợt bỏ Yu-Gi-Oh cập nhật lại bộ kiểm tra: bỏ 6 mục bẫy,
-  mục LP 8000 thay bằng mục máu 100 + bảng sát thương gốc; thêm mục bảng sát thương theo tướng và mục quy tắc sân theo chặng), gồm:
+- `./gradlew :desktop:verifyHeadless` — **16 PASS / 0 FAIL** (15 mục cũ + **mục 16: logic kéo–thả** — hoán đổi
+  bench→bàn ở ô trùng, hoán đổi bàn→bench theo slot, sắp xếp lại bench, đặt tướng thứ 2 theo giới hạn cấp), gồm:
   dữ liệu gốc khớp bản RN; RNG tất định; sinh 5.200 màn; ghép sao; shop/odds; **máu người chơi = 100 + sát thương thua vòng thang 100**;
   bảng rank LP; lật thẻ 8 lá; mô phỏng trận tất định; **bảng sát thương cộng từ sự kiện, cả 2 bên, sắp giảm dần**;
   **quy tắc sân theo chặng (chương/stage/Boss)**; **trận PvP 8 người trọn vẹn tới khi có hạng (3 seed: 17–20 vòng)**;
@@ -240,3 +259,31 @@ bằng một máy chủ tĩnh (ví dụ `python3 -m http.server`) trên máy th�
 - **Mẹo build trong sandbox này:** tiến trình Java bị chặn TCP IPv4 (kể cả loopback client↔daemon của Gradle) nhưng
   IPv6 loopback thông — chạy Gradle với `JDK_JAVA_OPTIONS="-Djava.net.preferIPv4Stack=false -Djava.net.preferIPv6Addresses=true"`
   và binary Gradle cài sẵn (wrapper chưa tải xong distribution). Trên máy thường không cần mẹo này.
+
+## Đợt painted hóa + kéo–thả + làm lại nút bấm (2026-10-25)
+
+- **Painted hóa toàn game:** asset sinh bởi `tools/make-painted-assets.py` phủ MỌI màn — menu (lobby painted),
+  màn trận (sân + tướng painted), lật thẻ (lưng thẻ), chiến dịch/học chơi/hồ sơ (tranh nền sau panel). Không màn nào
+  còn lẫn sprite pixel. Tỉ lệ màn trận theo bản mẫu đã chốt: ô bàn 84×70, sprite bàn/trận 100px, xem trước địch 88px,
+  bench 56px.
+- **Nút bấm v2:** `tools/make_ui.py` vẽ nội bộ ở 4x rồi thu LANCZOS — nút **dày có khối**: bo góc lớn, gradient dọc
+  (sáng trên → đậm dưới), **viền vàng hai lớp + viên kim cương ở 4 góc**, gloss bóng ở nửa trên; hover sáng hơn,
+  nhấn xuống tối rõ, disabled xám hóa; panel/plaque/thẻ shop/ô bench bo góc đồng bộ. Thêm **họ nút vàng** (MUA XP,
+  Làm mới) cạnh họ chính hồng ngọc (ĐẤU!) và họ phụ tím đậm. `Ui.GameButton` gắn **icon vẽ nét cao 96×96** cạnh nhãn:
+  kiếm (ĐẤU!), tốc độ, biểu đồ (Bảng sát thương), sách (Nhật ký), sao (MUA XP), xu vàng (Làm mới), thùng rác
+  (Bán tướng chọn). Áp dụng qua Ui helper cho mọi màn: menu, màn trận, chiến dịch (lưới 100 nút màn), học chơi, hồ sơ.
+  Xem trước bộ texture: `tools/ui-preview.png`.
+- **Kéo–thả:** logic hoán đổi/dời ô tách ở tầng `Match` (3 method mới, test headless mục 16); UI xử lý
+  touchDown/touchDragged/touchUp với ngưỡng kéo 14px, tô sáng ô đích, 2 vùng thùng rác khi kéo từ bàn, animation
+  trượt về khi thả hụt. Hai lỗi phát hiện khi soi ảnh và đã sửa tận gốc trong đợt: (1) hit-test ô bàn phải dùng
+  `Math.floor` — phép cắt `(int)` về 0 khiến điểm kéo dưới mép bàn bị nhận nhầm thành hàng 0; (2) `Ui.drawShadow`
+  phải sao chép màu batch (`new Color(batch.getColor())`) — tham chiếu trực tiếp khiến lệnh khôi phục vô hiệu,
+  phần tử vẽ ngay sau bóng (lưng thẻ úp) bị nhuộm đen trong suốt.
+- **Kiểm chứng đợt này:** compile desktop PASS; `verifyHeadless` **16 PASS / 0 FAIL**; `:web:buildWeb` PASS
+  (game.js 915.854 byte). Ảnh `tools/shot6-*.png` đã tự soi: menu, lật thẻ (8 lưng thẻ hiện rõ sau sửa lỗi shadow),
+  chuẩn bị (nút mới có icon, **không còn nút "Cất về bench"**, gợi ý kéo–thả mới), **đang kéo** (ScreenshotMain giả lập
+  trạng thái kéo: sprite bám trỏ trên ô bench được tô viền vàng + 2 vùng thùng rác hiện), giao tranh, chiến dịch,
+  học chơi, hồ sơ.
+- **Chưa kiểm chứng (nói thẳng):** kéo–thả bằng tay thật trên bản chạy (mới kiểm bằng test logic + ảnh giả lập trạng thái
+  kéo + code path cảm ứng); runtime bản web TeaVM vẫn chỉ build PASS như các đợt trước; bảng sát thương/nhật ký ở
+  trạng thái đang mở và thẻ shop ở trạng thái mua được vẫn chưa có ảnh chụp trực tiếp (giới hạn công cụ chụp).

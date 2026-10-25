@@ -20,13 +20,14 @@ import java.lang.reflect.Method;
 // Cach chay: xvfb-run ./gradlew :desktop:screenshot -PscreenshotMode=battle -PscreenshotOut=tools/shot-battle.png
 // Che do: menu | draft (lat the up) | planning (pha chuan bi) | battle (dang giao tranh)
 // | result (announcer THANG!/THUA! dau pha ket qua vong)
+// | drag (gia lap dang keo mot tuong tren ban ve phia o bench: sprite bam tro + 2 vung thung rac hien)
 public class ScreenshotMain {
     static class ShotGame extends MainGame {
         final String mode;
         final String outPath;
         int frames = 0;
         int resultFrames = 0;
-        boolean battleStarted = false, captured = false;
+        boolean battleStarted = false, captured = false, dragSet = false;
         MatchScreen matchScreen;
 
         ShotGame(String mode, String outPath) { this.mode = mode; this.outPath = outPath; }
@@ -40,13 +41,22 @@ public class ScreenshotMain {
                 case "menu":
                     setScreen(new MenuScreen(this));
                     break;
+                case "campaign":
+                    setScreen(new com.dautruongchibi.ui.CampaignScreen(this));
+                    break;
+                case "guide":
+                    setScreen(new com.dautruongchibi.ui.GuideScreen(this));
+                    break;
+                case "profile":
+                    setScreen(new com.dautruongchibi.ui.ProfileScreen(this));
+                    break;
                 case "draft": {
                     Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
                     matchScreen = new MatchScreen(this, m);
                     setScreen(matchScreen);
                     break;
                 }
-                case "planning": case "battle": case "result": {
+                case "planning": case "battle": case "result": case "drag": {
                     Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
                     m.autoPlan();
                     matchScreen = new MatchScreen(this, m);
@@ -72,6 +82,23 @@ public class ScreenshotMain {
             super.render();
             frames++;
             try {
+                if ("drag".equals(mode) && !dragSet && frames > 50 && matchScreen != null) {
+                    // Gia lap trang thai dang keo: lay tuong dau tien tren ban, dat cac truong keo-tha
+                    // bang reflection, tro vao giua o bench so 1 (sprite bam tro + thung rac hien o 2 goc duoi)
+                    Field fMatch = MatchScreen.class.getDeclaredField("match");
+                    fMatch.setAccessible(true);
+                    Match mm = (Match) fMatch.get(matchScreen);
+                    if (mm != null && !mm.human().board.isEmpty()) {
+                        com.dautruongchibi.game.Engine.PlacedUnit u = mm.human().board.get(0);
+                        Field fUid = MatchScreen.class.getDeclaredField("dragUid"); fUid.setAccessible(true); fUid.set(matchScreen, u.uid);
+                        Field fUnit = MatchScreen.class.getDeclaredField("dragUnit"); fUnit.setAccessible(true); fUnit.set(matchScreen, u);
+                        Field fFrom = MatchScreen.class.getDeclaredField("dragFromBench"); fFrom.setAccessible(true); fFrom.setBoolean(matchScreen, false);
+                        Field fAct = MatchScreen.class.getDeclaredField("dragActive"); fAct.setAccessible(true); fAct.setBoolean(matchScreen, true);
+                        Field fX = MatchScreen.class.getDeclaredField("dragX"); fX.setAccessible(true); fX.setFloat(matchScreen, 451f);
+                        Field fY = MatchScreen.class.getDeclaredField("dragY"); fY.setAccessible(true); fY.setFloat(matchScreen, 120f);
+                        dragSet = true;
+                    }
+                }
                 boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode);
                 if (battleMode && !battleStarted && frames > 30 && matchScreen != null) {
                     Method mb = MatchScreen.class.getDeclaredMethod("startBattle");
