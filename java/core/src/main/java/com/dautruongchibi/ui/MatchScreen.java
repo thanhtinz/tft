@@ -9,6 +9,7 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.NinePatch;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Rectangle;
@@ -17,6 +18,7 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
+import com.badlogic.gdx.scenes.scene2d.utils.NinePatchDrawable;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.dautruongchibi.data.FxProfile;
 import com.dautruongchibi.data.GameData;
@@ -81,8 +83,15 @@ public class MatchScreen extends ScreenAdapter {
     static final float PLAN_TIME = 45f;
 
     // HUD labels
-    private Label roundLabel, goldVal, lvlVal, hpVal, msgLabel, timerLabel, oppInfo;
+    private Label roundLabel, goldVal, lvlVal, hpVal, msgLabel, timerLabel;
     private Table playersBox;
+    // Doi thu PvP cua vong nay (Match.peekNextOpponent — round-robin tat dinh, fight()
+    // dung cung mot cursor nen khop ca o pha tran): hang cua ho trong danh sach nguoi
+    // choi duoc HIGHLIGHT vien vang + dau KIEM CHEO kieu TFT (thay hop chu "Doi thu
+    // vong nay — doi hinh: ..." da bo). null = khong danh dau (PvE / vong quai PvP).
+    private Match.PlayerState markedOpponent;
+    private Texture swordsTex;        // icon kiem cheo ve bang Pixmap (khong dung emoji)
+    private NinePatchDrawable oppRowBg; // nen hang doi thu: trong vang + vien vang 2px
     private boolean shopOpen = false; // lop shop dang mo hay dong (mac dinh dong nhu TFT Mobile)
     private float resultT = 0;        // dem giay o pha RESULT sau announcer: ~4s thi tu chuyen tiep
     // Chip toc/he ve tay o mep trai: {noi dung, "1" neu bac dang kich hoat}
@@ -269,7 +278,9 @@ public class MatchScreen extends ScreenAdapter {
         msgLabel.setSize(700, 22);
         stage.addActor(msgLabel);
 
-        // Mep phai: tieu de + danh sach nguoi choi gon (khong nen hop dac), thong tin doi thu o duoi
+        // Mep phai: tieu de + danh sach nguoi choi gon (khong nen hop dac). Doi thu vong
+        // nay danh dau NGAY trong hang cua ho (kiem cheo + vien vang) — khong con hop chu
+        // liet ke doi hinh duoi danh sach nhu truoc (lam theo TFT that).
         Label playersTitle = Ui.labelSmall(a, match.isPvp() ? "NGƯỜI CHƠI — MÁU" : "THÔNG TIN", Ui.GOLD);
         playersTitle.setPosition(1094, 646);
         playersTitle.setSize(178, 18);
@@ -357,60 +368,121 @@ public class MatchScreen extends ScreenAdapter {
             String t = GameData.traitName(s.traitId) + " " + s.count + (s.active ? " (bậc " + s.tier + ")" : "");
             synChips.add(new String[]{t, s.active ? "1" : "0"});
         }
-        // Danh sach nguoi choi: hang gon mep phai (avatar tron + ten + mau), hang cua minh sang hon
-        playersBox.clear();
-        if (match.isPvp()) {
-            Color[] dots = {new Color(0.96f, 0.77f, 0.26f, 1), new Color(0.45f, 0.8f, 1, 1), new Color(1, 0.55f, 0.65f, 1),
-                new Color(0.55f, 0.95f, 0.6f, 1), new Color(0.78f, 0.62f, 1, 1), new Color(1, 0.75f, 0.4f, 1),
-                new Color(0.5f, 0.9f, 0.9f, 1), new Color(0.9f, 0.7f, 0.9f, 1)};
-            int idx = 0;
-            for (Match.PlayerState p : match.players) {
-                Table row = new Table();
-                // Hang cua minh: chi mot lop vang ban trong suot rat nhe, khong hop dac
-                if (p.human) row.background(Ui.bg(game.assets, new Color(1f, 0.84f, 0.3f, 0.16f)));
-                row.pad(2, 4, 2, 4);
-                com.badlogic.gdx.scenes.scene2d.ui.Image av = new com.badlogic.gdx.scenes.scene2d.ui.Image(
-                    new com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable(new com.badlogic.gdx.graphics.g2d.TextureRegion(game.assets.avatarTex)));
-                av.setColor(p.alive ? dots[idx % dots.length] : new Color(0.4f, 0.4f, 0.45f, 1));
-                row.add(av).width(20).height(20).padRight(5);
-                Label nm = Ui.labelSmall(game.assets, p.name + (p.placement > 0 ? " (hạng " + p.placement + ")" : ""), p.alive ? (p.human ? Ui.GOLD : Color.WHITE) : new Color(0.55f, 0.55f, 0.6f, 1));
-                row.add(nm).expandX().align(com.badlogic.gdx.utils.Align.left);
-                Label hp = Ui.labelSmall(game.assets, p.alive ? String.valueOf(p.hp) : "LOẠI", p.alive ? Color.WHITE : new Color(0.9f, 0.4f, 0.4f, 1));
-                row.add(hp).align(com.badlogic.gdx.utils.Align.right);
-                row.row();
-                // Thanh mau mong duoi ten (bar mau, khong chi la con so)
-                com.badlogic.gdx.scenes.scene2d.ui.ProgressBar.ProgressBarStyle bs = new com.badlogic.gdx.scenes.scene2d.ui.ProgressBar.ProgressBarStyle();
-                bs.background = Ui.bg(game.assets, new Color(0, 0, 0, 0.55f));
-                bs.knobBefore = Ui.bg(game.assets, p.alive ? new Color(0.30f, 0.85f, 0.45f, 0.95f) : new Color(0.4f, 0.4f, 0.45f, 0.9f));
-                com.badlogic.gdx.scenes.scene2d.ui.ProgressBar bar = new com.badlogic.gdx.scenes.scene2d.ui.ProgressBar(0, Engine.HP_MAX, 1, false, bs);
-                bar.setValue(p.alive ? p.hp : 0);
-                bar.setAnimateDuration(0);
-                row.add(bar).colspan(3).width(164).height(5).padTop(1);
-                playersBox.add(row).width(172).padBottom(2).row();
-                idx++;
-            }
-        }
-        oppInfo = Ui.labelSmall(game.assets, "", Color.WHITE);
-        oppInfo.setWrap(true);
-        // Nen toi ban trong suot + bong mem sau khoi chu do tham/thong tin (truoc day la chu tran tren tranh):
-        // ShadowTable nen dac alpha 0.45, padding deu 9px, chu nam gon trong khoi.
-        Table oppBg = Ui.shadowTable(game.assets);
-        oppBg.background(Ui.bg(game.assets, new Color(0.04f, 0.03f, 0.10f, 0.45f)));
-        oppBg.pad(9);
-        oppBg.add(oppInfo).width(154).align(com.badlogic.gdx.utils.Align.left);
-        playersBox.add(oppBg).width(172).align(com.badlogic.gdx.utils.Align.left).padTop(4).row();
-        StringBuilder ob = new StringBuilder();
-        if (match.isPvp()) {
-            ob.append("Đối thủ vòng này: ").append(nextOpponentText());
-        } else if (match.mode == Match.Mode.WAVES) {
-            ob.append("Sóng hiện tại: ").append(match.wave).append("\nMáu còn: ").append(h.hp).append("\nQuái sóng này: ").append(match.waveTeam(match.wave).size()).append(" con");
-        } else {
-            Stages.StageDef def = Stages.stageDef(match.campaignStageId);
-            ob.append("Màn ").append(def.id).append(": ").append(def.name).append("\nChương ").append(def.chapter).append(" — ").append(Stages.chapterName(def.chapter))
-              .append("\nSức mạnh địch: ").append(def.power).append("\nThưởng: ").append(def.reward).append(" điểm");
-        }
-        oppInfo.setText(ob.toString());
+        // Danh sach nguoi choi + danh dau doi thu kieu TFT: hop chu "Doi thu vong nay —
+        // doi hinh: ..." duoi danh sach DA BO HAN; doi thu duoc danh dau ngay trong hang
+        // cua ho o buildPlayerList (kiem cheo + vien vang).
+        markedOpponent = match.isPvp() ? match.peekNextOpponent() : null;
+        buildPlayerList();
         detectMerges();
+    }
+
+    // Xay (lai) cac hang nguoi choi o cot phai: avatar tron + ten + mau + thanh mau mong.
+    // Hang cua minh: lop vang nhe. Hang DOI THU (markedOpponent): nen trong vang + VIEN
+    // VANG 2px (opponentRowBg) + icon KIEM CHEO 16px ngay sau avatar + ten vang. Moi hang
+    // deu danh san mot o 16px cho dau kiem nen bo cuc ten/mau khong xich giua cac hang va
+    // giua cac vong. PvE (Chien Dich / Song Quai): khong co hang nguoi choi — cot phai
+    // chi con tieu de, gon sach, khong danh dau hang nao.
+    private void buildPlayerList() {
+        playersBox.clear();
+        if (!match.isPvp()) return;
+        Color[] dots = {new Color(0.96f, 0.77f, 0.26f, 1), new Color(0.45f, 0.8f, 1, 1), new Color(1, 0.55f, 0.65f, 1),
+            new Color(0.55f, 0.95f, 0.6f, 1), new Color(0.78f, 0.62f, 1, 1), new Color(1, 0.75f, 0.4f, 1),
+            new Color(0.5f, 0.9f, 0.9f, 1), new Color(0.9f, 0.7f, 0.9f, 1)};
+        int idx = 0;
+        for (Match.PlayerState p : match.players) {
+            Table row = new Table();
+            boolean isOpp = p == markedOpponent;
+            if (isOpp) row.background(opponentRowBg());
+            else if (p.human) row.background(Ui.bg(game.assets, new Color(1f, 0.84f, 0.3f, 0.16f)));
+            row.pad(2, 4, 2, 4);
+            com.badlogic.gdx.scenes.scene2d.ui.Image av = new com.badlogic.gdx.scenes.scene2d.ui.Image(
+                new com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable(new com.badlogic.gdx.graphics.g2d.TextureRegion(game.assets.avatarTex)));
+            av.setColor(p.alive ? dots[idx % dots.length] : new Color(0.4f, 0.4f, 0.45f, 1));
+            row.add(av).width(20).height(20).padRight(4);
+            // O dau kiem cheo co dinh 16px sau avatar: hang doi thu ve icon, hang khac de o
+            // trong cung be rong — vi tri ten/mau cua moi hang giong het nhau.
+            if (isOpp) {
+                com.badlogic.gdx.scenes.scene2d.ui.Image sw = new com.badlogic.gdx.scenes.scene2d.ui.Image(
+                    new com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable(new com.badlogic.gdx.graphics.g2d.TextureRegion(swordsTexture())));
+                row.add(sw).width(16).height(16).padRight(4);
+            } else {
+                row.add().width(16).height(16).padRight(4);
+            }
+            Label nm = Ui.labelSmall(game.assets, p.name + (p.placement > 0 ? " (hạng " + p.placement + ")" : ""), p.alive ? ((p.human || isOpp) ? Ui.GOLD : Color.WHITE) : new Color(0.55f, 0.55f, 0.6f, 1));
+            row.add(nm).expandX().align(com.badlogic.gdx.utils.Align.left);
+            Label hp = Ui.labelSmall(game.assets, p.alive ? String.valueOf(p.hp) : "LOẠI", p.alive ? Color.WHITE : new Color(0.9f, 0.4f, 0.4f, 1));
+            row.add(hp).align(com.badlogic.gdx.utils.Align.right);
+            row.row();
+            // Thanh mau mong duoi ten (bar mau, khong chi la con so)
+            com.badlogic.gdx.scenes.scene2d.ui.ProgressBar.ProgressBarStyle bs = new com.badlogic.gdx.scenes.scene2d.ui.ProgressBar.ProgressBarStyle();
+            bs.background = Ui.bg(game.assets, new Color(0, 0, 0, 0.55f));
+            bs.knobBefore = Ui.bg(game.assets, p.alive ? new Color(0.30f, 0.85f, 0.45f, 0.95f) : new Color(0.4f, 0.4f, 0.45f, 0.9f));
+            com.badlogic.gdx.scenes.scene2d.ui.ProgressBar bar = new com.badlogic.gdx.scenes.scene2d.ui.ProgressBar(0, Engine.HP_MAX, 1, false, bs);
+            bar.setValue(p.alive ? p.hp : 0);
+            bar.setAnimateDuration(0);
+            row.add(bar).colspan(4).width(164).height(5).padTop(1);
+            playersBox.add(row).width(172).padBottom(2).row();
+            idx++;
+        }
+    }
+
+    // Icon KIEM CHEO ve bang Pixmap 28x28 (khong dung emoji/ky tu): 2 thanh kiem cheo
+    // thanh hinh X — luoi bac sang, chuoi vang, can nau dap. Ve 1 kiem (mui tren-trai,
+    // can duoi-phai) roi ve ban guong qua truc doc. Texture tao 1 lan, dung chung.
+    private Texture swordsTexture() {
+        if (swordsTex != null) return swordsTex;
+        int S = 28;
+        Pixmap pm = new Pixmap(S, S, Pixmap.Format.RGBA8888);
+        drawSword(pm, S, false);
+        drawSword(pm, S, true);
+        swordsTex = new Texture(pm);
+        swordsTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        pm.dispose();
+        return swordsTex;
+    }
+
+    private void drawSword(Pixmap pm, int S, boolean mirror) {
+        // Luoi kiem: 3 duong song song (day ~3px) tu mui (6,3) toi chuoi (19,16)
+        pm.setColor(0.93f, 0.95f, 1f, 1f);
+        swordLine(pm, S, mirror, 6, 3, 19, 16);
+        swordLine(pm, S, mirror, 7, 2, 20, 15);
+        swordLine(pm, S, mirror, 5, 4, 18, 17);
+        // Chuoi kiem vang: 2 duong vuong goc voi luoi tai (19,16)
+        pm.setColor(1f, 0.78f, 0.25f, 1f);
+        swordLine(pm, S, mirror, 16, 19, 22, 13);
+        swordLine(pm, S, mirror, 17, 20, 23, 14);
+        // Can nau + dap vang o cuoi can
+        pm.setColor(0.45f, 0.30f, 0.16f, 1f);
+        swordLine(pm, S, mirror, 20, 17, 23, 20);
+        swordLine(pm, S, mirror, 21, 16, 24, 19);
+        pm.setColor(1f, 0.78f, 0.25f, 1f);
+        int px = mirror ? S - 1 - 24 : 24;
+        pm.fillCircle(px, 21, 2);
+    }
+
+    private void swordLine(Pixmap pm, int S, boolean mirror, int x1, int y1, int x2, int y2) {
+        if (mirror) { x1 = S - 1 - x1; x2 = S - 1 - x2; }
+        pm.drawLine(x1, y1, x2, y2);
+    }
+
+    // Nen hang doi thu: Pixmap 16x16 — trong vang mo (alpha 0.26, doc duoc tren ca san
+    // sang) + vien vang dac 2px; NinePatch giu nguyen do day vien khi keo gian theo hang.
+    // (Khong boc Table ngoai: tranh doi chieu cao hang lam xich danh sach.)
+    private NinePatchDrawable opponentRowBg() {
+        if (oppRowBg != null) return oppRowBg;
+        Pixmap pm = new Pixmap(16, 16, Pixmap.Format.RGBA8888);
+        pm.setColor(1f, 0.80f, 0.25f, 0.26f);
+        pm.fill();
+        pm.setColor(1f, 0.80f, 0.25f, 1f);
+        pm.fillRectangle(0, 0, 16, 2);
+        pm.fillRectangle(0, 14, 16, 2);
+        pm.fillRectangle(0, 0, 2, 16);
+        pm.fillRectangle(14, 0, 2, 16);
+        Texture t = new Texture(pm);
+        t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        pm.dispose();
+        oppRowBg = new NinePatchDrawable(new NinePatch(t, 4, 4, 4, 4));
+        return oppRowBg;
     }
 
     // Phat hien gop sao de chay hieu ung xoay hop nhat: tuong moi xuat hien voi sao > 1
@@ -443,22 +515,6 @@ public class MatchScreen extends ScreenAdapter {
         int bi = h.bench.indexOf(u);
         if (bi >= 0) return new float[]{benchCx(bi), benchCy()};
         return null;
-    }
-
-    private String nextOpponentText() {
-        if (Engine.isPveStageRound(match.round)) return "Quái PvE (" + Engine.pveEnemiesForRound(match.round).size() + " con)";
-        // Do tham: hien ten + toan bo doi hinh bot se gap
-        Match.PlayerState bot = match.peekNextOpponent();
-        List<Engine.PlacedUnit> team = match.peekNextOpponentTeam();
-        if (bot == null || team == null) return "một đối thủ bot (đội hình ẩn)";
-        StringBuilder sb = new StringBuilder(bot.name).append(" — đội hình: ");
-        for (int i = 0; i < team.size(); i++) {
-            Engine.PlacedUnit u = team.get(i);
-            if (i > 0) sb.append(", ");
-            sb.append(GameData.champById(u.defId).name);
-            if (u.star > 1) sb.append(" (").append(u.star).append(" sao)");
-        }
-        return sb.toString();
     }
 
     // Khay trang bi VE TAY: moi mon do trong kho la 1 o icon rieng (icon ve tay that, khong
@@ -965,8 +1021,10 @@ public class MatchScreen extends ScreenAdapter {
         batch.end();
         // --- Bong do cho khoi danh sach nguoi choi mep phai (Table khong nen, ve tay o day;
         // cac nut/plaque/panel Scene2D con lai tu do bong qua Ui.ShadowTextButton/ShadowTable) ---
+        // Chi ve khi danh sach CO hang (PvP): PvE de trong -> khong de mang bong ma treo lo lung.
         batch.begin();
-        drawShadowRect(playersBox.getX(), playersBox.getY(), playersBox.getWidth(), playersBox.getHeight(), 0.30f);
+        if (playersBox.getChildren().size > 0)
+            drawShadowRect(playersBox.getX(), playersBox.getY(), playersBox.getWidth(), playersBox.getHeight(), 0.30f);
         batch.end();
         // --- HUD Scene2D (plaque, nut noi, danh sach gon) ---
         stage.act(delta);
@@ -2113,6 +2171,15 @@ public class MatchScreen extends ScreenAdapter {
         if (match.human().board.isEmpty()) toast("Đội hình trống — vẫn vào trận (sẽ thua chắc).");
         battleArenaKey = arenaKey(); // chot san cua VONG SAP DAU truoc khi fight() tang round
         outcome = match.fight();
+        // Ghim danh dau theo DOI THU THAT vua dau (outcome.opponentName): binh thuong
+        // trung peek cua pha chuan bi (fight() dung cung opponentCursor) nen khong phai
+        // xay lai; neu lech thi xay lai danh sach de kiem cheo/highlight o pha tran khop
+        // 100%. Vong PvE (ten "Quai PvE ...") khong khop nguoi choi nao -> dau = null.
+        if (match.isPvp() && outcome != null) {
+            Match.PlayerState real = null;
+            for (Match.PlayerState p : match.players) if (p.name.equals(outcome.opponentName)) { real = p; break; }
+            if (real != markedOpponent) { markedOpponent = real; buildPlayerList(); }
+        }
         shopOpen = false; // vao giao tranh: lop shop tu dong (nut Toc do da bo — speed chi con la bien noi bo cho cong cu chup)
         playT = 0; firedIdx = 0; speed = 1;
         floatTexts.clear(); glows.clear(); projectiles.clear(); pows.clear(); battleFx.clear();

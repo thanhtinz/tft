@@ -213,6 +213,23 @@ kiểm chứng headless mục 19–21):
 - **Tên tướng trong bảng sát thương:** cột tên được nới rộng (thanh sát thương lùi sang phải) và tên dài
   được cắt bằng `MatchScreen.fitDamageName`: phần tên bị rút gọn kèm "..." nhưng **hậu tố sao "(N sao)"
   luôn nguyên vẹn** (bản cũ cắt mù từ cuối chuỗi thành "Pipo Chim Sẻ (2").
+- **Đánh dấu đối thủ kiểu TFT (thay hộp chữ "Đối thủ vòng này"):** hộp chữ dưới danh sách người chơi
+  ("Đối thủ vòng này: X — đội hình: ..." liệt kê toàn bộ tướng địch, kèm biến thể thông tin PvE) đã
+  **xoá hẳn** — cả nhãn `oppInfo`, khung nền riêng và hàm `nextOpponentText()`; cột phải kết thúc ngay
+  ở hàng người chơi cuối, mảng bóng sau danh sách chỉ vẽ khi danh sách có hàng. Thay vào đó, đối thủ
+  được đánh dấu **ngay trong hàng của họ** trong danh sách "NGƯỜI CHƠI — MÁU" (`MatchScreen.buildPlayerList`,
+  tách khỏi `refreshPlanning`): nền trong vàng + **viền vàng 2px** (NinePatch vẽ bằng Pixmap, không bọc
+  Table ngoài nên chiều cao hàng không đổi) + **icon kiếm chéo 16px** ngay sau avatar (texture 28×28 vẽ
+  bằng Pixmap: 2 lưỡi bạc chéo hình X, chuôi vàng, cán nâu — không emoji) + tên vàng. Mọi hàng đều dành
+  sẵn ô 16px cho dấu kiếm nên vị trí tên/máu không xê dịch giữa các hàng/vòng. Đối thủ lấy từ
+  `Match.peekNextOpponent()` (round-robin tất định — `fight()` dùng cùng `opponentCursor` nên dấu ở pha
+  chuẩn bị khớp người sẽ gặp); `startBattle` còn ghim lại theo `FightOutcome.opponentName` thật để pha
+  trận khớp 100%. Vòng PvE/vòng quái trong PvP: không đánh dấu hàng nào; chế độ PvE (Chiến Dịch/Sóng
+  Quái) cột phải chỉ còn tiêu đề, gọn sạch. Cơ chế ghép trận hiện tại **không có trận bóng ma** (đối thủ
+  luôn là bot còn sống) nên không có trường hợp đánh dấu người đã bị loại. Dòng trạng thái "Đang giao
+  tranh với X..." trên đầu pha trận giữ nguyên. Mode chụp mới: `oppmark` (chuẩn bị PvP vòng 13),
+  `oppbattle` (đang đấu), `pveplan` (Chiến Dịch) — ảnh `tools/shot24-*.png` đã soi: dấu đúng hàng
+  Bé Na ở cả 2 pha, PvE sạch dấu/hộp/bóng ma.
 
 ### Nét pixel cho tranh nền + kiểm chứng sân hoàng hôn/băng (đợt 2026-10-25)
 
