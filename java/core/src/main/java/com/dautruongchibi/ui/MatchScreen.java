@@ -37,10 +37,13 @@ import java.util.Set;
 
 // Man hinh tran dau — BO CUC SAN TRAN VIEN (hoc tu Kanto Tactics + FighterZ Tactics va ban RN):
 // tranh san la MOT moi truong lien mach phu kin 1280x720, moi UI la lop noi ban trong suot TREN san.
-// Ban co lon o giua (o 70px, sprite 80px), luoi chi mo o pha chuan bi va mo han khi giao tranh.
-// Bench = hang o ngay mep duoi trong san, shop = hang 5 the o dai duoi tren san.
-// Toc/he = chip nho doc mep trai; danh sach nguoi choi = hang gon mep phai; nhat ky = panel bat/tat.
-// Giu nguyen trinh dien: pow truyen tranh, announcer, bang sat thuong, popup trang bi, xoay gop sao.
+// Ban co lon o giua (o painted 84x70, sprite 100px), luoi chi mo o pha chuan bi va mo han khi giao tranh.
+// Bench = hang o ngay mep duoi trong san. DIEU KHIEN hoc TFT Mobile: nut tron xanh duong goc duoi
+// trai = cap + mua XP, nut tron vang goc duoi phai = vang + mo/dong SHOP (shop la lop mo/dong nam
+// tren bench, reroll tron chi co trong shop, cham vung trong thi dong shop); tran TU DONG bat dau
+// khi het 45s chuan bi; pha ket qua tu chuyen sau ~4s va bang sat thuong tu hien o pha do.
+// Toc/he = chip nho doc mep trai; danh sach nguoi choi = hang gon mep phai; nhat ky = nut icon nho.
+// Giu nguyen trinh dien: pow truyen tranh, announcer, popup trang bi, xoay gop sao, keo-tha + thung rac, VFX theo he.
 public class MatchScreen extends ScreenAdapter {
     enum Phase { PLANNING, DRAFT, AUGMENT, BATTLE, RESULT, OVER }
 
@@ -56,13 +59,25 @@ public class MatchScreen extends ScreenAdapter {
     // sprite ban/tran 100px, xem truoc dich 88px, bench o 64 sprite 56px.
     static final float BX = 357, BY = 152, CELLX = 84, CELLY = 70;
     static final float BENCH_Y = 94, BENCH_X = 357, SLOT = 64;
-    static final float SHOP_Y = 6, SHOP_X = 254, CARD_W = 148, CARD_H = 82;
+    // Shop la LOP MO/DONG (truong shopOpen): hang the nam o dai duoi TREN bench (y 156..238,
+    // phu tam hang ban 0 khi dang mo), khong con nam sat mep duoi nhu ban cu.
+    static final float SHOP_Y = 156, SHOP_X = 254, CARD_W = 148, CARD_H = 82;
+    // Hai nut tron dieu khien kieu TFT Mobile (ve tay bang batch, hit-test hinh tron trong BoardInput):
+    // tron xanh duoi-trai = cap + MUA XP, tron vang duoi-phai = vang + mo/dong shop.
+    static final float XP_CX = 62, XP_CY = 58, XP_R = 54;
+    static final float GOLD_CX = 1218, GOLD_CY = 58, GOLD_R = 54;
+    // Nut LAM MOI tron vang o cuoi hang shop — chi ton tai khi shop dang mo.
+    static final float REROLL_CX = 1072, REROLL_CY = SHOP_Y + CARD_H / 2, REROLL_R = 38;
+    // Dem nguoc pha chuan bi: 45 giay (ban cu 90 giay — rut ngan theo dot dieu khien TFT Mobile)
+    static final float PLAN_TIME = 45f;
 
     // HUD labels
     private Label roundLabel, goldVal, lvlVal, hpVal, msgLabel, timerLabel, logLabel, oppInfo;
     private Table invBox, playersBox, logBox;
-    private Ui.GameButton fightBtn, speedBtn, dmgBtn, logBtn;
+    private Ui.GameButton logBtn;
     private boolean showLog = false;
+    private boolean shopOpen = false; // lop shop dang mo hay dong (mac dinh dong nhu TFT Mobile)
+    private float resultT = 0;        // dem giay o pha RESULT sau announcer: ~4s thi tu chuyen tiep
     // Chip toc/he ve tay o mep trai: {noi dung, "1" neu bac dang kich hoat}
     private final List<String[]> synChips = new ArrayList<>();
 
@@ -81,10 +96,10 @@ public class MatchScreen extends ScreenAdapter {
     private boolean returnFromBench;
     private float returnFromX, returnFromY, returnT = -1;
     private static final float RETURN_DUR = 0.22f;
-    // Hai vung thung rac o 2 goc duoi: chi hien khi dang keo tuong TU BAN (tha vao = ban)
+    // Hai vung thung rac o 2 goc duoi: chi hien khi dang KEO tuong (tu ban hoac tu bench, tha vao = ban)
     private static final Rectangle TRASH_L = new Rectangle(10, 8, 190, 108);
     private static final Rectangle TRASH_R = new Rectangle(1080, 8, 190, 108);
-    private float planTimeLeft = 90;
+    private float planTimeLeft = PLAN_TIME;
     private String toast = "";
     private float toastT = 0;
 
@@ -115,7 +130,6 @@ public class MatchScreen extends ScreenAdapter {
     private final Map<String, Engine.FightUnit> unitIndex = new HashMap<>();
     private float announceT = 0; // >0: dang hien chu ho lon giua san o pha RESULT
     private String battleArenaKey = null; // khoa san chot tai startBattle (match.round da tang sau fight())
-    private boolean showDmgChart = false;
     private String popupItemId = null;
     private float popupT = 0;
     private final List<MergeFx> mergeFx = new ArrayList<>();
@@ -128,6 +142,22 @@ public class MatchScreen extends ScreenAdapter {
     // Texture tron mem + vong tron (alpha radial, sinh bang Pixmap giong whiteTex cua Assets):
     // dung cho cum may pow, vong chan theo sao va xoay gop sao (tint mau truc tiep len nen trang).
     private Texture circleTex, ringTex;
+    // Dia tron canh CUNG cho 2 nut tron dieu khien (alpha 1 toi 94% ban kinh roi moi mo dan):
+    // circleTex qua mem nen dia ve bang no bi mo ria nhu bong ma, phai co tex rieng.
+    private Texture discTex;
+
+    private static Texture discTexture() {
+        Pixmap pm = new Pixmap(128, 128, Pixmap.Format.RGBA8888);
+        for (int y = 0; y < 128; y++) for (int x = 0; x < 128; x++) {
+            double d = Math.hypot(x - 63.5, y - 63.5) / 64.0;
+            float al = d <= 0.94 ? 1f : (float) Math.max(0, 1 - (d - 0.94) / 0.06);
+            pm.setColor(1, 1, 1, al);
+            pm.drawPixel(x, y);
+        }
+        Texture t = new Texture(pm);
+        pm.dispose();
+        return t;
+    }
 
     private static Texture radialTex(boolean ring) {
         Pixmap pm = new Pixmap(64, 64, Pixmap.Format.RGBA8888);
@@ -163,6 +193,7 @@ public class MatchScreen extends ScreenAdapter {
         shapes = new ShapeRenderer();
         circleTex = radialTex(false);
         ringTex = radialTex(true);
+        discTex = discTexture();
         stage = new Stage(new FitViewport(1280, 720), batch);
         Assets a = game.assets;
 
@@ -216,10 +247,10 @@ public class MatchScreen extends ScreenAdapter {
         invBox.top().align(com.badlogic.gdx.utils.Align.left);
         stage.addActor(invBox);
 
-        // Nhat ky: panel noi nho bat/tat bang nut, mac dinh tat de giua san thoang — ShadowTable: tu do bong mem
+        // Nhat ky: panel noi nho bat/tat bang nut icon, mac dinh tat de giua san thoang — ShadowTable: tu do bong mem
         logBox = Ui.shadowTable(a);
-        logBox.setPosition(8, 158);
-        logBox.setSize(336, 196);
+        logBox.setPosition(8, 168);
+        logBox.setSize(336, 190);
         logBox.background(Ui.bg(a, Ui.PANEL));
         logBox.pad(8);
         logBox.top().align(com.badlogic.gdx.utils.Align.left);
@@ -230,44 +261,15 @@ public class MatchScreen extends ScreenAdapter {
         logBox.setVisible(false);
         stage.addActor(logBox);
 
-        // Cum nut goc duoi phai: DAU! to, tren no la Toc do + Bang sat thuong
-        fightBtn = Ui.iconButtonBig(a, "sword", "ĐẤU!", Ui.ACCENT);
-        fightBtn.setPosition(1052, 8);
-        fightBtn.setSize(220, 84);
-        fightBtn.addListener(changed(() -> startBattle()));
-        stage.addActor(fightBtn);
-        speedBtn = Ui.iconButton(a, "speed", "Tốc độ: x1", Ui.BTN, a.font);
-        speedBtn.setPosition(1052, 144);
-        speedBtn.setSize(220, 36);
-        speedBtn.addListener(changed(() -> { speed = speed == 1 ? 2 : 1; speedBtn.setText("Tốc độ: x" + (int) speed); }));
-        stage.addActor(speedBtn);
-        dmgBtn = Ui.iconButton(a, "chart", "Bảng sát thương: Tắt", Ui.BTN, a.font);
-        dmgBtn.setPosition(1052, 100);
-        dmgBtn.setSize(220, 36);
-        dmgBtn.addListener(changed(() -> { showDmgChart = !showDmgChart; dmgBtn.setText(showDmgChart ? "Bảng sát thương: Bật" : "Bảng sát thương: Tắt"); }));
-        stage.addActor(dmgBtn);
-
-        // Cum nut goc duoi trai: Mua XP nut lon (kieu TFT mobile) + Lam moi + Ban tuong
-        Ui.GameButton xpBtn = Ui.iconButton(a, "star", "MUA XP\n4 vàng", Ui.BTN_GOLD, a.font);
-        xpBtn.setPosition(8, 6);
-        xpBtn.setSize(88, 84);
-        xpBtn.addListener(changed(() -> { if (phase == Phase.PLANNING) { int g0 = match.human().gold, lv0 = match.human().level; toast(match.buyXp()); if (match.human().level > lv0) game.sound().sfx("levelup"); else if (match.human().gold < g0) game.sound().sfx("coin"); } refreshPlanning(); }));
-        stage.addActor(xpBtn);
-        Ui.GameButton rerollBtn = Ui.iconButton(a, "coin", "Làm mới (2 vàng)", Ui.BTN_GOLD, a.fontSmall);
-        rerollBtn.setPosition(104, 48);
-        rerollBtn.setSize(150, 40);
-        rerollBtn.addListener(changed(() -> { if (phase == Phase.PLANNING) { int g0 = match.human().gold; toast(match.reroll()); if (match.human().gold < g0) game.sound().sfx("reroll"); } refreshPlanning(); }));
-        stage.addActor(rerollBtn);
-        Ui.GameButton sellBtn = Ui.iconButton(a, "trash", "Bán tướng chọn", Ui.BTN, a.fontSmall);
-        sellBtn.setPosition(104, 6);
-        sellBtn.setSize(150, 40);
-        sellBtn.addListener(changed(() -> { if (phase == Phase.PLANNING && selUid != null) { int g0 = match.human().gold; toast(match.sell(selUid)); if (match.human().gold > g0) game.sound().sfx("sell"); selUid = null; refreshPlanning(); } }));
-        stage.addActor(sellBtn);
+        // SO DO DIEU KHIEN MOI (TFT Mobile): khong con cum nut chu nhat o 2 goc duoi.
+        // Nut tron mua XP (duoi-trai) + nut tron vang/mo shop (duoi-phai) + nut reroll tron trong
+        // shop deu VE TAY bang batch (drawRoundButtons/drawShop) va xu ly cham trong BoardInput.
         // KHONG con nut "Cat ve bench": keo tuong tren ban tha vao o bench de cat (xem BoardInput keo-tha).
-        logBtn = Ui.iconButton(a, "book", "Nhật ký: Tắt", Ui.BTN, a.fontSmall);
-        logBtn.setPosition(8, 106);
-        logBtn.setSize(110, 38);
-        logBtn.addListener(changed(() -> { showLog = !showLog; logBox.setVisible(showLog); logBtn.setText(showLog ? "Nhật ký: Bật" : "Nhật ký: Tắt"); }));
+        // Nhat ky thu thanh nut ICON nho kin dao o mep trai (khong chu), bam de bat/tat panel.
+        logBtn = Ui.iconButton(a, "book", "", Ui.BTN, a.fontSmall);
+        logBtn.setPosition(14, 120);
+        logBtn.setSize(42, 42);
+        logBtn.addListener(changed(() -> { showLog = !showLog; logBox.setVisible(showLog); }));
         stage.addActor(logBtn);
         // Thoat: nut nho do o goc tren phai
         TextButton exitBtn = Ui.button(a, "Thoát", Ui.RED, a.fontSmall);
@@ -392,7 +394,6 @@ public class MatchScreen extends ScreenAdapter {
         logLabel.setText(lb.toString());
         rebuildInvBox();
         detectMerges();
-        fightBtn.setText(match.mode == Match.Mode.WAVES ? "ĐÁNH SÓNG " + match.wave + "!" : match.mode == Match.Mode.CAMPAIGN ? "VÀO TRẬN!" : "ĐẤU!");
     }
 
     // Phat hien gop sao de chay hieu ung xoay hop nhat: tuong moi xuat hien voi sao > 1
@@ -493,7 +494,7 @@ public class MatchScreen extends ScreenAdapter {
         float now = com.badlogic.gdx.utils.TimeUtils.nanoTime() / 1e9f;
         // --- Cap nhat trang thai ---
         if (toastT > 0) { toastT -= delta; msgLabel.setText(toast); }
-        else if (phase == Phase.PLANNING) msgLabel.setText("Kéo tướng để xếp đội hình: lên bàn để đặt, về bench để cất, xuống góc thùng rác để bán.");
+        else if (phase == Phase.PLANNING) msgLabel.setText("Kéo tướng: lên bàn để đặt, về bench để cất, vào thùng rác để bán — hết giờ tự vào trận.");
         else if (phase == Phase.BATTLE) msgLabel.setText("Đang giao tranh với " + (outcome != null ? outcome.opponentName : "") + "...");
         if (returnT >= 0) { returnT += delta; if (returnT >= RETURN_DUR) { returnT = -1; returnUid = null; } }
         if (announceT > 0) announceT -= delta;
@@ -510,7 +511,7 @@ public class MatchScreen extends ScreenAdapter {
                 draftApplied = true;
                 toast(match.pickDraft(draftChosen));
                 if (match.augmentPending) { phase = Phase.AUGMENT; }
-                else { phase = Phase.PLANNING; planTimeLeft = 90; refreshPlanning(); }
+                else { phase = Phase.PLANNING; planTimeLeft = PLAN_TIME; refreshPlanning(); }
             }
         }
         if (phase == Phase.BATTLE && outcome != null && outcome.result != null) {
@@ -523,9 +524,16 @@ public class MatchScreen extends ScreenAdapter {
             if (playT >= outcome.result.duration + 1.0f) {
                 phase = Phase.RESULT;
                 announceT = 1.5f; // announcer phong to giua san roi moi hien panel ket qua
+                resultT = 0;
                 if (outcome.droppedItem != null) { popupItemId = outcome.droppedItem; popupT = 2.3f; }
                 game.sound().sfx(outcome.humanWon ? "win" : "lose");
             }
+        }
+        // Pha ket qua: sau announcer, tu dong chuyen tiep sau ~4 giay (cham man hinh = di ngay,
+        // xu ly o BoardInput nhanh RESULT). Overlay ket thuc tran (OVER) giu nguyen nut bam.
+        if (phase == Phase.RESULT && announceT <= 0) {
+            resultT += delta;
+            if (resultT >= 4.0f) advanceFromResult();
         }
 
         Gdx.gl.glClearColor(0.05f, 0.04f, 0.1f, 1);
@@ -544,7 +552,7 @@ public class MatchScreen extends ScreenAdapter {
         batch.begin();
         battleFx.drawGround(batch, circleTex); // vet dat theo he (chay/doc/bang) nam duoi chan tuong
         if (phase == Phase.BATTLE || phase == Phase.RESULT) drawBattleUnits(now);
-        else { drawPlanningUnits(now); drawBench(now); drawShop(); }
+        else { drawPlanningUnits(now); drawBench(now); if (shopOpen && phase == Phase.PLANNING) drawShop(); }
         drawSynergyChips();
         drawMergeFx(now);
         // So sat thuong noi (phong Kanto: cam vang, chi mang to + "!")
@@ -571,14 +579,19 @@ public class MatchScreen extends ScreenAdapter {
         // --- HUD Scene2D (plaque, nut noi, danh sach gon) ---
         stage.act(delta);
         stage.draw();
+        // 2 nut tron dieu khien ve sau HUD (tren moi lop san/bench/shop) nhung duoi overlay:
+        // chi o pha chuan bi — vao giao tranh la bien mat, khong con nut thua.
+        if (phase == Phase.PLANNING) drawRoundButtons(now);
         // Lop keo-tha ve sau HUD de sprite bam tro + vung thung rac nam tren cung (chi pha chuan bi)
         if (phase == Phase.PLANNING) drawDragOverlay(now);
-        // --- Overlay tren cung: bang sat thuong, announcer/ket qua, popup trang bi ---
-        if (showDmgChart && outcome != null && outcome.result != null && (phase == Phase.BATTLE || phase == Phase.RESULT)) drawDamageChart();
+        // --- Overlay tren cung: announcer/ket qua, popup trang bi ---
         if (phase == Phase.DRAFT) drawDraftOverlay(now);
         else if (phase == Phase.AUGMENT) drawAugmentOverlay();
         else if (phase == Phase.RESULT) drawResultOverlay();
         else if (phase == Phase.OVER) drawOverOverlay();
+        // Bang sat thuong TU HIEN o pha ket qua vong (sau announcer, cung luc panel ket qua) —
+        // khong con nut bat/tat; du lieu van la Engine.damageChart cua tran vua dau.
+        if (phase == Phase.RESULT && announceT <= 0 && outcome != null && outcome.result != null) drawDamageChart();
         if (popupT > 0 && popupItemId != null) drawItemPopup();
     }
 
@@ -840,6 +853,139 @@ public class MatchScreen extends ScreenAdapter {
                 drawCentered(a.fontSmall, "Sắp gộp!", x + CARD_W - 26, y + CARD_H - 6, Ui.GOLD);
             }
         }
+        drawShopOdds(a);
+        drawRerollButton(a, h);
+    }
+
+    // Dong ti le odds theo bac gia o cap hien tai (du lieu GameData.SHOP_ODDS) — nam ngay tren hang the.
+    private void drawShopOdds(Assets a) {
+        Match.PlayerState h = match.human();
+        int lvl = Math.max(1, Math.min(9, h.level));
+        float oy = SHOP_Y + CARD_H + 4;
+        batch.setColor(0.05f, 0.05f, 0.12f, 0.78f);
+        batch.draw(a.whiteTex(), SHOP_X - 6, oy, 330, 24);
+        batch.setColor(Color.WHITE);
+        a.fontSmall.setColor(Ui.TEXT_DIM);
+        a.fontSmall.draw(batch, "Tỉ lệ cấp " + lvl + ":", SHOP_X, oy + 17);
+        String label = "Tỉ lệ cấp " + lvl + ":";
+        layout.setText(a.fontSmall, label);
+        float cx = SHOP_X + layout.width + 10;
+        Color[] tierCols = { new Color(0.75f, 0.75f, 0.8f, 1), new Color(0.4f, 0.9f, 0.45f, 1), new Color(0.4f, 0.65f, 1, 1), new Color(0.78f, 0.5f, 1, 1), new Color(1, 0.8f, 0.2f, 1) };
+        for (int c = 0; c < 5; c++) {
+            batch.setColor(tierCols[c]);
+            batch.draw(a.whiteTex(), cx, oy + 6, 11, 11);
+            batch.setColor(Color.WHITE);
+            String pct = GameData.SHOP_ODDS[lvl][c] + "%";
+            a.fontSmall.setColor(Color.WHITE);
+            a.fontSmall.draw(batch, pct, cx + 14, oy + 17);
+            layout.setText(a.fontSmall, pct);
+            cx += 14 + layout.width + 10;
+        }
+        a.fontSmall.setColor(Color.WHITE);
+    }
+
+    // Nut LAM MOI tron vang o cuoi hang shop (gia 2) — chi ve khi shop mo, hit-test o planningPress.
+    private void drawRerollButton(Assets a, Match.PlayerState h) {
+        boolean afford = h.gold >= 2;
+        float d = REROLL_R * 2;
+        batch.setColor(0, 0, 0, 0.35f);
+        batch.draw(discTex, REROLL_CX - REROLL_R - 3, REROLL_CY - REROLL_R - 3, d, d);
+        batch.setColor(afford ? new Color(0.50f, 0.34f, 0.05f, 1) : new Color(0.35f, 0.35f, 0.38f, 1));
+        batch.draw(discTex, REROLL_CX - REROLL_R, REROLL_CY - REROLL_R, d, d);
+        batch.setColor(afford ? new Color(0.98f, 0.78f, 0.25f, 1) : new Color(0.55f, 0.55f, 0.58f, 1));
+        float in = REROLL_R - 5;
+        batch.draw(discTex, REROLL_CX - in, REROLL_CY - in, in * 2, in * 2);
+        batch.setColor(1, 1, 1, 0.30f);
+        batch.draw(a.glowTex(), REROLL_CX - in, REROLL_CY + 2, in * 2, in - 4);
+        batch.setColor(Color.WHITE);
+        drawCentered(a.fontSmall, "LÀM MỚI", REROLL_CX, REROLL_CY + 15, afford ? new Color(0.35f, 0.22f, 0.02f, 1) : Ui.TEXT_DIM);
+        batch.draw(a.icon("coin"), REROLL_CX - 13, REROLL_CY - 22, 13, 13);
+        drawCentered(a.font, "2", REROLL_CX + 8, REROLL_CY - 9, afford ? new Color(0.35f, 0.22f, 0.02f, 1) : Ui.TEXT_DIM);
+    }
+
+    // Hai nut tron dieu khien o 2 goc duoi (chi pha chuan bi), ve bang batch sau HUD:
+    // - Trai: dia xanh duong = cap + MUA XP: vong cung tien trinh XP quanh dia, huy hieu "Lv. X"
+    //   de o goc duoi-phai cua dia, trong dia co nhan MUA XP + icon xu + gia 4 + dong "XP a/b".
+    // - Phai: dia vang = so vang lon o giua + nhan SHOP/DONG; huy hieu lua + so streak khi
+    //   dang co chuoi thang (streak >= 2). Shop dang mo thi dia co vong sang nhap nhay bao quanh.
+    private void drawRoundButtons(float now) {
+        Assets a = game.assets;
+        Match.PlayerState h = match.human();
+        // --- Vong tien trinh XP + vong bao shop-mo: ve bang ShapeRenderer truoc batch ---
+        shapes.begin(ShapeRenderer.ShapeType.Filled);
+        int need = Engine.xpToNext(h.level);
+        float frac = h.level >= 9 ? 1f : Math.min(1f, h.xp / (float) Math.max(1, need));
+        shapes.setColor(0.04f, 0.05f, 0.12f, 0.55f);
+        shapes.circle(XP_CX, XP_CY, XP_R + 6);
+        if (frac > 0) {
+            shapes.setColor(0.35f, 0.85f, 1f, 0.95f);
+            shapes.arc(XP_CX, XP_CY, XP_R + 6, 90, -360f * frac, 40);
+        }
+        if (shopOpen) {
+            float pulse = 0.55f + 0.35f * (float) Math.sin(now * 4);
+            shapes.setColor(1f, 0.82f, 0.25f, pulse);
+            shapes.circle(GOLD_CX, GOLD_CY, GOLD_R + 7);
+        }
+        shapes.end();
+
+        batch.begin();
+        float d = XP_R * 2;
+        // Dia XP: bong + vien xanh dam + mat xanh duong + gloss nua tren
+        batch.setColor(0, 0, 0, 0.35f);
+        batch.draw(discTex, XP_CX - XP_R - 3, XP_CY - XP_R - 3, d, d);
+        batch.setColor(0.10f, 0.22f, 0.48f, 1);
+        batch.draw(discTex, XP_CX - XP_R, XP_CY - XP_R, d, d);
+        boolean maxLvl = h.level >= 9;
+        batch.setColor(maxLvl ? new Color(0.45f, 0.48f, 0.55f, 1) : new Color(0.17f, 0.40f, 0.80f, 1));
+        float in = XP_R - 5;
+        batch.draw(discTex, XP_CX - in, XP_CY - in, in * 2, in * 2);
+        batch.setColor(1, 1, 1, 0.28f);
+        batch.draw(a.glowTex(), XP_CX - in, XP_CY + 2, in * 2, in - 4);
+        batch.setColor(Color.WHITE);
+        drawCentered(a.font, "MUA XP", XP_CX, XP_CY + 30, Color.WHITE);
+        // Gia: icon xu + "4" mau vang
+        batch.draw(a.icon("coin"), XP_CX - 15, XP_CY + 2, 15, 15);
+        a.font.setColor(Ui.GOLD);
+        layout.setText(a.font, "4");
+        a.font.draw(batch, "4", XP_CX + 3, XP_CY + 15);
+        a.font.setColor(Color.WHITE);
+        drawCentered(a.fontSmall, maxLvl ? "XP MAX" : "XP " + h.xp + "/" + need, XP_CX, XP_CY - 16, new Color(0.85f, 0.92f, 1, 1));
+        // Huy hieu cap: dia vang nho de goc duoi-phai dia XP, loi toi + chu "Lv. X"
+        batch.setColor(0.98f, 0.78f, 0.25f, 1);
+        batch.draw(discTex, XP_CX + 38 - 19, XP_CY - 38 - 19, 38, 38);
+        batch.setColor(0.16f, 0.12f, 0.30f, 1);
+        batch.draw(discTex, XP_CX + 38 - 16.5f, XP_CY - 38 - 16.5f, 33, 33);
+        batch.setColor(Color.WHITE);
+        drawCentered(a.fontSmall, "Lv." + h.level, XP_CX + 38, XP_CY - 38 + 5, Ui.GOLD);
+
+        // Dia vang: bong + vien vang dam + mat vang + gloss
+        float gd = GOLD_R * 2;
+        batch.setColor(0, 0, 0, 0.35f);
+        batch.draw(discTex, GOLD_CX - GOLD_R - 3, GOLD_CY - GOLD_R - 3, gd, gd);
+        batch.setColor(0.50f, 0.34f, 0.05f, 1);
+        batch.draw(discTex, GOLD_CX - GOLD_R, GOLD_CY - GOLD_R, gd, gd);
+        batch.setColor(0.98f, 0.78f, 0.25f, 1);
+        float gin = GOLD_R - 5;
+        batch.draw(discTex, GOLD_CX - gin, GOLD_CY - gin, gin * 2, gin * 2);
+        batch.setColor(1, 1, 1, 0.30f);
+        batch.draw(a.glowTex(), GOLD_CX - gin, GOLD_CY + 2, gin * 2, gin - 4);
+        batch.setColor(Color.WHITE);
+        batch.draw(a.icon("coin"), GOLD_CX - 9, GOLD_CY + 16, 18, 18);
+        drawCentered(a.fontTitle, String.valueOf(h.gold), GOLD_CX, GOLD_CY + 12, new Color(0.30f, 0.19f, 0.02f, 1));
+        drawCentered(a.fontSmall, shopOpen ? "ĐÓNG" : "SHOP", GOLD_CX, GOLD_CY - 22, new Color(0.35f, 0.22f, 0.02f, 1));
+        // Huy hieu chuoi thang: dia do de goc tren-trai dia vang + ngon lua ve tay + so streak
+        if (h.streak >= 2) {
+            float fx = GOLD_CX - 40, fy = GOLD_CY + 40;
+            batch.setColor(0.62f, 0.10f, 0.05f, 1);
+            batch.draw(discTex, fx - 17, fy - 17, 34, 34);
+            batch.setColor(1, 0.45f, 0.10f, 1);
+            batch.draw(a.glowTex(), fx - 11, fy - 9, 22, 20);
+            batch.setColor(1, 0.85f, 0.25f, 1);
+            batch.draw(a.glowTex(), fx - 6, fy - 6, 12, 12);
+            batch.setColor(Color.WHITE);
+            drawCentered(a.fontSmall, String.valueOf(h.streak), fx, fy + 5, Color.WHITE);
+        }
+        batch.end();
     }
 
     private static SkillKind parseKind(String s) {
@@ -1270,7 +1416,9 @@ public class MatchScreen extends ScreenAdapter {
         batch.end();
     }
 
-    private final Rectangle resultBtn = new Rectangle(490, 226, 300, 54);
+    // Panel ket qua vong nam LECH TRAI (tam x=451) de phia phai san danh cho bang sat thuong
+    // tu hien cung luc. Khong con nut "Tiep tuc": pha RESULT tu chuyen sau ~4s, cham = chuyen ngay.
+    private static final float RESULT_CX = 451;
     private void drawResultOverlay() {
         Assets a = game.assets;
         batch.begin();
@@ -1283,19 +1431,21 @@ public class MatchScreen extends ScreenAdapter {
         batch.setColor(0.02f, 0.02f, 0.07f, 0.55f);
         batch.draw(a.whiteTex(), 0, 0, 1280, 720);
         batch.setColor(Color.WHITE);
-        drawShadowRect(320, 200, 640, 330, 0.42f);
-        a.patchPanel.draw(batch, 320, 200, 640, 330);
+        drawShadowRect(216, 200, 470, 330, 0.42f);
+        a.patchPanel.draw(batch, 216, 200, 470, 330);
         if (outcome != null) {
-            drawCentered(a.fontTitle, outcome.bossBattle && outcome.humanWon ? "HẠ GỤC BOSS!" : outcome.humanWon ? "THẮNG!" : "THUA!", 640, 500, outcome.humanWon ? new Color(0.35f, 0.95f, 0.5f, 1) : new Color(1, 0.4f, 0.4f, 1));
-            drawCentered(a.fontBig, outcome.summary, 640, 448, Color.WHITE);
-            drawCentered(a.font, "Đối thủ: " + outcome.opponentName, 640, 414, Ui.TEXT_DIM);
-            if (outcome.humanHpDelta != 0) drawCentered(a.font, "Máu thay đổi: " + outcome.humanHpDelta + "  •  Máu còn: " + match.human().hp, 640, 382, Color.WHITE);
-            if (outcome.droppedItem != null) drawCentered(a.font, "Trang bị rơi: " + GameData.itemById(outcome.droppedItem).name + " (đã vào kho)", 640, 350, Ui.GOLD);
-            if (match.mode == Match.Mode.CAMPAIGN || match.mode == Match.Mode.WAVES) drawCentered(a.fontSmall, match.endMessage, 640, 322, Ui.TEXT_DIM);
+            drawCentered(a.fontTitle, outcome.bossBattle && outcome.humanWon ? "HẠ GỤC BOSS!" : outcome.humanWon ? "THẮNG!" : "THUA!", RESULT_CX, 500, outcome.humanWon ? new Color(0.35f, 0.95f, 0.5f, 1) : new Color(1, 0.4f, 0.4f, 1));
+            // Tom tat vong: chu to neu vua panel 470, dai qua thi ha xuong font thuong
+            layout.setText(a.fontBig, outcome.summary);
+            if (layout.width <= 430) drawCentered(a.fontBig, outcome.summary, RESULT_CX, 448, Color.WHITE);
+            else drawCentered(a.font, outcome.summary, RESULT_CX, 448, Color.WHITE);
+            drawCentered(a.font, "Đối thủ: " + outcome.opponentName, RESULT_CX, 414, Ui.TEXT_DIM);
+            if (outcome.humanHpDelta != 0) drawCentered(a.font, "Máu thay đổi: " + outcome.humanHpDelta + "  •  Máu còn: " + match.human().hp, RESULT_CX, 382, Color.WHITE);
+            if (outcome.droppedItem != null) drawCentered(a.font, "Trang bị rơi: " + GameData.itemById(outcome.droppedItem).name + " (đã vào kho)", RESULT_CX, 350, Ui.GOLD);
+            if (match.mode == Match.Mode.CAMPAIGN || match.mode == Match.Mode.WAVES) drawCentered(a.fontSmall, match.endMessage, RESULT_CX, 322, Ui.TEXT_DIM);
         }
-        drawShadowRect(resultBtn.x, resultBtn.y, resultBtn.width, resultBtn.height, 0.35f);
-        a.patchBtnPrimary[0].draw(batch, resultBtn.x, resultBtn.y, resultBtn.width, resultBtn.height);
-        drawCentered(a.fontBig, match.over ? "Xem kết quả" : "Tiếp tục", 640, resultBtn.y + 38, Color.WHITE);
+        int remain = Math.max(0, (int) Math.ceil(4.0f - resultT));
+        drawCentered(a.fontSmall, match.over ? "Chạm để xem kết quả cuối" : "Tự tiếp tục sau " + remain + "s — chạm để đi ngay", RESULT_CX, 238, Ui.TEXT_DIM);
         batch.end();
     }
 
@@ -1332,7 +1482,8 @@ public class MatchScreen extends ScreenAdapter {
         if (match.human().board.isEmpty()) toast("Đội hình trống — vẫn vào trận (sẽ thua chắc).");
         battleArenaKey = arenaKey(); // chot san cua VONG SAP DAU truoc khi fight() tang round
         outcome = match.fight();
-        playT = 0; firedIdx = 0; speed = 1; speedBtn.setText("Tốc độ: x1");
+        shopOpen = false; // vao giao tranh: lop shop tu dong (nut Toc do da bo — speed chi con la bien noi bo cho cong cu chup)
+        playT = 0; firedIdx = 0; speed = 1;
         floatTexts.clear(); glows.clear(); projectiles.clear(); pows.clear(); battleFx.clear();
         lastAttackAt.clear(); lastAttackTarget.clear(); lastHitAt.clear(); lastScreenPos.clear(); lastHeavyHitAt.clear();
         // Chi muc don vi toan tran (gom ca golem trieu hoi xuat hien giua tran) cho nguong don nang 15%
@@ -1350,7 +1501,7 @@ public class MatchScreen extends ScreenAdapter {
         if (match.draftPending) { enterDraft(); return; }
         if (match.augmentPending) { phase = Phase.AUGMENT; return; }
         phase = Phase.PLANNING;
-        planTimeLeft = 90; selUid = null; armedItem = null;
+        planTimeLeft = PLAN_TIME; resultT = 0; selUid = null; armedItem = null;
         refreshPlanning();
     }
 
@@ -1412,13 +1563,13 @@ public class MatchScreen extends ScreenAdapter {
                         if (augmentRect(i).contains(x, y)) {
                             toast(match.pickAugment(i));
                             game.sound().sfx("levelup");
-                            phase = Phase.PLANNING; planTimeLeft = 90; refreshPlanning();
+                            phase = Phase.PLANNING; planTimeLeft = PLAN_TIME; refreshPlanning();
                             return true;
                         }
                     }
                     return true;
                 }
-                case RESULT: if (resultBtn.contains(x, y)) { advanceFromResult(); return true; } return true;
+                case RESULT: advanceFromResult(); return true; // cham bat ky dau o pha ket qua = chuyen ngay
                 case OVER: {
                     if (overMenuBtn.contains(x, y)) { game.setScreen(new MenuScreen(game)); return true; }
                     if (overAgainBtn.contains(x, y)) { playAgain(); return true; }
@@ -1450,16 +1601,37 @@ public class MatchScreen extends ScreenAdapter {
         }
     }
 
-    // Nhan xuong o pha chuan bi: shop mua ngay nhu cu; dang cam do -> luong cham cu;
-    // cham vao tuong (bench/ban) -> ghi nhan UNG VIEN KEO (cham thuong se chon o touchUp,
-    // keo qua nguong thi BoardInput.touchDragged bat dau keo that).
+    // Nhan xuong o pha chuan bi theo SO DO DIEU KHIEN MOI, thu tu uu tien:
+    // 1) Lop shop (chi khi dang mo): the tuong -> mua ngay (shop van mo sau khi mua);
+    //    nut reroll tron o cuoi hang -> lam moi. Reroll KHONG ton tai khi shop dong.
+    // 2) 2 nut tron goc duoi: tron XP -> mua XP; tron vang -> MO/DONG shop.
+    // 3) Dang cam do -> luong cham cu (planningClick).
+    // 4) Tuong o bench/ban -> UNG VIEN KEO (cham thuong se chon o touchUp, keo qua nguong thi keo that).
+    // 5) Khong cham gi ca (vung san trong) -> neu shop dang mo thi DONG SHOP (dung y user:
+    //    "bam vao man hinh trong ben duoi (ben tren shop) la tat shop"), con khong thi bo chon.
     private boolean planningPress(float x, float y) {
-        for (int i = 0; i < 5; i++) {
-            Rectangle r = new Rectangle(SHOP_X + i * (CARD_W + 8), SHOP_Y, CARD_W, CARD_H);
-            if (r.contains(x, y)) { toast(match.buy(i)); if (match.shop.get(i) == null) game.sound().sfx("coin"); refreshPlanning(); return true; }
+        Match.PlayerState h = match.human();
+        if (shopOpen) {
+            for (int i = 0; i < 5; i++) {
+                Rectangle r = new Rectangle(SHOP_X + i * (CARD_W + 8), SHOP_Y, CARD_W, CARD_H);
+                if (r.contains(x, y)) { toast(match.buy(i)); if (match.shop.get(i) == null) game.sound().sfx("coin"); refreshPlanning(); return true; }
+            }
+            if (Math.hypot(x - REROLL_CX, y - REROLL_CY) <= REROLL_R + 4) {
+                int g0 = h.gold; toast(match.reroll()); if (h.gold < g0) game.sound().sfx("reroll");
+                refreshPlanning(); return true;
+            }
+        }
+        if (Math.hypot(x - XP_CX, y - XP_CY) <= XP_R + 4) {
+            int g0 = h.gold, lv0 = h.level; toast(match.buyXp());
+            if (h.level > lv0) game.sound().sfx("levelup"); else if (h.gold < g0) game.sound().sfx("coin");
+            refreshPlanning(); return true;
+        }
+        if (Math.hypot(x - GOLD_CX, y - GOLD_CY) <= GOLD_R + 4) {
+            shopOpen = !shopOpen;
+            game.sound().sfx("click");
+            return true;
         }
         if (armedItem != null) return planningClick(x, y);
-        Match.PlayerState h = match.human();
         for (int i = 0; i < 9; i++) {
             Rectangle r = new Rectangle(BENCH_X + i * SLOT, BENCH_Y, SLOT - 4, 52);
             if (r.contains(x, y) && i < h.bench.size()) { beginDragCandidate(h.bench.get(i), true, x, y); return true; }
@@ -1473,9 +1645,11 @@ public class MatchScreen extends ScreenAdapter {
                 return true;
             }
             if (selUid != null) return planningClick(x, y); // o trong + dang co tuong chon: dat theo cham nhu cu
-            return true;
+            // O ban trong, khong co gi dang chon -> roi xuong nhanh dong shop o duoi
         }
-        return planningClick(x, y);
+        boolean handled = planningClick(x, y);
+        if (!handled && shopOpen) { shopOpen = false; game.sound().sfx("click"); return true; }
+        return handled;
     }
 
     private void beginDragCandidate(Engine.PlacedUnit u, boolean fromBench, float x, float y) {
@@ -1509,13 +1683,15 @@ public class MatchScreen extends ScreenAdapter {
 
     private boolean trashContains(float x, float y) { return TRASH_L.contains(x, y) || TRASH_R.contains(x, y); }
 
-    // Tha tuong dang keo: thu tu uu tien thung rac (chi tu ban) -> o ban -> o bench; hut thi truot ve cho cu
+    // Tha tuong dang keo: thu tu uu tien thung rac -> o ban -> o bench; hut thi truot ve cho cu
     private void resolveDragDrop() {
         Match.PlayerState h = match.human();
         Engine.PlacedUnit u = dragUnit;
         if (u == null) return;
         boolean ok = false;
-        if (!dragFromBench && trashContains(dragX, dragY)) {
+        // Ban bang keo vao thung rac ap dung cho ca tuong tu bench (nut "Ban tuong chon" da bo
+        // khoi so do dieu khien moi — keo-tha la duong ban duy nhat).
+        if (trashContains(dragX, dragY)) {
             int g0 = h.gold;
             toast(match.sell(u.uid));
             if (h.gold > g0) { game.sound().sfx("sell"); ok = true; }
@@ -1545,7 +1721,7 @@ public class MatchScreen extends ScreenAdapter {
     }
 
     // Lop ve keo-tha (sau stage.draw): sprite truot ve khi tha hut, o dich to sang,
-    // 2 vung thung rac (chi khi keo tu ban), sprite bam con tro nhac len + phong to nhe.
+    // 2 vung thung rac (khi dang keo tuong), sprite bam con tro nhac len + phong to nhe.
     private void drawDragOverlay(float now) {
         Assets a = game.assets;
         batch.begin();
@@ -1567,7 +1743,7 @@ public class MatchScreen extends ScreenAdapter {
             }
         }
         if (dragActive && dragUnit != null) {
-            if (!dragFromBench) { drawTrashZone(TRASH_L, now); drawTrashZone(TRASH_R, now); }
+            drawTrashZone(TRASH_L, now); drawTrashZone(TRASH_R, now); // keo tu bench hay tu ban deu ban duoc
             int cx = cellXAt(dragX), cy = cellYAt(dragY);
             if (cx >= 0 && cx < 7 && cy >= 0 && cy < 4) {
                 float x = BX + cx * CELLX, y = BY + cy * CELLY;
@@ -1605,12 +1781,10 @@ public class MatchScreen extends ScreenAdapter {
         drawCentered(a.fontBig, "BÁN", r.x + r.width / 2, r.y + 36, Color.WHITE);
     }
 
+    // Tra ve true neu click THUC SU lam mot viec (chon/dat/deo do) — planningPress dua vao
+    // day de biet day la "cham vung trong" (khong lam gi) hay thao tac that, phuc vu quy tac dong shop.
+    // (Mua the/reroll khong con o day: lop shop duoc planningPress xu ly rieng khi dang mo.)
     private boolean planningClick(float x, float y) {
-        // Shop
-        for (int i = 0; i < 5; i++) {
-            Rectangle r = new Rectangle(SHOP_X + i * (CARD_W + 8), SHOP_Y, CARD_W, CARD_H);
-            if (r.contains(x, y)) { toast(match.buy(i)); if (match.shop.get(i) == null) game.sound().sfx("coin"); refreshPlanning(); return true; }
-        }
         Match.PlayerState h = match.human();
         // Bench
         for (int i = 0; i < 9; i++) {
@@ -1621,8 +1795,9 @@ public class MatchScreen extends ScreenAdapter {
                     if (armedItem != null) { int inv0 = h.inventory.size(); toast(match.equipItem(u.uid, armedItem)); if (h.inventory.size() < inv0) game.sound().sfx("equip"); armedItem = null; }
                     else { selUid = u.uid; selFromBench = true; toast("Đã chọn " + GameData.champById(u.defId).name + " (bench) — kéo lên bàn hoặc chạm ô bàn cờ để đặt."); }
                     refreshPlanning();
+                    return true;
                 }
-                return true;
+                return false; // o bench trong = vung trong
             }
         }
         // Ban co (chi hang 0..3 la vung dat tuong cua minh)
@@ -1630,6 +1805,7 @@ public class MatchScreen extends ScreenAdapter {
         if (cx >= 0 && cx < 7 && cy >= 0 && cy < 4) {
             Engine.PlacedUnit at = null;
             for (Engine.PlacedUnit u : h.board) if (u.x == cx && u.y == cy) at = u;
+            boolean acted = armedItem != null || selUid != null || at != null;
             if (armedItem != null && at != null) { int inv0 = h.inventory.size(); toast(match.equipItem(at.uid, armedItem)); if (h.inventory.size() < inv0) game.sound().sfx("equip"); armedItem = null; }
             else if (selUid != null) {
                 boolean wasBench = selFromBench;
@@ -1647,7 +1823,7 @@ public class MatchScreen extends ScreenAdapter {
                 toast("Đã chọn " + GameData.champById(at.defId).name + " — kéo để xếp lại (về bench = cất, xuống góc thùng rác = bán), hoặc chạm ô khác để dời.");
             }
             refreshPlanning();
-            return true;
+            return acted;
         }
         selUid = null; armedItem = null;
         refreshPlanning();
@@ -1664,5 +1840,6 @@ public class MatchScreen extends ScreenAdapter {
         if (shapes != null) shapes.dispose();
         if (circleTex != null) circleTex.dispose();
         if (ringTex != null) ringTex.dispose();
+        if (discTex != null) discTex.dispose();
     }
 }

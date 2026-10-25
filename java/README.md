@@ -84,31 +84,36 @@ java/
 - **Bố cục màn trận — sân tràn viền (đợt làm lại theo 2 game mẫu):** tranh sân là MỘT môi trường liền mạch phủ kín
   1280×720, không còn hai cột hộp tím hai bên. Bàn cờ lớn ở giữa (**ô 84×70px, sprite tướng 100px** — tỉ lệ painted,
   bóng ellipse mềm dưới chân);
-  lưới ô chỉ hiện mờ ở pha chuẩn bị và mờ hẳn về ~0 khi giao tranh. Bench là hàng ô ngay mép dưới TRONG sân, shop là
-  hàng 5 thẻ ở dải dưới TRÊN sân. Thông tin dồn ra viền: tộc/hệ = chip nhỏ bán trong suốt dọc mép trái, trang bị = nút
-  nổi dưới chip, danh sách người chơi = hàng gọn mép phải (avatar + tên + số máu + thanh máu mỏng, hàng của mình phủ
-  vàng rất nhẹ), thanh trên = plaque nổi mỏng ở giữa-trên, nhật ký thu thành panel nhỏ bật/tắt bằng nút. Nút hành động
-  ở các góc: ĐẤU! to ở góc dưới phải (trên nó là Tốc độ + Bảng sát thương), MUA XP là nút lớn góc dưới trái kiểu
-  TFT mobile (cạnh Làm mới / Bán tướng), Thoát là nút nhỏ góc trên phải.
+  lưới ô chỉ hiện mờ ở pha chuẩn bị và mờ hẳn về ~0 khi giao tranh. Bench là hàng ô ngay mép dưới TRONG sân. Thông tin
+  dồn ra viền: tộc/hệ = chip nhỏ bán trong suốt dọc mép trái, trang bị = nút nổi dưới chip, danh sách người chơi = hàng
+  gọn mép phải (avatar + tên + số máu + thanh máu mỏng, hàng của mình phủ vàng rất nhẹ), thanh trên = plaque nổi mỏng ở
+  giữa-trên, nhật ký thu thành nút icon cuốn sách nhỏ. **Điều khiển học TFT Mobile (đợt 2026-10-25):** hai NÚT TRÒN ở
+  hai góc dưới — tròn XANH DƯƠNG dưới-trái vừa là cấp (huy hiệu "Lv.") vừa là nút MUA XP (tiến trình "XP a/b" + vòng
+  cung tiến trình quanh nút, giá 4 + icon xu; chạm = mua XP), tròn VÀNG dưới-phải hiện số vàng (+ huy hiệu lửa khi có
+  chuỗi thắng) và là nút MỞ/ĐÓNG SHOP. Shop là lớp mở/đóng nằm TRÊN bench: hàng 5 thẻ như cũ + dòng tỉ lệ odds % theo
+  bậc giá của cấp hiện tại + nút LÀM MỚI tròn vàng cuối hàng (2 vàng, chỉ tồn tại khi shop mở); mua xong shop vẫn mở,
+  chạm vùng sân trống = đóng shop, vào giao tranh shop tự đóng. Các nút ĐẤU!/Tốc độ/Bảng sát thương/Bán tướng chọn/
+  MUA XP/Làm mới chữ nhật đều đã BỎ; trận TỰ ĐỘNG bắt đầu khi hết 45s chuẩn bị; pha kết quả tự chuyển sau ~4s
+  (chạm = đi ngay) và bảng sát thương TỰ HIỆN ở pha đó. Thoát là nút nhỏ góc trên phải.
 - **Kéo–thả tướng (đợt 2026-10-25, thay nút "Cất về bench" — nút đã XOÁ khỏi giao diện):** ở pha chuẩn bị, kéo quá
   ngưỡng 14px thì sprite bám theo con trỏ (nhấc nhẹ, phóng to ~1,05, có bóng dưới); chạm nhẹ vẫn là chọn/xem như cũ
   và luồng chạm-chọn + chạm-ô đặt vẫn dùng được làm dự phòng. Các hướng kéo: **bench → ô bàn** (đặt tướng; ô có tướng
   thì HOÁN ĐỔI, tướng kia về đúng ô bench vừa trống — `Match.moveBenchToBoard`), **bàn → ô bàn khác** (dời/hoán đổi),
   **bàn → ô bench** (cất về bench; ô bench có tướng thì hoán đổi, tướng bench lên đúng ô bàn vừa trống —
-  `Match.moveBoardToBenchSlot`), **bench → ô bench khác** (dời chỗ — `Match.moveOnBench`), **bàn → thùng rác**:
-  khi kéo tướng từ bàn, hai vùng thùng rác đỏ ở 2 góc dưới hiện ra, thả vào = bán tướng theo luật hoàn vàng hiện tại.
+  `Match.moveBoardToBenchSlot`), **bench → ô bench khác** (dời chỗ — `Match.moveOnBench`), **→ thùng rác**:
+  khi đang kéo tướng (từ bàn hay từ bench đều được), hai vùng thùng rác đỏ ở 2 góc dưới hiện ra, thả vào = bán tướng
+  theo luật hoàn vàng hiện tại — đây là cách bán duy nhất (không còn nút "Bán tướng chọn").
   Ô đích hợp lệ được tô vàng khi kéo qua; thả ra ngoài mọi vùng hợp lệ thì tướng **trượt về vị trí cũ** (animation 0,22s).
-  Tướng ở bench vẫn bán được bằng nút "Bán tướng chọn" như mô hình đã chốt.
 - **Trình diễn theo 2 game mẫu (Kanto Tactics + FighterZ Tactics)** — chỉ học bố cục/kỹ thuật trình diễn, không sao chép asset:
   1. **Sân đấu đổi theo chặng** (`game/ArenaTheme.java`): Chiến Dịch theo chương — `(chương-1)%3` lần lượt rừng / sa mạc / băng
      (khớp tông banner chương), vòng Boss → hoàng hôn; PvP + Sóng Quái theo stage: 1 rừng, 2 hoàng hôn, 3 sa mạc, ≥4 băng
-     (Sóng Quái quy stage = ⌈sóng/5⌉), vòng Boss → hoàng hôn. Sân được chốt tại thời điểm bấm ĐẤU cho đúng vòng đang đấu.
+     (Sóng Quái quy stage = ⌈sóng/5⌉), vòng Boss → hoàng hôn. Sân được chốt tại thời điểm bắt đầu giao tranh (tự động khi hết giờ chuẩn bị) cho đúng vòng đang đấu.
   2. **Đòn nặng truyện tranh:** đòn crit hoặc đòn ≥ 15% máu tối đa của mục tiêu → cụm nổ mây trắng "pow" + 5 vệt tốc độ
      tỏa ra tại điểm trúng, mục tiêu **lộn nghiêng** ±38° trong 0,35s. (Số sát thương to kiểu Kanto giữ nguyên.)
   3. **Announcer cuối vòng:** chữ Baloo lớn "THẮNG!" / "THUA!" (thắng trận có boss: **"HẠ GỤC BOSS!"**) phồng lên giữa sân
      ~1,5s rồi tan, kèm banner nhỏ chứa tóm tắt vòng + máu còn lại; sau đó mới hiện panel kết quả chi tiết.
-  4. **Bảng sát thương theo tướng:** nút "Bảng sát thương" ở góc dưới phải bật/tắt panel nổi đè mép phải sân, liệt kê từng tướng
-     của **cả 2 bên** kèm thanh ngang theo tổng sát thương gây ra trong trận vừa đấu (dữ liệu `Engine.damageChart` cộng từ sự kiện engine).
+  4. **Bảng sát thương theo tướng:** panel nổi ở phía phải sân **TỰ HIỆN trong pha kết quả vòng** (không còn nút bật/tắt),
+     liệt kê từng tướng của **cả 2 bên** kèm thanh ngang theo tổng sát thương gây ra trong trận vừa đấu (dữ liệu `Engine.damageChart` cộng từ sự kiện engine).
   5. **Lên sao = TIẾN HOÁ ĐỔI HÌNH DẠNG (kiểu Kanto):** mỗi tướng có **3 hình dạng riêng theo cấp sao** — gộp sao là tướng
      đổi hẳn hình, không chỉ tăng chỉ số: **2 sao = dạng trưởng thành** (thêm giáp vai, viền **bạc**, vũ khí to hơn có đá quý,
      thêm phụ kiện), **3 sao = dạng tiến hoá cuối** (vương miện/viền **vàng**, áo choàng, vũ khí lớn nhất, thần thái trùm).
@@ -222,7 +227,7 @@ resize premultiplied-alpha cho viền sạch) — giữ nguyên RGBA nét cao. T
   (tất định theo seed/cursor vòng — `Match.peekNextOpponentTeam()`), và vẽ trước đội hình bot lên nửa trên bàn cờ ở vòng PvP thường.
 - **Phát lại giao tranh:** engine xuất khung hình mỗi 0,5s; GUI nội suy giữa 2 khung — vị trí dùng **smoothstep** (mượt ở đầu/cuối bước di chuyển),
   máu/mana/khiên nội suy tuyến tính. Vẫn là phát lại ở mức sprite, không phải mô phỏng 60fps.
-- **Pha chuẩn bị** có đếm ngược 90 giây, hết giờ tự vào trận (bản RN cũng tự bắt đầu theo đồng hồ vòng).
+- **Pha chuẩn bị** có đếm ngược 45 giây (trước là 90 giây — rút ngắn theo đợt điều khiển TFT Mobile), hết giờ tự vào trận ở mọi chế độ.
 - **Âm thanh (đã nối đợt hoàn thiện):** tái sử dụng nguyên dàn WAV tổng hợp của bản RN — 22 file trong `assets/audio/`
   (2 nhạc nền: menu + trong trận, phát lặp; 20 SFX). Đã nối: bấm nút (click), mua tướng (coin), bán (sell), đặt/dời tướng (place),
   làm mới shop (reroll), gắn đồ (equip), lên cấp (levelup), lật thẻ mở trận (sparkle), chọn cường hóa (levelup),
@@ -331,6 +336,29 @@ còn không phát tiếng nào). Nay mỗi tướng có **hồ sơ hiệu ứng 
 - **Kiểm chứng đợt này:** compile desktop PASS; `verifyHeadless` **18 PASS / 0 FAIL** (mục 18 mới: đủ 25 tướng
   + 10 quái có hồ sơ hệ, đủ file `cast_<hệ>.wav` cho các hệ đã dùng, hệ của 2 kỹ năng đặc trưng đúng);
   `:web:buildWeb` PASS (game.js 940.648 byte, webapp có đủ 10 file cast). Ảnh chụp bắt khoảnh khắc cast:
-  `tools/fx-fire.png`, `fx-ice.png`, `fx-lightning.png`, `fx-heal.png`, `fx-beam.png` (ScreenshotMain thêm chế độ
+  `tools/fx-fire.png`, `fx-ice.png`, `fx-lightning.png`, `fx-beam.png` (ScreenshotMain thêm chế độ
   `fx<he>`: dựng đội hình có tướng của hệ đó, chờ `BattleFx.lastCastFx` trùng hệ rồi chụp trễ ~8 frame cho
   hiệu ứng đã rõ).
+
+## Đợt điều khiển TFT Mobile (2026-10-25)
+- Làm lại sơ đồ điều khiển màn trận theo 2 ảnh mẫu TFT Mobile của user. Hai nút tròn vẽ tay (batch + hit-test
+  hình tròn trong `BoardInput`): **tròn xanh dưới-trái = cấp + MUA XP** (huy hiệu "Lv." đè góc nút, "XP a/b"
+  hoặc "MAX", vòng cung tiến trình XP quanh nút, giá 4 + icon xu), **tròn vàng dưới-phải = số vàng + MỞ/ĐÓNG
+  shop** (huy hiệu lửa + số streak khi chuỗi thắng ≥ 2). **Shop thành lớp mở/đóng** (trường `shopOpen`):
+  hàng 5 thẻ dời lên dải trên bench (y 156), thêm **dòng odds %** theo `GameData.SHOP_ODDS` của cấp hiện tại
+  và **nút LÀM MỚI tròn vàng** ở cuối hàng (chỉ bấm/vẽ được khi shop mở); mua xong shop vẫn mở; **chạm vùng
+  sân trống (không trúng thẻ/nút/ô/tướng) = đóng shop**; vào giao tranh tự đóng. **Bỏ hẳn** các nút ĐẤU!/VÀO
+  TRẬN!, Tốc độ (biến nội bộ `speed` giữ cho công cụ chụp), bật/tắt Bảng sát thương, "Bán tướng chọn" (bán
+  chỉ bằng kéo vào thùng rác — nay áp dụng cho cả kéo từ bench), MUA XP/Làm mới chữ nhật; Nhật ký thu thành
+  nút icon sách 42×42. **Tự động vào trận:** đếm ngược chuẩn bị rút **90s → 45s**, hết giờ tự đánh ở mọi chế
+  độ; **pha kết quả tự chuyển sau ~4s** kể từ khi announcer xong (chạm bất kỳ đâu = đi ngay, bỏ nút "Tiếp
+  tục"), panel kết quả thu hẹp lệch trái (tâm x=451) để **bảng sát thương tự hiện phía phải sân** cùng lúc.
+  ScreenshotMain thêm 2 mode `shopopen` (reflection bật `shopOpen`) và `resultpanel` (chụp sau announcer,
+  trước mốc tự chuyển). Đợt này làm trên bản sao `tft-java-uicontrols` (gates 17/17) rồi port sang sau khi
+  đợt VFX lên main.
+- **Kiểm chứng đợt này (trên project chính sau port):** compile desktop PASS, `verifyHeadless` **18/18 PASS**,
+  `:web:buildWeb` PASS. Ảnh `tools/shot8-*.png` tự soi 2 vòng: chuẩn bị shop đóng (chỉ còn 2 nút tròn +
+  bench), shop mở (5 thẻ thật + odds + reroll vàng + nút vàng thành "ĐÓNG"), giao tranh (sạch nút), kết quả
+  (panel + bảng sát thương cạnh nhau không chồng). Chưa kiểm chứng: cảm giác chạm thật trên thiết bị, runtime
+  web TeaVM (build PASS như mọi đợt), trường hợp shop mở phủ hàng bàn 0 — tướng ở hàng 0 muốn kéo phải đóng
+  shop trước (đúng tính chất lớp phủ của TFT).

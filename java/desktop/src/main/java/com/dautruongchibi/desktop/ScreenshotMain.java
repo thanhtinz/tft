@@ -31,7 +31,8 @@ public class ScreenshotMain {
         final String outPath;
         int frames = 0;
         int resultFrames = 0;
-        boolean battleStarted = false, captured = false, dragSet = false;
+        int panelFrames = 0;
+        boolean battleStarted = false, captured = false, dragSet = false, shopSet = false;
         MatchScreen matchScreen;
         int fxSeenSeq = -1;
         int fxCaptureAt = -1;
@@ -62,9 +63,15 @@ public class ScreenshotMain {
                     setScreen(matchScreen);
                     break;
                 }
-                case "planning": case "battle": case "result": case "drag": {
+                case "planning": case "shopopen": case "battle": case "result": case "resultpanel": case "drag": {
                     Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
                     m.autoPlan();
+                    if ("shopopen".equals(mode)) {
+                        // autoPlan da mua sach shop + tieu het vang: nap lai vang va lam moi
+                        // de chup duoc 5 the that (chua ban) + nut reroll o trang thai vang
+                        m.human().gold = 50;
+                        m.reroll();
+                    }
                     matchScreen = new MatchScreen(this, m);
                     setScreen(matchScreen);
                     break;
@@ -123,14 +130,21 @@ public class ScreenshotMain {
                         dragSet = true;
                     }
                 }
+                if ("shopopen".equals(mode) && !shopSet && frames > 50 && matchScreen != null) {
+                    // Gia lap lop shop dang MO o pha chuan bi (dat thang truong shopOpen bang reflection)
+                    Field fShop = MatchScreen.class.getDeclaredField("shopOpen");
+                    fShop.setAccessible(true);
+                    fShop.setBoolean(matchScreen, true);
+                    shopSet = true;
+                }
                 boolean fxMode = mode.startsWith("fx");
-                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "starbattle".equals(mode) || fxMode;
+                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || fxMode;
                 if (battleMode && !battleStarted && frames > 30 && matchScreen != null) {
                     Method mb = MatchScreen.class.getDeclaredMethod("startBattle");
                     mb.setAccessible(true);
                     mb.invoke(matchScreen);
                     battleStarted = true;
-                    if ("result".equals(mode)) {
+                    if ("result".equals(mode) || "resultpanel".equals(mode)) {
                         // Tang toc playback x3 de vao pha RESULT nhanh (announcer chi keo 1,5s)
                         Field fs = MatchScreen.class.getDeclaredField("speed");
                         fs.setAccessible(true);
@@ -173,6 +187,16 @@ public class ScreenshotMain {
                     due = (fxCaptureAt >= 0 && frames >= fxCaptureAt) || frames >= 5400;
                     if (due && fxCaptureAt < 0) System.out.println("FX_NOT_CAPTURED wanted=" + wanted + " lastFx=" + lastFx);
                     if (due && fxCaptureAt >= 0) System.out.println("FX_CAPTURED wanted=" + wanted + " frame=" + frames);
+                } else if ("resultpanel".equals(mode) && battleStarted) {
+                    // Cho announcer chay xong (announceT <= 0) de panel ket qua + bang sat thuong
+                    // da hien, chup nhanh trong cua so ~4s truoc khi pha RESULT tu chuyen tiep
+                    Field fp = MatchScreen.class.getDeclaredField("phase");
+                    fp.setAccessible(true);
+                    Field fa = MatchScreen.class.getDeclaredField("announceT");
+                    fa.setAccessible(true);
+                    boolean panelUp = "RESULT".equals(String.valueOf(fp.get(matchScreen))) && fa.getFloat(matchScreen) <= 0;
+                    if (panelUp) panelFrames++;
+                    due = panelFrames >= 12 || frames >= 2400;
                 } else if ("result".equals(mode) && battleStarted) {
                     Field fp = MatchScreen.class.getDeclaredField("phase");
                     fp.setAccessible(true);

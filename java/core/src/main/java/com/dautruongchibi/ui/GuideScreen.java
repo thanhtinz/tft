@@ -38,8 +38,8 @@ public class GuideScreen extends ScreenAdapter {
         "2 hoàng hôn, 3 sa mạc, từ stage 4 là băng (vòng Boss cũng hoàng hôn).",
         "Đòn chí mạng hoặc đòn nặng (từ 15% máu tối đa của mục tiêu) sẽ nổ cụm khói truyện tranh",
         "kèm vệt tốc độ, và mục tiêu bị lộn nghiêng. Cuối mỗi vòng, chữ hô lớn THẮNG! / THUA!",
-        "(hạ boss: HẠ GỤC BOSS!) phồng lên giữa sân. Nút 'Bảng sát thương' ở panel phải mở",
-        "bảng tổng sát thương của từng tướng hai bên trong trận vừa đấu.",
+        "(hạ boss: HẠ GỤC BOSS!) phồng lên giữa sân. Bảng sát thương của trận vừa đấu tự hiện",
+        "ở phía phải sân trong pha kết quả — không cần bấm nút nào cả.",
         "Thắng vòng quái PvE sẽ rơi 1 trang bị (Sóng Quái: mỗi 3 sóng; Chiến Dịch: thắng màn Boss)",
         "— thẻ trang bị nảy lên giữa-phải sân rồi tự vào kho. Gộp sao có vòng xoáy hợp nhất;",
         "tướng 2 sao có vòng bạc ở chân, 3 sao có hào quang vàng cháy kèm chấm sao bay.",
@@ -62,11 +62,22 @@ public class GuideScreen extends ScreenAdapter {
         "PvP Đấu Tập: bot yếu hơn, thuần luyện tập. (PvP online người thật: mở khi có Supabase.)",
         "",
         "ĐIỀU KHIỂN TRONG TRẬN",
+        "Hai nút tròn ở hai góc dưới (kiểu TFT Mobile): nút tròn XANH DƯƠNG dưới-trái vừa là cấp",
+        "vừa là nút MUA XP — có huy hiệu Lv., tiến trình XP a/b + vòng cung quanh nút, giá 4 xu;",
+        "chạm là mua XP. Nút tròn VÀNG dưới-phải hiện số vàng: chạm để MỞ shop, chạm lại để đóng",
+        "(có huy hiệu lửa khi đang chuỗi thắng).",
+        "Shop là lớp mở/đóng nằm trên bench: 5 thẻ tướng + dòng tỉ lệ odds % theo cấp + nút LÀM MỚI",
+        "tròn vàng (2 vàng) ở cuối hàng — reroll chỉ có khi shop đang mở. Mua thẻ xong shop vẫn mở;",
+        "chạm vào vùng sân trống là đóng shop; vào giao tranh shop tự đóng.",
+        "Trận TỰ ĐỘNG bắt đầu khi hết 45 giây chuẩn bị — không còn nút Đấu. Kết quả vòng tự",
+        "chuyển tiếp sau ~4 giây (chạm màn hình để đi ngay), bảng sát thương tự hiện lúc đó.",
         "Kéo–thả là chính: kéo tướng từ bench lên bàn để đặt; kéo tướng trên bàn sang ô khác để dời",
-        "(ô có tướng sẽ hoán đổi), kéo về ô bench để cất, kéo xuống thùng rác ở góc dưới để bán.",
+        "(ô có tướng sẽ hoán đổi), kéo về ô bench để cất, kéo xuống thùng rác ở góc dưới để bán",
+        "(tướng ở bench cũng bán bằng kéo vào thùng rác — không còn nút bán riêng).",
         "Thả ra ngoài vùng hợp lệ thì tướng trượt về chỗ cũ. Chạm chọn + chạm ô đích vẫn dùng được",
-        "như cách dự phòng; tướng ở bench cũng bán được bằng nút 'Bán tướng chọn'.",
-        "Trang bị: chạm 1 món trong kho rồi chạm tướng để đeo (tối đa 3 món)."
+        "như cách dự phòng.",
+        "Trang bị: chạm 1 món trong kho rồi chạm tướng để đeo (tối đa 3 món).",
+        "Nhật ký trận: nút icon cuốn sách nhỏ ở góc dưới-trái. Thoát: nút nhỏ góc trên-phải."
     );
 
     public GuideScreen(MainGame game) { this.game = game; }
