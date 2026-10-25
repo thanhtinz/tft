@@ -88,7 +88,14 @@ public class GuideScreen extends ScreenAdapter {
         "Kéo đồ lên tướng để đeo (tối đa 3 món/tướng); thành phần đeo được như đồ thường. Nếu",
         "tướng đang đeo sẵn thành phần còn lại của một công thức, hai món TỰ HỢP NHẤT ngay trên",
         "người tướng thành đồ hoàn chỉnh chiếm 1 ô. Chạm (không kéo) vào 1 món đồ trong khay trái",
-        "để mở bảng thông tin: chỉ số, và với thành phần là danh sách các đồ nó ghép được thành."
+        "để mở bảng thông tin: chỉ số, và với thành phần là danh sách các đồ nó ghép được thành.",
+        "Đồ tướng đang đeo HIỆN thành hàng icon nhỏ ngay dưới thanh máu/mana của tướng — trên",
+        "bàn, trên bench, trong trận (cả tướng địch) và ở đội hình địch khi do thám.",
+        "Chạm chọn 1 tướng để mở THẺ TƯỚNG: chân dung, chỉ số, kỹ năng, 3 ô trang bị đang đeo",
+        "(chạm ô có đồ để xem thông tin món đó) và nút BÁN kèm giá bán.",
+        "Đồ đã đeo là CỐ ĐỊNH — không tháo ra hay dời sang tướng khác được. Muốn thu hồi đồ",
+        "thì BÁN tướng (kéo vào thùng rác hoặc nút BÁN trong thẻ): toàn bộ đồ trên người tướng",
+        "tự rơi trở lại khay trang bị."
     );
 
     public GuideScreen(MainGame game) { this.game = game; }

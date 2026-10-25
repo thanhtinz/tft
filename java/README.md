@@ -193,6 +193,24 @@ kiểm chứng headless mục 19–21):
 | Giày Bay (+20% tốc đánh) | Dây Cung Kẹo Dẻo + Găng Tay Nhung |
 | Giọt Nước Mắt Sao (+20 mana, +15 SMKN) | Gậy Phép Socola + Mảnh Tim Kẹo |
 
+### Gắn + hiển thị trang bị trên tướng (căn theo TFT, đợt 2026-10-25)
+
+- **Hiện đồ trên tướng:** mọi tướng có đồ đều hiện hàng icon đồ (tối đa 3 icon 18px trên phiến tối) ngay
+  **dưới cụm thanh máu/mana** — trên bàn, trên bench, ở đội hình địch xem trước khi do thám, và trong trận
+  cho cả 2 phe (`Engine.FightUnit` mang theo `items` từ `PlacedUnit` qua `makeSim`/`copySim`; golem triệu
+  hồi không thừa hưởng đồ của chủ). Tướng không có đồ không vẽ gì thêm.
+- **Thẻ tướng (kiểu TFT Mobile):** chạm-chọn 1 tướng ở pha chuẩn bị mở thẻ ở mép phải — chân dung, tên + sao,
+  chip tộc/hệ, lưới chỉ số (`Engine.statsOf`: sao × chỉ số gốc + đồ đang đeo), tên + mô tả kỹ năng, **3 ô
+  trang bị** (chạm 1 ô có đồ mở bảng thông tin của món đó) và **nút BÁN kèm giá** (`Engine.sellValue`).
+  Thẻ đóng khi bỏ chọn/chạm ra ngoài/bắt đầu kéo; bán qua thẻ chạy cùng `Match.sell` như kéo vào thùng rác.
+- **Đồ đã đeo là CỐ ĐỊNH:** không có đường tháo/dời đồ khỏi tướng. Đường duy nhất lấy đồ lại là **bán
+  tướng** — `Match.sell` trả **toàn bộ** đồ trên người tướng về khay (kể cả đồ đã tự hợp nhất trên người:
+  trả nguyên đồ hoàn chỉnh, không tách lại thành phần) và thông báo bán liệt kê các món được trả
+  (kiểm chứng headless mục 22). Gộp sao tràn quá 3 món cũng trả phần thừa về khay như trước.
+- **Phản hồi khi kéo đồ (parity TFT):** đang kéo 1 icon — mọi thành phần trong khay ghép được với nó phát
+  sáng viền xanh; mọi tướng **nhận được** món đó (còn ô trống hoặc hợp nhất được) sáng quầng vàng nhẹ;
+  di qua 1 tướng đang đeo thành phần ghép được → hiện **chip xem trước** món hoàn chỉnh sẽ tạo thành cạnh
+  tướng; tướng đã đủ 3 ô và không hợp nhất được thì ô đích tô viền đỏ (thả vào sẽ bị từ chối như luật cũ).
 
 ## Cách build & chạy
 
@@ -205,7 +223,7 @@ Máy có mạng bình thường (Gradle tự tải dependency từ Maven Central
 ```bash
 cd java
 ./gradlew :desktop:run            # chay ban desktop
-./gradlew :desktop:verifyHeadless # chay bo kiem tra logic (phai dat 21 PASS / 0 FAIL)
+./gradlew :desktop:verifyHeadless # chay bo kiem tra logic (phai dat 22 PASS / 0 FAIL)
 ./gradlew :web:buildWeb           # dung ban web TeaVM -> web/build/webapp (index.html + game.js + assets)
 ./gradlew :android:assembleDebug  # build APK debug (can Android SDK; module chi kich hoat khi co
                                   # local.properties chua sdk.dir hoac bien ANDROID_HOME)

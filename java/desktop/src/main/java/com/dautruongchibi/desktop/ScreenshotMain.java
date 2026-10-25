@@ -99,6 +99,27 @@ public class ScreenshotMain {
                     setScreen(matchScreen);
                     break;
                 }
+                case "unititems": case "unitcard": case "unitcardbench": {
+                    // Do deo tren nguoi nhieu tuong (ban + bench) + dich xem truoc co do
+                    Match m = unitItemsShowcase();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "battleitems": {
+                    // Tran danh that: ca 2 phe deu co tuong mang do (dich cua makeAiTeam vong 13)
+                    Match m = battleItemsMatch();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "itemdragunit": {
+                    // Gia lap keo tpkiem len gogo dang deo tptim (chip xem truoc hop nhat)
+                    Match m = itemDragUnitShowcase();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
                 case "starbattle": {
                     Match m = starBattleMatch();
                     matchScreen = new MatchScreen(this, m);
@@ -149,6 +170,34 @@ public class ScreenshotMain {
                         else { fX.setFloat(matchScreen, 451f); fY.setFloat(matchScreen, 120f); }
                         dragSet = true;
                     }
+                }
+                if (("unitcard".equals(mode) || "unitcardbench".equals(mode)) && !dragSet && frames > 50 && matchScreen != null) {
+                    // Mo THE TUONG bang reflection: chon gogo tren ban (deo 3 mon) hoac
+                    // lulu 2 sao tren bench (deo 2 mon) — the phai hien 3 o do + nut BAN
+                    Field fMatch = MatchScreen.class.getDeclaredField("match");
+                    fMatch.setAccessible(true);
+                    Match mm = (Match) fMatch.get(matchScreen);
+                    boolean fromBench = "unitcardbench".equals(mode);
+                    com.dautruongchibi.game.Engine.PlacedUnit target = null;
+                    java.util.List<com.dautruongchibi.game.Engine.PlacedUnit> pool = fromBench ? mm.human().bench : mm.human().board;
+                    for (com.dautruongchibi.game.Engine.PlacedUnit u : pool)
+                        if (u.defId.equals(fromBench ? "lulu" : "gogo")) target = u;
+                    if (target != null) {
+                        Field fS = MatchScreen.class.getDeclaredField("selUid"); fS.setAccessible(true);
+                        fS.set(matchScreen, target.uid);
+                        Field fB = MatchScreen.class.getDeclaredField("selFromBench"); fB.setAccessible(true);
+                        fB.setBoolean(matchScreen, fromBench);
+                        dragSet = true;
+                    }
+                }
+                if ("itemdragunit".equals(mode) && !dragSet && frames > 50 && matchScreen != null) {
+                    // Dang keo tpkiem (o khay 0) dung tam o (2,0) cua gogo dang deo tptim:
+                    // chip xem truoc "Vuot Rong" phai hien canh gogo; titan du 3 o khong sang quang
+                    Field fIdx = MatchScreen.class.getDeclaredField("dragItemIndex"); fIdx.setAccessible(true); fIdx.setInt(matchScreen, 0);
+                    Field fActI = MatchScreen.class.getDeclaredField("itemDragActive"); fActI.setAccessible(true); fActI.setBoolean(matchScreen, true);
+                    Field fX = MatchScreen.class.getDeclaredField("dragX"); fX.setAccessible(true); fX.setFloat(matchScreen, 567f);
+                    Field fY = MatchScreen.class.getDeclaredField("dragY"); fY.setAccessible(true); fY.setFloat(matchScreen, 187f);
+                    dragSet = true;
                 }
                 if ("select".equals(mode) && !dragSet && frames > 50 && matchScreen != null) {
                     // Gia lap CHAM-CHON mot tuong tren ban (selUid != null): luoi o phai hien
@@ -216,7 +265,7 @@ public class ScreenshotMain {
                     dragSet = true;
                 }
                 boolean fxMode = mode.startsWith("fx");
-                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || fxMode;
+                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || "battleitems".equals(mode) || fxMode;
                 if (battleMode && !battleStarted && frames > 30 && matchScreen != null) {
                     Method mb = MatchScreen.class.getDeclaredMethod("startBattle");
                     mb.setAccessible(true);
@@ -347,6 +396,74 @@ public class ScreenshotMain {
         m.addChampion(h, "phoenix");
         m.addChampion(h, "bobi");
         h.gold = 50; // de nut reroll o trang thai vang khi chup benchshop
+        return m;
+    }
+
+    // Doi hinh benchShowcase + do deo tren nguoi nhieu tuong ca ban lan bench: gogo (ban)
+    // 3 mon, titan (ban) 2 mon, lulu 2 sao (bench) 2 mon, queen (bench) 1 thanh phan.
+    // Vong dat len 12 (3-1, PvP) de doi hinh dich xem truoc cua makeAiTeam co tuong mang do.
+    static Match unitItemsShowcase() {
+        Match m = benchShowcase();
+        Match.PlayerState h = m.human();
+        for (com.dautruongchibi.game.Engine.PlacedUnit u : new java.util.ArrayList<>(h.board)) {
+            if (u.defId.equals("gogo")) {
+                h.inventory.add("vuot"); h.inventory.add("tim"); h.inventory.add("tpkiem");
+                m.equipItem(u.uid, "vuot"); m.equipItem(u.uid, "tim"); m.equipItem(u.uid, "tpkiem");
+            } else if (u.defId.equals("titan")) {
+                h.inventory.add("giap"); h.inventory.add("tpcung");
+                m.equipItem(u.uid, "giap"); m.equipItem(u.uid, "tpcung");
+            }
+        }
+        for (com.dautruongchibi.game.Engine.PlacedUnit u : new java.util.ArrayList<>(h.bench)) {
+            if (u.defId.equals("lulu")) {
+                h.inventory.add("gay"); h.inventory.add("tptim");
+                m.equipItem(u.uid, "gay"); m.equipItem(u.uid, "tptim");
+            } else if (u.defId.equals("queen")) {
+                h.inventory.add("tpgay");
+                m.equipItem(u.uid, "tpgay");
+            }
+        }
+        h.inventory.add("tpkiem"); h.inventory.add("tpcung");
+        m.round = 12;
+        return m;
+    }
+
+    // Tran danh that 2 phe deu co do: phe minh dung san doi hinh co do; dich do
+    // makeAiTeam(13) sinh khi fight() chay (tuong dau mang thanh phan tpkiem).
+    static Match battleItemsMatch() {
+        Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
+        Match.PlayerState h = m.human();
+        if (m.draftPending) m.pickDraft(0);
+        if (m.augmentPending) m.pickAugment(0);
+        h.level = 9;
+        m.addChampion(h, "gogo"); m.addChampion(h, "titan"); m.addChampion(h, "lulu"); m.addChampion(h, "mimi");
+        placeByStar(m, h, "gogo", 1, 2, 0);
+        placeByStar(m, h, "titan", 1, 3, 0);
+        placeByStar(m, h, "lulu", 1, 2, 3);
+        placeByStar(m, h, "mimi", 1, 4, 3);
+        for (com.dautruongchibi.game.Engine.PlacedUnit u : new java.util.ArrayList<>(h.board)) {
+            if (u.defId.equals("gogo")) { h.inventory.add("vuot"); h.inventory.add("tim"); m.equipItem(u.uid, "vuot"); m.equipItem(u.uid, "tim"); }
+            if (u.defId.equals("lulu")) { h.inventory.add("gay"); m.equipItem(u.uid, "gay"); }
+        }
+        m.round = 13;
+        return m;
+    }
+
+    // Keo do len tuong: gogo tren ban (o 2,0) dang deo tptim; titan du 3 o (khong nhan
+    // them duoc); khay chua tpkiem o o 0 — cong cu chup gia lap dang keo tpkiem vao gogo.
+    static Match itemDragUnitShowcase() {
+        Match m = benchShowcase();
+        Match.PlayerState h = m.human();
+        for (com.dautruongchibi.game.Engine.PlacedUnit u : new java.util.ArrayList<>(h.board)) {
+            if (u.defId.equals("gogo")) { h.inventory.add("tptim"); m.equipItem(u.uid, "tptim"); }
+            if (u.defId.equals("titan")) {
+                h.inventory.add("giap"); h.inventory.add("tim"); h.inventory.add("cung");
+                m.equipItem(u.uid, "giap"); m.equipItem(u.uid, "tim"); m.equipItem(u.uid, "cung");
+            }
+        }
+        h.inventory.clear();
+        // tpkiem dang keo (o 0); tptim o o 1 PHAI phat sang vien xanh vi ghep duoc voi tpkiem
+        h.inventory.add("tpkiem"); h.inventory.add("tptim"); h.inventory.add("tpgay");
         return m;
     }
 

@@ -354,6 +354,39 @@ public class HeadlessMain {
         check("Nguon roi: the lat + roi PvE chi tra do thanh phan, du 6 loai qua 300 lan roi",
             dropOk && dropped.size() == 6, "so loai roi duoc: " + dropped.size());
 
+        // 22) Ban tuong kieu TFT: TOAN BO do tren nguoi tuong roi tro lai khay — ke ca do da
+        // tu hop nhat tren nguoi (tra do hoan chinh, KHONG tach lai thanh phan); vang cong
+        // dung gia ban; ap cho tuong o bench lan tuong tren ban (moi duong ban deu qua Match.sell)
+        Match sm = Match.startCampaign(1, 5, "SellTest");
+        Match.PlayerState sh = sm.human();
+        sm.addChampion(sh, "gogo");
+        Engine.PlacedUnit sgu = sh.bench.get(0);
+        sh.inventory.add("tpkiem"); sh.inventory.add("tptim"); sh.inventory.add("giap");
+        sm.equipItem(sgu.uid, "tpkiem");
+        sm.equipItem(sgu.uid, "tptim"); // tu hop nhat tren nguoi -> vuot (chiem 1 o)
+        sm.equipItem(sgu.uid, "giap");  // o thu 2
+        boolean sWorn = sgu.items.size() == 2 && sgu.items.contains("vuot") && sgu.items.contains("giap");
+        int sGold0 = sh.gold, sInv0 = sh.inventory.size();
+        String sellMsg = sm.sell(sgu.uid);
+        boolean sellBenchOk = sh.bench.isEmpty() && sh.gold == sGold0 + Engine.sellValue("gogo", 1)
+            && sh.inventory.size() == sInv0 + 2 && sh.inventory.contains("vuot") && sh.inventory.contains("giap")
+            && !sh.inventory.contains("tpkiem") && !sh.inventory.contains("tptim")
+            && sellMsg.contains("trả về khay");
+        sm.addChampion(sh, "lulu");
+        Engine.PlacedUnit slu = sh.bench.get(0);
+        sh.level = 9;
+        sm.moveToBoard(slu.uid, 0, 0);
+        sh.inventory.add("kiem"); sh.inventory.add("tim"); sh.inventory.add("cung");
+        sm.equipItem(slu.uid, "kiem"); sm.equipItem(slu.uid, "tim"); sm.equipItem(slu.uid, "cung");
+        int sInv1 = sh.inventory.size();
+        String sellMsg2 = sm.sell(slu.uid);
+        boolean sellBoardOk = sh.board.isEmpty() && sh.inventory.size() == sInv1 + 3
+            && sh.inventory.contains("kiem") && sh.inventory.contains("tim") && sh.inventory.contains("cung")
+            && sellMsg2.contains("trả về khay");
+        check("Ban tuong tra do ve khay: do hop nhat tren nguoi tra nguyen do hoan chinh, ban tu bench lan tren ban",
+            sWorn && sellBenchOk && sellBoardOk,
+            "deoTruoc=" + sWorn + " banBench=" + sellBenchOk + " banBan=" + sellBoardOk + " | msg: " + sellMsg);
+
         System.out.println("=== TONG KET: " + pass + " PASS / " + fail + " FAIL ===");
         if (fail > 0) { System.out.println("Muc fail: " + failures); System.exit(1); }
     }

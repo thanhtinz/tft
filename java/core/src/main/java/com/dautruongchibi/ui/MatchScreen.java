@@ -113,6 +113,12 @@ public class MatchScreen extends ScreenAdapter {
     // Bang thong tin do: panel noi lech trai (khong che giua ban), dong bang cham ra ngoai/nut X
     private static final Rectangle INFO_PANEL = new Rectangle(224, 186, 388, 330);
     private static final Rectangle INFO_CLOSE = new Rectangle(224 + 388 - 42, 186 + 330 - 42, 36, 36);
+    // The thong tin TUONG (kieu TFT Mobile): panel mep PHAI hien khi dang cham-chon 1 tuong o
+    // pha chuan bi (selUid). Phu danh sach nguoi choi trong luc mo (thong tin tam thoi), nhung
+    // KHONG che ban co (ket thuc x=945), bench (y<166), khay do va 2 dia tron dieu khien.
+    private static final Rectangle CARD = new Rectangle(954, 166, 316, 496);
+    private Rectangle cardSellRect() { return new Rectangle(CARD.x + 18, CARD.y + 14, CARD.width - 36, 44); }
+    private Rectangle cardItemRect(int i) { return new Rectangle(CARD.x + 63 + i * 66, CARD.y + 66, 58, 58); }
     // Keo-tha tuong o pha chuan bi: cham = chon (nhu cu), keo qua nguong 14px = sprite bam tro.
     // Keo-tha tuong o pha chuan bi: cham = chon (nhu cu), keo qua nguong 14px = sprite bam tro.
     private String dragUid;
@@ -549,6 +555,145 @@ public class MatchScreen extends ScreenAdapter {
         a.fontBig.setColor(Color.WHITE);
         batch.end();
     }
+
+    // Tuong dang duoc cham-chon (selUid) — tim tren ban truoc, bench sau; null neu uid da
+    // khong con (vd vua gop sao xong) thi the tuong tu dong khong hien nua.
+    private Engine.PlacedUnit selectedUnit() {
+        if (selUid == null) return null;
+        Match.PlayerState h = match.human();
+        for (Engine.PlacedUnit u : h.board) if (u.uid.equals(selUid)) return u;
+        for (Engine.PlacedUnit u : h.bench) if (u.uid.equals(selUid)) return u;
+        return null;
+    }
+
+    private void drawStat(String label, String value, float x, float y, float w) {
+        Assets a = game.assets;
+        drawLeft(a.font, label, x, y, Ui.TEXT_DIM);
+        layout.setText(a.font, value);
+        a.font.setColor(Color.WHITE);
+        a.font.draw(batch, value, x + w - layout.width, y);
+        a.font.setColor(Color.WHITE);
+    }
+
+    // THE TUONG (kieu TFT Mobile): hien khi cham-chon 1 tuong o pha chuan bi. Chan dung +
+    // ten/sao + chip toc/he + luoi chi so (Engine.statsOf = sao x chi so goc + do dang deo;
+    // buff toc/he cua ca doi chi ap trong mo phong tran danh nen khong gop vao day) +
+    // ky nang + 3 o trang bi (cham o co do = mo bang thong tin mon do) + nut BAN kem gia ban
+    // (Engine.sellValue). Ban qua the chay cung Match.sell nhu keo vao thung rac: do tren
+    // nguoi tuong tu tra ve khay.
+    private void drawUnitCard() {
+        Engine.PlacedUnit u = selectedUnit();
+        if (u == null) return;
+        Assets a = game.assets;
+        GameData.ChampDef def = GameData.champById(u.defId);
+        Engine.Stats st = Engine.statsOf(u);
+        float px = CARD.x, py = CARD.y, pw = CARD.width, top = py + CARD.height;
+        batch.begin();
+        drawShadowRect(px, py, pw, CARD.height, 0.45f);
+        // Nen gan dac rieng cho the: patchPanel ban trong suot nen chu HUD phia sau (dong
+        // thong tin doi thu/doanh sach) in thau len lam roi phan ky nang — phu toi 0.88 truoc
+        batch.setColor(0.03f, 0.02f, 0.08f, 0.88f);
+        batch.draw(a.whiteTex(), px, py, pw, CARD.height);
+        batch.setColor(Color.WHITE);
+        a.patchPanel.draw(batch, px, py, pw, CARD.height);
+        // Chan dung + ten + sao + chip toc/he
+        batch.draw(a.unitOnGround(u.defId, u.star), px + 16, top - 104, 88, 88);
+        layout.setText(a.fontBig, def.name, Color.WHITE, pw - 126, com.badlogic.gdx.utils.Align.left, true);
+        a.fontBig.setColor(Color.WHITE);
+        a.fontBig.draw(batch, layout, px + 116, top - 30);
+        a.fontBig.setColor(Color.WHITE);
+        float sw = 14;
+        batch.setColor(u.star >= 3 ? Ui.GOLD : new Color(0.88f, 0.92f, 0.97f, 1));
+        for (int i = 0; i < u.star; i++) batch.draw(a.icon("star"), px + 116 + i * (sw + 2), top - 62, sw, sw);
+        batch.setColor(Color.WHITE);
+        for (int i = 0; i < def.traits.length; i++) {
+            float cxp = px + 116 + i * 100;
+            batch.setColor(0.07f, 0.05f, 0.15f, 0.75f);
+            batch.draw(a.whiteTex(), cxp, top - 94, 94, 22);
+            batch.setColor(Color.WHITE);
+            drawCentered(a.fontSmall, GameData.traitName(def.traits[i]), cxp + 47, top - 79, Ui.TEXT_DIM);
+        }
+        // Duong ke phan cach
+        batch.setColor(1, 1, 1, 0.22f);
+        batch.draw(a.whiteTex(), px + 16, top - 118, pw - 32, 1);
+        batch.setColor(Color.WHITE);
+        // Luoi chi so 2 cot x 4 hang
+        float ly = top - 146;
+        drawStat("Máu", String.valueOf((int) Math.round(st.hp)), px + 16, ly, 140);
+        drawStat("Sát thương", String.valueOf((int) Math.round(st.ad)), px + 166, ly, 134);
+        ly -= 28;
+        drawStat("SMKN", String.valueOf((int) Math.round(st.ap)), px + 16, ly, 140);
+        drawStat("Tốc đánh", String.format("%.2f", st.as), px + 166, ly, 134);
+        ly -= 28;
+        drawStat("Giáp", String.valueOf((int) Math.round(st.armor)), px + 16, ly, 140);
+        drawStat("Kháng phép", String.valueOf((int) Math.round(st.mr)), px + 166, ly, 134);
+        ly -= 28;
+        drawStat("Tầm đánh", String.valueOf(def.range), px + 16, ly, 140);
+        drawStat("Chí mạng", (int) Math.round(st.crit) + "%", px + 166, ly, 134);
+        // Ky nang
+        drawLeft(a.font, "KỸ NĂNG", px + 16, top - 264, Ui.GOLD);
+        drawLeft(a.font, def.skill.name, px + 16, top - 286, Color.WHITE);
+        layout.setText(a.fontSmall, def.skill.desc, Ui.TEXT_DIM, pw - 32, com.badlogic.gdx.utils.Align.left, true);
+        a.fontSmall.setColor(Ui.TEXT_DIM);
+        a.fontSmall.draw(batch, layout, px + 16, top - 306);
+        a.fontSmall.setColor(Color.WHITE);
+        // 3 o trang bi: co do -> icon (vien vang = do hoan chinh, vien bac = thanh phan);
+        // o trong -> khung mo. Cham o co do mo bang thong tin mon do (xu ly o planningPress).
+        drawLeft(a.font, "TRANG BỊ (" + u.items.size() + "/3)", px + 16, py + 138, Ui.GOLD);
+        for (int i = 0; i < 3; i++) {
+            Rectangle r = cardItemRect(i);
+            if (i < u.items.size()) {
+                drawShadowRect(r.x, r.y, r.width, r.height, 0.35f);
+                batch.draw(a.itemIcon(u.items.get(i)), r.x + 4, r.y + 4, r.width - 8, r.height - 8);
+                drawBorder(r.x, r.y, r.width, r.height, GameData.isComponent(u.items.get(i)) ? new Color(0.75f, 0.82f, 0.95f, 1) : Ui.GOLD, 2);
+            } else {
+                batch.setColor(0.05f, 0.04f, 0.12f, 0.35f);
+                batch.draw(a.whiteTex(), r.x, r.y, r.width, r.height);
+                batch.setColor(Color.WHITE);
+                drawBorder(r.x, r.y, r.width, r.height, new Color(1, 1, 1, 0.20f), 1);
+            }
+        }
+        // Nut BAN kem gia (ban qua the = Match.sell, song song voi keo vao thung rac)
+        Rectangle sell = cardSellRect();
+        drawShadowRect(sell.x, sell.y, sell.width, sell.height, 0.4f);
+        batch.setColor(0.55f, 0.10f, 0.12f, 0.95f);
+        batch.draw(a.whiteTex(), sell.x, sell.y, sell.width, sell.height);
+        batch.setColor(Color.WHITE);
+        drawBorder(sell.x, sell.y, sell.width, sell.height, new Color(1, 0.45f, 0.45f, 1), 2);
+        drawCentered(a.font, "BÁN TƯỚNG  +" + Engine.sellValue(u.defId, u.star) + " VÀNG", sell.x + sell.width / 2, sell.y + 29, Color.WHITE);
+        batch.end();
+    }
+
+    // Tuong co nhan duoc mon do nay khong — dung luat cua Match.equipItem: con o trong,
+    // HOAC mon dang keo la thanh phan hop nhat duoc voi 1 thanh phan tuong dang deo
+    // (hop nhat khong tang so o nen tuong du 3 o van nhan duoc).
+    private boolean canReceiveItem(Engine.PlacedUnit u, String itemId) {
+        if (u.items.size() < 3) return true;
+        return fusionResult(u, itemId) != null;
+    }
+    // Do hoan chinh se tao thanh neu tha itemId len tuong u (null neu khong hop nhat duoc)
+    private String fusionResult(Engine.PlacedUnit u, String itemId) {
+        if (!GameData.isComponent(itemId)) return null;
+        for (String worn : u.items) {
+            if (!GameData.isComponent(worn)) continue;
+            String r = GameData.combineResult(worn, itemId);
+            if (r != null) return r;
+        }
+        return null;
+    }
+    // Chip xem truoc kieu TFT khi keo do: tha mon dang keo len tuong nay se hop nhat thanh
+    // mon nay — phien toi + icon do dich + vien vang, ve canh phia tren-phai cua tuong dich.
+    private void drawCombinePreviewChip(float cx, float cy, String resultItemId) {
+        Assets a = game.assets;
+        float s = 46, x = cx + 32, y = cy + 42;
+        drawShadowRect(x, y, s, s, 0.4f);
+        batch.setColor(0.02f, 0.02f, 0.06f, 0.88f);
+        batch.draw(a.whiteTex(), x, y, s, s);
+        batch.setColor(Color.WHITE);
+        batch.draw(a.itemIcon(resultItemId), x + 3, y + 3, s - 6, s - 6);
+        drawBorder(x, y, s, s, Ui.GOLD, 2);
+        drawCentered(a.fontSmall, "GHÉP", x + s / 2, y + s + 14, Ui.GOLD);
+    }
     // ================= RENDER =================
     private final com.badlogic.gdx.graphics.g2d.GlyphLayout layout = new com.badlogic.gdx.graphics.g2d.GlyphLayout();
     private final List<float[]> projectiles = new ArrayList<>(); // {t0, ax, ay, tx, ty} toa do man hinh
@@ -686,6 +831,8 @@ public class MatchScreen extends ScreenAdapter {
         if (phase == Phase.PLANNING) drawDragOverlay(now);
         // Bang thong tin do (modal nhe o pha chuan bi): ve tren lop keo-tha, duoi popup mo qua
         if (phase == Phase.PLANNING && itemInfoId != null) drawItemInfoPanel();
+        // The tuong (cham-chon): ve cung lop modal; an trong luc dang keo tuong (dragUid/dragActive)
+        if (phase == Phase.PLANNING && selUid != null && !dragActive && dragUid == null) drawUnitCard();
         // --- Overlay tren cung: announcer/ket qua, popup trang bi ---
         if (phase == Phase.DRAFT) drawDraftOverlay(now);
         else if (phase == Phase.AUGMENT) drawAugmentOverlay();
@@ -871,6 +1018,25 @@ public class MatchScreen extends ScreenAdapter {
         }
     }
 
+    // Hang icon TRANG BI dang deo nam ngay DUOI cum thanh mau/mana (kieu TFT): toi da 3 icon
+    // 18px tren mot phien toi mong, bam theo (cx, cy) cua drawBars — cum thanh chiem cy+52..cy+65
+    // (sao o cy+70), phien do dat sat duoi thanh mana: cy+30..cy+52, de len phan tren cua sprite
+    // nhu TFT. Ap cho moi noi ve tuong: ban, bench, xem truoc dich/do tham, trong tran (2 phe).
+    // Tuong khong deo do thi khong ve gi them.
+    private void drawUnitItems(float cx, float cy, List<String> items) {
+        if (items == null || items.isEmpty()) return;
+        Assets a = game.assets;
+        int n = Math.min(3, items.size());
+        float icon = 18, gap = 3, pad = 4;
+        float w = n * icon + (n - 1) * gap + pad * 2, h = 22;
+        float x = cx - w / 2, y = cy + 30;
+        batch.setColor(0.02f, 0.02f, 0.06f, 0.62f);
+        batch.draw(a.whiteTex(), x, y, w, h);
+        batch.setColor(Color.WHITE);
+        drawBorder(x, y, w, h, new Color(1, 1, 1, 0.22f), 1);
+        for (int i = 0; i < n; i++) batch.draw(a.itemIcon(items.get(i)), x + pad + i * (icon + gap), y + 2, icon, icon);
+    }
+
     private void drawPlanningUnits(float now) {
         Match.PlayerState h = match.human();
         // Xem truoc doi dich (PvE) o nua tren ban
@@ -886,6 +1052,7 @@ public class MatchScreen extends ScreenAdapter {
             drawGroundRing(p[0], p[1], u.star, now, u.uid.hashCode());
             drawUnitSprite(art, p[0], p[1], 88, u.star, true, 0.85f, 0, null);
             drawBars(p[0], p[1], 1, 0, 0, 1, u.star, false);
+            drawUnitItems(p[0], p[1], u.items); // do tham: dich deo gi cung thay duoi thanh mau
         }
         int i = 0;
         for (Engine.PlacedUnit u : h.board) {
@@ -896,6 +1063,7 @@ public class MatchScreen extends ScreenAdapter {
             drawGroundRing(p[0], p[1], u.star, now, u.uid.hashCode());
             drawUnitSprite(u.defId, p[0], p[1] + bob, 100, u.star, false, 1, 0, null);
             drawBars(p[0], p[1], 1, 0, 0, 0, u.star, false);
+            drawUnitItems(p[0], p[1], u.items);
         }
     }
 
@@ -957,6 +1125,7 @@ public class MatchScreen extends ScreenAdapter {
                         for (int k = 0; k < u.star; k++) batch.draw(a.icon("star"), cx - total / 2 + k * (sw + 1), cy + 54, sw, sw);
                         batch.setColor(Color.WHITE);
                     }
+                    drawUnitItems(cx, cy, u.items); // bench cung hien do duoi vi tri thanh mau nhu tren ban
                 }
             }
         }
@@ -1421,6 +1590,7 @@ public class MatchScreen extends ScreenAdapter {
             drawUnitSprite(base.artId, cx, cy, 100, base.star, base.team == 1, alpha, rotation, tint);
             lastScreenPos.put(uid, new float[]{cx, cy});
             if (!dying) drawBars(cx, cy, hp / Math.max(1, base.maxHp), mana / Math.max(1, base.maxMana), shield / Math.max(1, base.maxHp), base.team, base.star, base.stun > 0);
+            if (!dying) drawUnitItems(cx, cy, base.items); // trong tran ca 2 phe deu hien do dang deo
             if (!dying && base.stun > 0) battleFx.drawStunStars(batch, game.assets.icon("star"), cx, cy + 70, now); // sao xoay quanh dau khi choang/dong bang
         }
     }
@@ -1811,6 +1981,24 @@ public class MatchScreen extends ScreenAdapter {
             game.sound().sfx("click");
             return true;
         }
+        // The tuong dang mo (co tuong dang chon): nut BAN + o do trong the xu ly truoc het;
+        // cham vao phan con lai cua the = nuot cham (khong bo chon, khong roi xuong dat tuong).
+        if (selUid != null && CARD.contains(x, y)) {
+            Engine.PlacedUnit su = selectedUnit();
+            if (su != null) {
+                if (cardSellRect().contains(x, y)) {
+                    toast(match.sell(su.uid)); // Match.sell tu tra do ve khay + liet ke trong thong bao
+                    game.sound().sfx("sell");
+                    selUid = null;
+                    refreshPlanning();
+                    return true;
+                }
+                for (int i = 0; i < su.items.size() && i < 3; i++) {
+                    if (cardItemRect(i).contains(x, y)) { itemInfoId = su.items.get(i); game.sound().sfx("click"); return true; }
+                }
+                return true;
+            }
+        }
         // Bang thong tin do dang mo: cham nut X hoac cham ra ngoai bang = dong; cham vao icon
         // khac trong khay = xem mon do. Bang khong chan keo-tha tuong (dong xong moi thao tac tiep).
         if (itemInfoId != null) {
@@ -2011,34 +2199,72 @@ public class MatchScreen extends ScreenAdapter {
         if (itemDragActive && dragItemIndex >= 0) {
             Match.PlayerState h = match.human();
             if (dragItemIndex < h.inventory.size()) {
+                String dragId = h.inventory.get(dragItemIndex);
+                // Phan hoi kieu TFT: MOI thanh phan trong khay ghep duoc voi mon dang keo deu
+                // phat sang vien xanh nhip — khong chi o dang di chuot qua.
+                for (int i = 0; i < h.inventory.size(); i++) {
+                    if (i == dragItemIndex) continue;
+                    if (GameData.combineResult(dragId, h.inventory.get(i)) != null) {
+                        Rectangle r = traySlotRect(i);
+                        float pulse = 0.6f + 0.35f * (float) Math.sin(now * 6);
+                        drawBorder(r.x - 1, r.y - 1, 50, 50, new Color(0.4f, 1, 0.5f, pulse), 2);
+                    }
+                }
                 boolean overSlot = false;
                 for (int i = 0; i < h.inventory.size(); i++) {
                     if (i == dragItemIndex) continue;
                     if (traySlotRect(i).contains(dragX, dragY)) {
                         Rectangle r = traySlotRect(i);
-                        boolean canCombine = GameData.combineResult(h.inventory.get(dragItemIndex), h.inventory.get(i)) != null;
+                        boolean canCombine = GameData.combineResult(dragId, h.inventory.get(i)) != null;
                         drawBorder(r.x, r.y, 48, 48, canCombine ? new Color(0.4f, 1, 0.5f, 1) : new Color(1, 0.45f, 0.45f, 1), 3);
                         overSlot = true;
                     }
                 }
                 if (!overSlot) {
+                    // Tuong nao NHAN duoc mon dang keo (con o, hoac hop nhat duoc) sang quang vang nhe
+                    for (Engine.PlacedUnit u : h.board) {
+                        if (!canReceiveItem(u, dragId)) continue;
+                        float[] p = cellCenter(u.x, u.y);
+                        float pulse = 0.16f + 0.07f * (float) Math.sin(now * 6);
+                        batch.setColor(1f, 0.85f, 0.3f, pulse);
+                        batch.draw(a.glowTex(), p[0] - 64, p[1] - 64, 128, 128);
+                        batch.setColor(Color.WHITE);
+                    }
+                    for (int bi = 0; bi < h.bench.size(); bi++) {
+                        if (!canReceiveItem(h.bench.get(bi), dragId)) continue;
+                        float pulse = 0.20f + 0.08f * (float) Math.sin(now * 6);
+                        batch.setColor(1f, 0.85f, 0.3f, pulse);
+                        batch.draw(a.glowTex(), benchCx(bi) - 56, benchCy() - 72, 112, 64);
+                        batch.setColor(Color.WHITE);
+                    }
                     int bs = benchSlotAt(dragX, dragY);
                     if (bs >= 0 && bs < h.bench.size()) {
+                        Engine.PlacedUnit tu = h.bench.get(bs);
+                        boolean can = canReceiveItem(tu, dragId);
                         float pulse = 0.42f + 0.15f * (float) Math.sin(now * 6);
-                        batch.setColor(1f, 0.85f, 0.3f, pulse);
+                        batch.setColor(1f, can ? 0.85f : 0.30f, can ? 0.3f : 0.25f, pulse);
                         batch.draw(a.glowTex(), benchCx(bs) - 56, benchCy() - 72, 112, 64);
                         batch.setColor(Color.WHITE);
+                        String fuse = fusionResult(tu, dragId);
+                        if (fuse != null) drawCombinePreviewChip(benchCx(bs), benchCy(), fuse); // xem truoc mon se hop nhat
                     } else {
                         int cx = cellXAt(dragX), cy = cellYAt(dragY);
                         if (cx >= 0 && cx < 7 && cy >= 0 && cy < 4) {
-                            boolean hasUnit = false;
-                            for (Engine.PlacedUnit u : h.board) if (u.x == cx && u.y == cy) hasUnit = true;
-                            if (hasUnit) {
+                            Engine.PlacedUnit tu = null;
+                            for (Engine.PlacedUnit u : h.board) if (u.x == cx && u.y == cy) tu = u;
+                            if (tu != null) {
                                 float x = BX + cx * CELLX, y = BY + cy * CELLY;
-                                batch.setColor(1, 0.85f, 0.3f, 0.30f);
-                                batch.draw(a.whiteTex(), x + 2, y + 2, CELLX - 4, CELLY - 4);
-                                batch.setColor(Color.WHITE);
-                                drawBorder(x + 1, y + 1, CELLX - 2, CELLY - 2, Ui.GOLD, 3);
+                                boolean can = canReceiveItem(tu, dragId);
+                                if (can) {
+                                    batch.setColor(1, 0.85f, 0.3f, 0.30f);
+                                    batch.draw(a.whiteTex(), x + 2, y + 2, CELLX - 4, CELLY - 4);
+                                    batch.setColor(Color.WHITE);
+                                    drawBorder(x + 1, y + 1, CELLX - 2, CELLY - 2, Ui.GOLD, 3);
+                                } else { // du 3 o + khong hop nhat duoc: vien do = tha vao se bi tu choi
+                                    drawBorder(x + 1, y + 1, CELLX - 2, CELLY - 2, new Color(1, 0.40f, 0.40f, 1), 3);
+                                }
+                                String fuse = fusionResult(tu, dragId);
+                                if (fuse != null) { float[] p = cellCenter(cx, cy); drawCombinePreviewChip(p[0], p[1], fuse); }
                             }
                         }
                     }

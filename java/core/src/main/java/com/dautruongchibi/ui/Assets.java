@@ -26,7 +26,8 @@ public class Assets {
     // Bo ky tu can thiet: ASCII + Tieng Viet day du + vai ky hieu game con lai trong font moi
     private static final String EXTRA_CHARS = "àáâãèéêìíòóôõùúýăđơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ"
         + "ÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐƠƯẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴỶỸ"
-        + "•…—–·×";
+        + "•…—–·×"
+        + "ĩũĨŨ"; // thieu 4 glyph nay: "Hiep Si" (i~) bi tofu o chip toc/he + the tuong, "Dua" (u~) tung phai doi ten mon do
 
     public BitmapFont font, fontBig, fontSmall, fontTitle;
     private final Map<String, Texture> unitTex = new HashMap<>();

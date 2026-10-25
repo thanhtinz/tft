@@ -150,12 +150,16 @@ public final class Engine {
         public int team, star, x, y, range;
         public double hp, maxHp, mana, maxMana, shield, stun;
         public boolean alive, isMonster;
+        // Id cac trang bi dang deo (chi de HIEN icon duoi thanh mau trong tran kieu TFT;
+        // chi so that da duoc statsOf gap vao tu PlacedUnit.items khi tao SimUnit)
+        public List<String> items = new ArrayList<>();
         public FightUnit copy() {
             FightUnit f = new FightUnit();
             f.uid = uid; f.defId = defId; f.artId = artId; f.name = name; f.color = color;
             f.team = team; f.star = star; f.x = x; f.y = y; f.range = range;
             f.hp = hp; f.maxHp = maxHp; f.mana = mana; f.maxMana = maxMana; f.shield = shield; f.stun = stun;
             f.alive = alive; f.isMonster = isMonster;
+            f.items.addAll(items);
             return f;
         }
     }
@@ -185,6 +189,7 @@ public final class Engine {
             s.team = team; s.star = star; s.x = x; s.y = y; s.range = range;
             s.hp = hp; s.maxHp = maxHp; s.mana = mana; s.maxMana = maxMana; s.shield = shield; s.stun = stun;
             s.alive = alive; s.isMonster = isMonster;
+            s.items.addAll(items);
             s.ad = ad; s.ap = ap; s.armor = armor; s.mr = mr; s.as = as; s.crit = crit; s.lifesteal = lifesteal;
             s.dodge = dodge; s.manaRegen = manaRegen; s.poison = poison; s.buffAsUntil = buffAsUntil; s.baseAs = baseAs;
             s.atkCd = atkCd; s.skillKind = skillKind; s.skillPower = skillPower; s.skillName = skillName;
@@ -206,6 +211,7 @@ public final class Engine {
         s.mana = Math.min(st.manaStart, st.maxMana); s.maxMana = st.maxMana;
         s.shield = maxHp * buff.shieldPct / 100; s.stun = 0; s.atkCd = 0; s.alive = true;
         s.isMonster = u.isMonster; s.color = d.color;
+        s.items.addAll(u.items); // mang theo de lop render hien icon do duoi thanh mau (kieu TFT)
         s.ad = st.ad * (1 + buff.adPct / 100); s.ap = st.ap + buff.apPct;
         s.armor = st.armor + buff.armor; s.mr = st.mr + buff.armor;
         s.as = st.as * (1 + buff.asPct / 100); s.baseAs = s.as;
@@ -409,6 +415,7 @@ public final class Engine {
                 }
                 case summon: {
                     SimUnit g = u.copySim();
+                    g.items.clear(); // golem trieu hoi khong deo do cua chu (copySim sao ca items)
                     g.uid = u.uid + "-golem" + (int) Math.floor(t);
                     g.defId = "golem-summon"; g.artId = "golem"; g.range = 1; g.name = "Golem Bánh";
                     g.hp = 900; g.maxHp = 900; g.ad = 40; g.mana = 9999; g.maxMana = 9999;

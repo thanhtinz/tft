@@ -274,9 +274,20 @@ public final class Match {
                 if (u.uid.equals(uid)) {
                     int v = Engine.sellValue(u.defId, u.star);
                     list.remove(u);
-                    for (String it : u.items) h.inventory.add(it);
+                    // Kieu TFT: ban tuong thi TOAN BO do tren nguoi tuong roi tro lai khay trang bi
+                    List<String> returned = new ArrayList<>(u.items);
+                    for (String it : returned) h.inventory.add(it);
                     h.gold += v;
-                    return "Đã bán " + GameData.champById(u.defId).name + " (+" + v + " vàng).";
+                    String msg = "Đã bán " + GameData.champById(u.defId).name + " (+" + v + " vàng).";
+                    if (!returned.isEmpty()) {
+                        StringBuilder sb = new StringBuilder(msg).append(" Đồ trả về khay: ");
+                        for (int i = 0; i < returned.size(); i++) {
+                            if (i > 0) sb.append(", ");
+                            sb.append(GameData.itemById(returned.get(i)).name);
+                        }
+                        msg = sb.append(".").toString();
+                    }
+                    return msg;
                 }
             }
         }
