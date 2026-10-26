@@ -422,6 +422,22 @@ kiểm chứng headless mục 19–21):
   headless mục 27 (mặt thật, hồi chiêu, đường cong pop, bảng chân lý tự bật, phân bố gieo hạt của bot)
   và mode chụp `emotewheel` / `emotepop` / `emotefoe` trong ScreenshotMain.
 
+### Vá đỉnh màn trận (đợt 2026-10-26)
+
+- **Bỏ hẳn dòng gợi ý tĩnh ở đỉnh** ("Kéo tướng: đặt / cất / bán • Kéo đồ khay trái: ghép / đeo — hết giờ
+  tự vào trận.") theo yêu cầu user — hướng dẫn thao tác đã có trong màn Học Chơi. `msgLabel` chỉ còn hiện
+  toast tạm thời; các toast chọn tướng cũng cắt bỏ phần hướng dẫn kéo/đặt/bán, chỉ giữ "Đã chọn X.".
+- **"Vệt đỏ" sau dòng gợi ý — đã rõ nguyên nhân:** đó là **thanh máu đỏ của tướng địch xem trước ở hàng
+  trên cùng bàn cờ** (tâm ô cy=607, `drawBars` vẽ thanh ở cy+57 → 664–671) **thò qua mép trên bàn cờ (642)**
+  vào vùng chữ đỉnh và bị chữ trắng che một phần nên trông như vệt lạ. Cách sửa: hàng trên cùng **lật cả
+  cụm thanh máu/mana/khiên/sao + khay đồ xuống dưới tướng** (đối xứng qua tâm tướng, `drawBars` /
+  `drawUnitItems` trong `MatchScreen`); các hàng khác giữ nguyên. Đo trên ảnh sân băng: pixel đỏ trong
+  dải đỉnh 395 → 0, thanh lật xuống đo đủ 350px/thanh dưới chân tướng.
+- **Chữ trên sân băng:** sau khi bỏ dòng gợi ý, dòng pha (chữ lớn có viền tối) đọc rõ trên nền băng nên
+  **không thêm dải mờ** (ít thay đổi càng tốt). Kiểm chứng bằng mode chụp mới `topfixice` / `topfixsunset`
+  (ảnh trước/sau `tools/shot-topfix-{ice,sunset}-{before,after}.png`); gates: compile PASS,
+  `verifyHeadless` **27/27 PASS**, `:web:buildWeb` PASS.
+
 ## Cách build & chạy
 
 > **Lưu ý bản trên GitHub:** các file nhị phân (PNG sprite/scene, font TTF, `gradle-wrapper.jar`) được lưu

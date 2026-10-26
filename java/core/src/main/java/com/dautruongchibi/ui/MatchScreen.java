@@ -1387,8 +1387,7 @@ public class MatchScreen extends ScreenAdapter {
         float now = com.badlogic.gdx.utils.TimeUtils.nanoTime() / 1e9f;
         // --- Cap nhat trang thai ---
         if (toastT > 0) { toastT -= delta; msgLabel.setText(toast); }
-        else if (phase == Phase.PLANNING) msgLabel.setText("Kéo tướng: đặt / cất / bán • Kéo đồ khay trái: ghép / đeo — hết giờ tự vào trận.");
-        else msgLabel.setText(""); // "Dang giao tranh voi X..." da chuyen len thanh dinh (topLabel)
+        else msgLabel.setText(""); // Dong goi y tinh "Keo tuong: dat / cat / ban..." DA BO theo yeu cau user (huong dan thao tac da co trong man Hoc Choi); msgLabel chi con hien toast tam thoi. "Dang giao tranh voi X..." nam o thanh dinh (topLabel)
         if (returnT >= 0) { returnT += delta; if (returnT >= RETURN_DUR) { returnT = -1; returnUid = null; } }
         // Luoi o mo dan theo thao tac: chi hien khi dang KEO tuong (dragActive) hoac dang CHON
         // mot tuong kieu cham (selUid) o pha chuan bi; con lai mo dan ve 0 (san sach khong o).
@@ -1860,23 +1859,30 @@ public class MatchScreen extends ScreenAdapter {
 
     private void drawBars(float cx, float cy, double hpFrac, double manaFrac, double shieldFrac, int team, int star, boolean stunned) {
         Assets a = game.assets;
-        float w = 50, x = cx - w / 2, y = cy + 57;
+        float w = 50, x = cx - w / 2;
+        // Hang tren cung cua ban (cy = 607): cum thanh/sao phia tren dau se vuot mep
+        // tren ban co (BY + 7*CELLY = 642) va lo vao vung chu dinh — thanh mau DO cua
+        // dich dung ngay sau dong goi y, bi chu trang che mot phan nen nhin nhu "vet
+        // do la" sau chu (da xac nhan bang anh chup). Hang nay LAT ca cum xuong duoi
+        // tuong (doi xung qua tam tuong); moi hang khac giu nguyen phia tren dau.
+        boolean below = cy + 81 > BY + 7 * CELLY;
+        float y = below ? cy - 64 : cy + 57;
         batch.setColor(0, 0, 0, 0.7f); batch.draw(a.whiteTex(), x - 1, y - 1, w + 2, 9);
         batch.setColor(team == 0 ? new Color(0.2f, 0.85f, 0.45f, 1) : new Color(0.95f, 0.3f, 0.3f, 1));
         batch.draw(a.whiteTex(), x, y, w * (float) Math.max(0, hpFrac), 7);
-        if (shieldFrac > 0.01) { batch.setColor(0.95f, 0.95f, 1, 0.9f); batch.draw(a.whiteTex(), x, y + 8, w * (float) Math.min(1, shieldFrac), 3); }
-        batch.setColor(0.25f, 0.5f, 1, 1); batch.draw(a.whiteTex(), x, y - 5, w * (float) Math.max(0, manaFrac), 3);
+        if (shieldFrac > 0.01) { batch.setColor(0.95f, 0.95f, 1, 0.9f); batch.draw(a.whiteTex(), x, below ? y - 4 : y + 8, w * (float) Math.min(1, shieldFrac), 3); }
+        batch.setColor(0.25f, 0.5f, 1, 1); batch.draw(a.whiteTex(), x, below ? y + 9 : y - 5, w * (float) Math.max(0, manaFrac), 3);
         batch.setColor(Color.WHITE);
         if (star >= 2) {
             // Sao cap tuong ve bang icon pixel (font game khong co glyph sao)
             float sw = 11, total = star * (sw + 1) - 1;
             batch.setColor(star >= 3 ? Ui.GOLD : new Color(0.88f, 0.92f, 0.97f, 1));
-            for (int i = 0; i < star; i++) batch.draw(a.icon("star"), cx - total / 2 + i * (sw + 1), y + 13, sw, sw);
+            for (int i = 0; i < star; i++) batch.draw(a.icon("star"), cx - total / 2 + i * (sw + 1), below ? y - 17 : y + 13, sw, sw);
             batch.setColor(Color.WHITE);
         }
         if (stunned) {
             batch.setColor(Ui.GOLD);
-            batch.draw(a.icon("star"), cx + 16 + 4 * (float) Math.sin(com.badlogic.gdx.utils.TimeUtils.nanoTime() / 2e8), y + 15, 11, 11);
+            batch.draw(a.icon("star"), cx + 16 + 4 * (float) Math.sin(com.badlogic.gdx.utils.TimeUtils.nanoTime() / 2e8), below ? y - 19 : y + 15, 11, 11);
             batch.setColor(Color.WHITE);
         }
     }
@@ -1892,7 +1898,9 @@ public class MatchScreen extends ScreenAdapter {
         int n = Math.min(3, items.size());
         float icon = 18, gap = 3, pad = 4;
         float w = n * icon + (n - 1) * gap + pad * 2, h = 22;
-        float x = cx - w / 2, y = cy + 30;
+        // Cung dieu kien voi drawBars: hang tren cung lat khay XUONG duoi tuong
+        // (cy-52..cy-30) de khoi tho qua mep tren ban co vao vung chu dinh.
+        float x = cx - w / 2, y = (cy + 81 > BY + 7 * CELLY) ? cy - 52 : cy + 30;
         batch.setColor(0.02f, 0.02f, 0.06f, 0.62f);
         batch.draw(a.whiteTex(), x, y, w, h);
         batch.setColor(Color.WHITE);
@@ -3747,9 +3755,7 @@ public class MatchScreen extends ScreenAdapter {
         if (dragUnit == null) return;
         selUid = dragUnit.uid; selFromBench = dragFromBench;
         String nm = GameData.champById(dragUnit.defId).name;
-        toast(dragFromBench
-            ? "Đã chọn " + nm + " (bench) — kéo lên bàn hoặc chạm ô bàn cờ để đặt."
-            : "Đã chọn " + nm + " — kéo để xếp lại (về bench = cất, xuống góc thùng rác = bán), hoặc chạm ô khác để dời.");
+        toast(dragFromBench ? "Đã chọn " + nm + " (bench)." : "Đã chọn " + nm + ".");
         refreshPlanning();
     }
 
@@ -4004,7 +4010,7 @@ public class MatchScreen extends ScreenAdapter {
             if (r.contains(x, y)) {
                 if (i < h.bench.size()) {
                     Engine.PlacedUnit u = h.bench.get(i);
-                    selUid = u.uid; selFromBench = true; toast("Đã chọn " + GameData.champById(u.defId).name + " (bench) — kéo lên bàn hoặc chạm ô bàn cờ để đặt.");
+                    selUid = u.uid; selFromBench = true; toast("Đã chọn " + GameData.champById(u.defId).name + " (bench).");
                     refreshPlanning();
                     return true;
                 }
@@ -4030,7 +4036,7 @@ public class MatchScreen extends ScreenAdapter {
                 selUid = null;
             } else if (at != null) {
                 selUid = at.uid; selFromBench = false;
-                toast("Đã chọn " + GameData.champById(at.defId).name + " — kéo để xếp lại (về bench = cất, xuống góc thùng rác = bán), hoặc chạm ô khác để dời.");
+                toast("Đã chọn " + GameData.champById(at.defId).name + ".");
             }
             refreshPlanning();
             return acted;

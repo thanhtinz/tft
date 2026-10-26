@@ -143,6 +143,17 @@ public class ScreenshotMain {
                     setScreen(matchScreen);
                     break;
                 }
+                case "topfixice": case "topfixsunset": {
+                    // VA DINH MAN TRAN: san BANG (sang) + san HOANG HON (toi) de doi
+                    // chieu vung chu dinh sau khi bo dong goi y tinh va lat thanh mau
+                    // hang tren cung xuong duoi tuong. Ep arenaId ca hai nhanh nhu cac
+                    // mode arena (dispose tu luu ho so -> tranh ro lua chon sang mode sau).
+                    profile.arenaId = "topfixice".equals(mode) ? "ice" : "sunset";
+                    Match m = benchShowcase();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
                 case "legendplan": {
                     // Pha chuan bi day du (benchShowcase): tinh linh cua minh (ep ho so
                     // sang Golem Da) o ria san nha, tinh linh doi thu o ria san dich
