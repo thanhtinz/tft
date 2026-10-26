@@ -147,7 +147,17 @@ public class HeadlessMain {
         for (Engine.DamageRow row : chart) { chartSum += row.damage; if (row.team == 0) hasA = true; else hasB = true; }
         boolean chartOk = !chart.isEmpty() && chartSum > 0 && hasA && hasB;
         for (int i = 1; i < chart.size(); i++) if (chart.get(i).damage > chart.get(i - 1).damage) chartOk = false;
-        check("Bang sat thuong: cong tu su kien attack/hit, ca 2 ben, sap giam dan", chartOk,
+        // Cong don theo thoi gian (tab SAT THUONG xem giua tran): t=0 phai rong (chua
+        // co don nao), t=duration phai trung tong toan tran, t giua tran khong vuot tong.
+        List<Engine.DamageRow> upTo0 = Engine.damageChartUpTo(b1, 0);
+        List<Engine.DamageRow> upToEnd = Engine.damageChartUpTo(b1, b1.duration);
+        List<Engine.DamageRow> upToMid = Engine.damageChartUpTo(b1, b1.duration / 2);
+        double endSum = 0, midSum = 0;
+        for (Engine.DamageRow row : upToEnd) endSum += row.damage;
+        for (Engine.DamageRow row : upToMid) midSum += row.damage;
+        chartOk = chartOk && upTo0.isEmpty() && upToEnd.size() == chart.size()
+            && Math.abs(endSum - chartSum) < 0.001 && midSum <= chartSum + 0.001;
+        check("Bang sat thuong: cong tu su kien attack/hit, ca 2 ben, sap giam dan + cong don theo thoi gian tran", chartOk,
             chart.isEmpty() ? "rong" : "dong dau: " + chart.get(0).name + " " + (int) chart.get(0).damage + ", tong " + chart.size() + " dong");
 
         // 11) Quy tac san theo chang (Kanto: moi truong doi theo chang; Boss -> hoang hon)

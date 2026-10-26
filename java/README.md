@@ -249,6 +249,53 @@ kiểm chứng headless mục 19–21):
   `battletab` — ảnh `tools/shot25-*.png` đã soi (kèm hồi quy `unitcard`/`iteminfo_full`/`pveplan`).
   GuideScreen bổ sung 3 dòng hướng dẫn panel 2 tab.
 
+### Sảnh chính theo bố cục TFT Mobile + thanh đỉnh tối giản + panel phải 2 tab (đợt 2026-10-25)
+
+- **Sảnh chính làm lại toàn bộ (`MenuScreen` viết lại, vẽ tay bằng batch):** toàn màn hình là
+  tranh lobby, KHÔNG còn tiêu đề to ở giữa / cột nút xếp chồng / panel hồ sơ đóng khung. Chỉ học
+  BỐ CỤC của ảnh mẫu TFT Mobile — nhân vật/tranh là của game mình. Góc trên-trái: avatar tròn
+  (cắt đầu/vai của Gogo từ sprite, nạp riêng lọc Nearest) + tên hồ sơ + dòng "Hạng • Cấp (XP)"
+  trên dải gradient tối mờ; chạm avatar/tên mở lớp sửa tên (Stage chứa TextField, quy tắc lưu
+  cũ: trim ≥ 2 ký tự). Góc trên-phải: 3 nút tròn nhỏ cho chức năng thật — Hồ Sơ & Thống Kê
+  (icon biểu đồ), Học Chơi (sách), Âm thanh (loa vẽ Pixmap, có bản gạch chéo khi tắt). Cột trái
+  giữa: 3 mục nút-tròn-kèm-chữ — CHIẾN DỊCH (dòng phụ tiến độ + thanh tiến độ CHIA 12 ĐOẠN
+  trên nền pill tối), SÓNG QUÁI (kỷ lục), HỒ SƠ (hạng/LP) — bấm đi thẳng màn tương ứng. Góc
+  dưới-trái: thẻ nổi bật CHIẾN DỊCH (banner chương + mô tả 2 dòng + tiến độ). Nửa phải: **linh
+  vật Gogo Hiệp Sĩ phóng lớn ~402px bằng Nearest** (cắt theo hộp alpha thật, có bóng chân +
+  nhấp nhô nhẹ), không che nút CHƠI/hàng icon. Góc dưới-phải: nút **CHƠI** thật to (nền vàng +
+  quầng sáng thở + mũi tên vẽ Pixmap) mở **lớp chọn chế độ**: panel tối ở giữa, đủ 5 chế độ
+  (Chiến Dịch / Sóng Quái / PvP Thường / PvP Hạng / PvP Đấu Tập) kèm mô tả ngắn — mọi chế độ
+  tới được trong tối đa 2 chạm.
+- **Thanh đỉnh trong trận tối giản kiểu TFT (Việc 2):** plaque pill to 760×48 ở đỉnh giữa
+  (chế độ — vòng — vàng — cấp/XP — máu — đếm giờ) đã GỠ. Đỉnh giữa chỉ còn 1 dòng chữ
+  (fontBig, căn giữa) theo pha — "Vòng 1-1 • Chuẩn bị: 42s" / "Đang giao tranh với X..." /
+  "Vòng 1-1 • Kết quả" / "… • Lật thẻ mở trận" / "… • Chọn cường hóa" — và **một thanh tiến
+  trình mảnh 240×5** ngay dưới: vàng theo đếm ngược chuẩn bị, xanh cyan theo playT/thời lượng
+  trận, ẩn ở các pha còn lại. Không thông tin nào mất hẳn: vàng → đĩa SHOP dưới-phải, cấp/XP →
+  đĩa MUA XP dưới-trái, máu PvP → hàng của mình trong tab NGƯỜI của panel phải, máu PvE → tab
+  NGƯỜI của panel phải (xem dưới), tên chế độ không hiện thường trực nữa.
+- **Panel phải hợp nhất 2 tab icon (Việc 3, đối xứng panel trái):** danh sách người chơi và
+  bảng sát thương gộp vào MỘT panel (`MatchScreen.drawRightPanel`, x 1084..1272, đỉnh 668)
+  với thanh 2 tab icon vẽ Pixmap cùng ngôn ngữ tab trái: **NGƯỜI** (chân dung nhóm — tab mặc
+  định) và **BIỂU ĐỒ** (3 cột biểu đồ — đọc rõ ở cỡ nhỏ hơn kiếm chéo). Tab NGƯỜI = danh sách
+  Scene2D nguyên vẹn (dấu kiếm chéo + highlight đối thủ của đợt ce8a3501 nằm trong tab này);
+  PvE thì tab này hiện tên + thanh máu + chế độ/màn của người chơi (`drawPveInfoTab`). Tab
+  BIỂU ĐỒ = bảng sát thương GỌN xem nhanh: giữa trận hiện số liệu **cộng dồn theo thời gian
+  trận** nhờ `Engine.damageChartUpTo(result, playT)` mới (lọc sự kiện attack/hit có `e.t <=
+  tMax`; `damageChart` toàn trận delegate về nó với tMax = ∞; verifyHeadless #10 mở rộng
+  khẳng định t=0 rỗng, t=duration trùng toàn trận), các pha khác hiện trận gần nhất, chưa có
+  trận nào hiện "Chưa có dữ liệu sát thương". Cache khóa 0,25s theo playT. Thẻ kết quả cuối
+  vòng giữ nguyên cột sát thương — tab này chỉ để xem nhanh. Trạng thái tab giữ qua các pha,
+  bấm tab được ở cả chuẩn bị (`planningPress`, sau thẻ tướng) lẫn giữa trận (`battlePress`,
+  sau thẻ trận). Hai lỗi bắt được khi soi ảnh đợt này: (1) visibility của danh sách phải đồng
+  bộ NGAY TẠI CHỖ VẼ (`drawRightPanel` tự `playersBox.setVisible(...)` mỗi frame) — chỉ set
+  trong handler chạm thì trạng thái tab đổi bằng đường khác sẽ vẽ đè 2 tab lên nhau; (2) cache
+  khóa 0,5s giữ bảng rỗng của frame đầu trận quá lâu → khóa 0,25s và mode chụp `battledmg`
+  phải chờ playT ≥ 3s mới có số liệu thật. Mode chụp mới: `menumodes` (lớp chọn chế độ),
+  `battledmg` (trận + tab biểu đồ), `dmgplan` (chuẩn bị + tab biểu đồ rỗng) — ảnh
+  `tools/shot26-*.png` đã soi toàn bộ (kèm crop panel phải 3x và dải đỉnh). GuideScreen bổ
+  sung mục SẢNH CHÍNH + 2 đoạn hướng dẫn thanh đỉnh/panel phải.
+
 ### Nét pixel cho tranh nền + kiểm chứng sân hoàng hôn/băng (đợt 2026-10-25)
 
 - **Lọc Nearest cho riêng tranh nền:** 4 sân đấu + tranh lobby là pixel art 640×360 và mọi nơi vẽ đều

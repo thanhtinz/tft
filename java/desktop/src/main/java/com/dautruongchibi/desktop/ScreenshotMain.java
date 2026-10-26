@@ -31,6 +31,10 @@ import java.lang.reflect.Method;
 // | tabtraits / tabitems / tabdrag (PANEL TRAI HOP NHAT 2 tab: chuan bi voi tab TOC/HE
 //   mac dinh / tab TRANG BI mo san / dang keo do trong tab TRANG BI)
 // | battletab (tran dang chay + tab TRANG BI mo san — panel van dung/chuyen duoc o pha tran)
+// | battledmg (tran dang chay + tab SAT THUONG cua panel phai mo san: bang sat thuong
+//   cong don theo thoi gian tran, xem nhanh giua tran khong can cho the ket qua)
+// | dmgplan (pha chuan bi + tab SAT THUONG mo san — trang thai rong "chua co du lieu")
+// | menumodes (sanh moi + LOP CHON CHE DO mo san sau nut CHOI)
 // | fxfire/fxice/fxlightning/fxheal/fxbeam (chup dung khung hinh mot tuong tung chieu theo
 //   HE chi dinh — doi BattleFx.lastCastFx trung he roi chup ngay frame do)
 public class ScreenshotMain {
@@ -43,6 +47,7 @@ public class ScreenshotMain {
         boolean battleStarted = false, captured = false, dragSet = false, shopSet = false;
         boolean overAdvanced = false; int overFrames = 0;
         MatchScreen matchScreen;
+        MenuScreen menuScreen;
         int fxSeenSeq = -1;
         int fxCaptureAt = -1;
 
@@ -54,8 +59,11 @@ public class ScreenshotMain {
             assets.load();
             profile = Profile.load(Profile.defaultPath());
             switch (mode) {
-                case "menu":
-                    setScreen(new MenuScreen(this));
+                case "menu": case "menumodes":
+                    // menumodes: sanh moi + LOP CHON CHE DO mo san (bat modesOpen bang
+                    // reflection trong render, nhu nguoi choi bam nut CHOI)
+                    menuScreen = new MenuScreen(this);
+                    setScreen(menuScreen);
                     break;
                 case "campaign":
                     setScreen(new com.dautruongchibi.ui.CampaignScreen(this));
@@ -125,6 +133,26 @@ public class ScreenshotMain {
                     // Tran danh that (battleItemsMatch) + tab TRANG BI mo san: kiem chung
                     // panel hop nhat van gon/dung dung o pha tran, dia duoi-trai khong bi che
                     Match m = battleItemsMatch();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "battledmg": {
+                    // Tran danh that (battleItemsMatch) + tab SAT THUONG cua panel phai mo
+                    // san (rightTab = 1 bang reflection): bang phai hien so lieu CONG DON
+                    // theo playT ngay giua tran
+                    Match m = battleItemsMatch();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "dmgplan": {
+                    // Pha chuan bi PvP + tab SAT THUONG mo san: chua tung co tran nao ->
+                    // trang thai rong "Chua co du lieu sat thuong"; tab NGUOI CHOI cua
+                    // panel phai phai bi thay boi tab nay (dau kiem cheo doi thu van nam
+                    // o tab NGUOI, chup rieng bang oppmark)
+                    Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
+                    m.autoPlan();
                     matchScreen = new MatchScreen(this, m);
                     setScreen(matchScreen);
                     break;
@@ -399,6 +427,17 @@ public class ScreenshotMain {
                     Field fEl = MatchScreen.class.getDeclaredField("draftElapsed"); fEl.setAccessible(true); fEl.setFloat(matchScreen, 1.45f);
                     dragSet = true;
                 }
+                if (("battledmg".equals(mode) || "dmgplan".equals(mode)) && !dragSet && frames > 5 && matchScreen != null) {
+                    // Mo san tab SAT THUONG cua panel phai (rightTab = 1) bang reflection.
+                    // frames > 5 nhu battletab: mode tran co the chup rat som khi pow no.
+                    Field fRT = MatchScreen.class.getDeclaredField("rightTab"); fRT.setAccessible(true); fRT.setInt(matchScreen, 1);
+                    dragSet = true;
+                }
+                if ("menumodes".equals(mode) && !dragSet && frames > 30 && menuScreen != null) {
+                    // Mo LOP CHON CHE DO o sanh bang reflection (modesOpen = true)
+                    Field fMO = MenuScreen.class.getDeclaredField("modesOpen"); fMO.setAccessible(true); fMO.setBoolean(menuScreen, true);
+                    dragSet = true;
+                }
                 if (("tabitems".equals(mode) || "tabdrag".equals(mode) || "battletab".equals(mode)) && !dragSet && frames > 5 && matchScreen != null) {
                     // frames > 5 (khong phai 50): mode tran co the chup RAT som khi pow no
                     // (playT ~0,2s) — set tab muon la anh chup van o tab mac dinh
@@ -424,7 +463,7 @@ public class ScreenshotMain {
                     dragSet = true;
                 }
                 boolean fxMode = mode.startsWith("fx");
-                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || "battleitems".equals(mode) || "battlesunset".equals(mode) || "battleice".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode) || "battlecard".equals(mode) || "battlecardinfo".equals(mode) || "oppbattle".equals(mode) || "battletab".equals(mode) || fxMode;
+                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || "battleitems".equals(mode) || "battlesunset".equals(mode) || "battleice".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode) || "battlecard".equals(mode) || "battlecardinfo".equals(mode) || "oppbattle".equals(mode) || "battletab".equals(mode) || "battledmg".equals(mode) || fxMode;
                 if (battleMode && !battleStarted && frames > 30 && matchScreen != null) {
                     Method mb = MatchScreen.class.getDeclaredMethod("startBattle");
                     mb.setAccessible(true);
@@ -456,7 +495,16 @@ public class ScreenshotMain {
                     dragSet = true;
                 }
                 boolean due;
-                if (("battlecard".equals(mode) || "battlecardinfo".equals(mode)) && battleStarted) {
+                if ("battledmg".equals(mode) && battleStarted) {
+                    // Chup MUON (playT >= 3s) de tab SAT THUONG co so lieu cong don that
+                    // (chup som theo pow dau tien thi bang con rong vi chua don nao dan)
+                    java.lang.reflect.Field fp = MatchScreen.class.getDeclaredField("phase");
+                    fp.setAccessible(true);
+                    java.lang.reflect.Field ft = MatchScreen.class.getDeclaredField("playT");
+                    ft.setAccessible(true);
+                    boolean inBattle = "BATTLE".equals(String.valueOf(fp.get(matchScreen)));
+                    due = (inBattle && ft.getFloat(matchScreen) >= 3.0f) || frames >= 1500;
+                } else if (("battlecard".equals(mode) || "battlecardinfo".equals(mode)) && battleStarted) {
                     // Chup GIUA tran khi the tran da mo va playT ~2.4s (tuong da tru mau,
                     // the phan anh trang thai song); phong ngu o frame 1500.
                     java.lang.reflect.Field fp = MatchScreen.class.getDeclaredField("phase");

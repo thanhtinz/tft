@@ -50,7 +50,9 @@ import java.util.Set;
 // DUOI hang cho, sat mep duoi man hinh, reroll tron chi co trong shop, cham vung trong thi dong shop); tran TU DONG bat dau
 // khi het 45s chuan bi; pha ket qua tu chuyen sau ~4s va bang sat thuong tu hien o pha do.
 // Panel trai HOP NHAT 2 tab icon kieu TFT Mobile (khien = toc/he, tui = khay trang bi);
-// danh sach nguoi choi = hang gon mep phai.
+// panel PHAI cung HOP NHAT 2 tab icon (nguoi = danh sach nguoi choi, bieu do = bang sat
+// thuong xem nhanh giua tran — cong don theo playT). Thanh dinh TOI GIAN kieu TFT:
+// chi dong chu vong + trang thai pha va mot thanh tien trinh MANH o dinh giua.
 // Giu nguyen trinh dien: pow truyen tranh, announcer, popup trang bi, xoay gop sao, keo-tha + thung rac, VFX theo he.
 public class MatchScreen extends ScreenAdapter {
     enum Phase { PLANNING, DRAFT, AUGMENT, BATTLE, RESULT, OVER }
@@ -83,9 +85,34 @@ public class MatchScreen extends ScreenAdapter {
     // Dem nguoc pha chuan bi: 45 giay (ban cu 90 giay — rut ngan theo dot dieu khien TFT Mobile)
     static final float PLAN_TIME = 45f;
 
-    // HUD labels
-    private Label roundLabel, goldVal, lvlVal, hpVal, msgLabel, timerLabel;
+    // HUD labels — THANH DINH TOI GIAN kieu TFT Mobile: chi MOT dong chu can giua o
+    // dinh (vong/man/song + trang thai pha/dem gio) + thanh tien trinh MANH ve tay
+    // ngay duoi dong chu (drawTopBar). Khong con plaque to chua vang/cap/mau: vang xem
+    // o dia SHOP duoi-phai, cap/XP o dia MUA XP duoi-trai, mau o hang cua minh trong
+    // tab NGUOI cua panel phai (PvE: tab NGUOI ve thong tin nguoi choi + thanh mau).
+    private Label topLabel, msgLabel;
+    private String roundText = "";
+    private float topBarFraction = -1f; // <0: an thanh manh; 0..1: muc fill
+    private boolean topBarBattle = false; // tran: fill xanh cyan + theo playT; chuan bi: vang + dem nguoc
     private Table playersBox;
+    // PANEL PHAI HOP NHAT 2 tab icon (cung ngon ngu panel trai): tab NGUOI = danh sach
+    // nguoi choi Scene2D (playersBox), tab BIEU DO = bang sat thuong ve tay xem nhanh
+    // giua tran. Trang thai tab giu nguyen qua cac pha, chuyen duoc ca chuan bi lan
+    // dang tran. Nut Thoat (y 678..710) nam tren thanh tab (628..668) — khong xung dot.
+    static final float RPANEL_X = 1084, RPANEL_W = 188, RPANEL_TOP = 668, RTAB_H = 40, RTAB_W = RPANEL_W / 2;
+    static final float RCONTENT_TOP = 618;
+    static final int DMG_ROW_H = 30, DMG_MAX_ROWS = 11;
+    private int rightTab = 0;
+    static final int RTAB_PLAYERS = 0, RTAB_DAMAGE = 1;
+    private Texture peopleTex, chartTex; // icon 2 tab phai ve bang Pixmap (khong emoji)
+    private Rectangle rTabRect(int t) {
+        return new Rectangle(RPANEL_X + t * RTAB_W, RPANEL_TOP - RTAB_H, RTAB_W, RTAB_H);
+    }
+    // Cache dong sat thuong cho tab BIEU DO: pha tran cong don theo playT (khoa = nua
+    // giay), cac pha khac la bang toan tran gan nhat — tranh cong lai moi frame.
+    private List<Engine.DamageRow> dmgCache;
+    private Object dmgCacheOutcome;
+    private int dmgCacheKey = Integer.MIN_VALUE;
     // Doi thu PvP cua vong nay (Match.peekNextOpponent — round-robin tat dinh, fight()
     // dung cung mot cursor nen khop ca o pha tran): hang cua ho trong danh sach nguoi
     // choi duoc HIGHLIGHT vien vang + dau KIEM CHEO kieu TFT (thay hop chu "Doi thu
@@ -269,44 +296,28 @@ public class MatchScreen extends ScreenAdapter {
         stage = new Stage(new FitViewport(1280, 720), batch);
         Assets a = game.assets;
 
-        // Thanh tren: plaque noi mong o giua-tren (vong | vang | cap | mau | thoi gian) — ShadowTable: tu do bong mem
-        Table top = Ui.shadowTable(a);
-        top.setPosition(260, 668);
-        top.setSize(760, 48);
-        top.background(Ui.plaqueBg(a));
-        top.pad(2, 14, 2, 14);
-        top.left();
-        roundLabel = Ui.labelBig(a, "", Color.WHITE);
-        goldVal = Ui.labelBig(a, "", Ui.GOLD);
-        lvlVal = Ui.labelBig(a, "", Color.WHITE);
-        hpVal = Ui.labelBig(a, "", new Color(1, 0.55f, 0.65f, 1));
-        timerLabel = Ui.label(a, "", Ui.TEXT_DIM);
-        top.add(roundLabel).padRight(14);
-        top.add(iconImg(a, "coin", 20)).padRight(4);
-        top.add(goldVal).padRight(14);
-        top.add(iconImg(a, "star", 20)).padRight(4);
-        top.add(lvlVal).padRight(14);
-        top.add(iconImg(a, "heart", 20)).padRight(4);
-        top.add(hpVal).padRight(14);
-        top.add(timerLabel);
-        stage.addActor(top);
-        // Dong thong bao nam ngay duoi plaque, can giua (chi la chu, khong nen hop)
+        // Thanh dinh TOI GIAN (kieu TFT Mobile): chi 1 dong chu can giua o dinh —
+        // vong/man/song + trang thai pha (updateTopBar cap nhat moi frame). Thanh tien
+        // trinh manh ve tay ngay duoi dong chu (drawTopBar trong render).
+        topLabel = Ui.labelBig(a, "", Color.WHITE);
+        topLabel.setAlignment(com.badlogic.gdx.utils.Align.center);
+        topLabel.setPosition(340, 688);
+        topLabel.setSize(600, 26);
+        stage.addActor(topLabel);
+        // Dong thong bao/goi y nam duoi thanh dinh, can giua (chi la chu, khong nen hop)
         msgLabel = Ui.label(a, "", Color.WHITE);
         msgLabel.setAlignment(com.badlogic.gdx.utils.Align.center);
-        msgLabel.setPosition(290, 642);
+        msgLabel.setPosition(290, 654);
         msgLabel.setSize(700, 22);
         stage.addActor(msgLabel);
 
-        // Mep phai: tieu de + danh sach nguoi choi gon (khong nen hop dac). Doi thu vong
-        // nay danh dau NGAY trong hang cua ho (kiem cheo + vien vang) — khong con hop chu
-        // liet ke doi hinh duoi danh sach nhu truoc (lam theo TFT that).
-        Label playersTitle = Ui.labelSmall(a, match.isPvp() ? "NGƯỜI CHƠI — MÁU" : "THÔNG TIN", Ui.GOLD);
-        playersTitle.setPosition(1094, 646);
-        playersTitle.setSize(178, 18);
-        stage.addActor(playersTitle);
+        // Mep phai: PANEL HOP NHAT 2 tab (ve tay trong render — drawRightPanel): tab
+        // NGUOI chua danh sach nguoi choi Scene2D nay; doi thu vong nay danh dau NGAY
+        // trong hang cua ho (kiem cheo + vien vang) nhu da chot. Khong con tieu de
+        // "NGUOI CHOI — MAU" roi (thanh tab da noi ro dang xem gi).
         playersBox = new Table();
-        playersBox.setPosition(1092, 292);
-        playersBox.setSize(180, 350);
+        playersBox.setPosition(RPANEL_X + 6, RCONTENT_TOP - 258);
+        playersBox.setSize(176, 258);
         // LUU Y: Table.align() GHI DE toan bo co can le — viet .top().align(left) se lam
         // MAT co top, noi dung bi CAN GIUA doc; khi khoi doi thu dai (noi dung > 350px)
         // hang dau tien bi day LEN trung vao tieu de "NGUOI CHOI — MAU". Phai gop 1 lan.
@@ -338,13 +349,6 @@ public class MatchScreen extends ScreenAdapter {
         refreshPlanning();
     }
 
-    private com.badlogic.gdx.scenes.scene2d.ui.Image iconImg(Assets a, String name, float size) {
-        com.badlogic.gdx.scenes.scene2d.ui.Image im = new com.badlogic.gdx.scenes.scene2d.ui.Image(
-            new com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable(new com.badlogic.gdx.graphics.g2d.TextureRegion(a.icon(name))));
-        im.setSize(size, size);
-        return im;
-    }
-
     private com.badlogic.gdx.scenes.scene2d.utils.ChangeListener changed(Runnable r) {
         return new com.badlogic.gdx.scenes.scene2d.utils.ChangeListener() {
             @Override public void changed(ChangeEvent e, com.badlogic.gdx.scenes.scene2d.Actor actor) { r.run(); }
@@ -363,18 +367,14 @@ public class MatchScreen extends ScreenAdapter {
     // ---------- Cap nhat UI pha chuan bi ----------
     private void refreshPlanning() {
         Match.PlayerState h = match.human();
-        String modeName;
+        // Thanh dinh chi con cum VONG/MAN/SONG — ten che do khong con hien thuong truc
+        // (thanh cu "PvP Hạng — Vòng ..." da bo cung plaque to).
         switch (match.mode) {
-            case PVP_NORMAL: modeName = "PvP Thường"; break;
-            case PVP_RANKED: modeName = "PvP Hạng"; break;
-            case PVP_PRACTICE: modeName = "PvP Đấu Tập"; break;
-            case WAVES: modeName = "Sóng Quái — Sóng " + match.wave; break;
-            default: modeName = "Chiến Dịch — Màn " + match.campaignStageId; break;
+            case PVP_NORMAL: case PVP_RANKED: case PVP_PRACTICE:
+                roundText = "Vòng " + Engine.roundLabel(match.round); break;
+            case WAVES: roundText = "Sóng " + match.wave; break;
+            default: roundText = "Màn " + match.campaignStageId; break;
         }
-        roundLabel.setText(modeName + (match.isPvp() ? " — Vòng " + Engine.roundLabel(match.round) : ""));
-        goldVal.setText(String.valueOf(h.gold));
-        lvlVal.setText("Cấp " + h.level + " (" + h.xp + "/" + Engine.xpToNext(h.level) + ")");
-        hpVal.setText(h.hp + " / " + Engine.HP_MAX);
         // Synergy -> chip nho doc mep trai (ve tay trong render)
         List<Engine.SynergyInfo> syns = Engine.computeSynergies(h.board);
         synChips.clear();
@@ -629,6 +629,221 @@ public class MatchScreen extends ScreenAdapter {
         }
         if (panelTab == TAB_TRAITS) drawTraitTab(bottom);
         else drawItemTab(now);
+    }
+
+    // ---------- THANH DINH TOI GIAN + PANEL PHAI 2 TAB (kieu TFT Mobile) ----------
+
+    // Cap nhat dong chu thanh dinh + muc fill thanh manh theo pha (goi moi frame).
+    private void updateTopBar() {
+        switch (phase) {
+            case PLANNING:
+                topLabel.setText(roundText + " • Chuẩn bị: " + Math.max(0, (int) Math.ceil(planTimeLeft)) + "s");
+                topBarFraction = Math.max(0, planTimeLeft) / PLAN_TIME;
+                topBarBattle = false;
+                break;
+            case BATTLE: {
+                String opp = outcome != null ? outcome.opponentName : "";
+                topLabel.setText(opp == null || opp.isEmpty() ? "Đang giao tranh..." : "Đang giao tranh với " + opp + "...");
+                double dur = (outcome != null && outcome.result != null) ? outcome.result.duration : 0;
+                topBarFraction = dur > 0 ? (float) Math.min(1, playT / dur) : -1f;
+                topBarBattle = true;
+                break;
+            }
+            case RESULT: topLabel.setText(roundText + " • Kết quả"); topBarFraction = -1f; break;
+            case DRAFT: topLabel.setText(roundText + " • Lật thẻ mở trận"); topBarFraction = -1f; break;
+            case AUGMENT: topLabel.setText(roundText + " • Chọn cường hóa"); topBarFraction = -1f; break;
+            default: topLabel.setText(roundText); topBarFraction = -1f; break;
+        }
+    }
+
+    // Thanh tien trinh MANH (240x5) ngay duoi dong chu dinh: chuan bi = vang chay
+    // nguoc theo thoi gian con lai, giao tranh = cyan chay theo playT/thoi luong tran.
+    // Cac pha khac an thanh (topBarFraction < 0). Dinh giua gan nhu TRONG nhu TFT that.
+    private void drawTopBar() {
+        if (topBarFraction < 0) return;
+        Assets a = game.assets;
+        float bw = 240, bx = 640 - bw / 2, by = 679;
+        batch.setColor(0, 0, 0, 0.55f);
+        batch.draw(a.whiteTex(), bx, by, bw, 5);
+        batch.setColor(topBarBattle ? new Color(0.45f, 0.85f, 1f, 1) : Ui.GOLD);
+        batch.draw(a.whiteTex(), bx, by, bw * Math.max(0, Math.min(1, topBarFraction)), 5);
+        batch.setColor(Color.WHITE);
+    }
+
+    // Icon tab NGUOI: 2 nhan vat ve Pixmap 48x48 (dau + vai) — nguoi truoc vang am,
+    // nguoi sau xanh duong mo. Tao 1 lan, loc Nearest nhu cac icon ve tay khac.
+    private Texture peopleTexture() {
+        if (peopleTex != null) return peopleTex;
+        Pixmap pm = new Pixmap(48, 48, Pixmap.Format.RGBA8888);
+        pm.setColor(0.30f, 0.55f, 0.80f, 1f);
+        pm.fillCircle(33, 31, 10); // vai nguoi sau
+        pm.setColor(0.45f, 0.75f, 1f, 1f);
+        pm.fillCircle(33, 15, 7); // dau nguoi sau
+        pm.setColor(0.85f, 0.60f, 0.16f, 1f);
+        pm.fillCircle(18, 36, 12); // vai nguoi truoc
+        pm.setColor(1f, 0.85f, 0.50f, 1f);
+        pm.fillCircle(18, 19, 8); // dau nguoi truoc
+        peopleTex = new Texture(pm);
+        peopleTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        pm.dispose();
+        return peopleTex;
+    }
+
+    // Icon tab SAT THUONG: BIEU DO COT ve Pixmap 48x48 — 3 cot tang dan (xanh -> vang
+    // -> cam) tren truc day trang mo. Doc ro o co 26px hon kiem cheo (kiem da dung lam
+    // dau doi thu trong hang nguoi choi, tranh nham lan).
+    private Texture chartTexture() {
+        if (chartTex != null) return chartTex;
+        Pixmap pm = new Pixmap(48, 48, Pixmap.Format.RGBA8888);
+        pm.setColor(0.45f, 0.85f, 1f, 1f);
+        pm.fillRectangle(8, 26, 8, 14);
+        pm.setColor(1f, 0.85f, 0.35f, 1f);
+        pm.fillRectangle(20, 18, 8, 22);
+        pm.setColor(1f, 0.55f, 0.25f, 1f);
+        pm.fillRectangle(32, 10, 8, 30);
+        pm.setColor(0.92f, 0.92f, 0.95f, 1f);
+        pm.fillRectangle(5, 40, 38, 3);
+        chartTex = new Texture(pm);
+        chartTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        pm.dispose();
+        return chartTex;
+    }
+
+    // Day panel phai: chieu cao theo noi dung LON HON trong 2 tab (danh sach 8 hang
+    // hoac bang sat thuong hien tai), chan duoi cung 200 — khong bao gio cham dia vang
+    // duoi-phai (ket thuc o y=112) hay hang cho (y<162).
+    private float rPanelBottom() {
+        float dmgH = 66 + Math.max(1, Math.min(damageRows().size(), DMG_MAX_ROWS)) * DMG_ROW_H + 12;
+        float bodyH = Math.max(258f, dmgH);
+        return Math.max(RPANEL_TOP - RTAB_H - bodyH, 200f);
+    }
+
+    // PANEL PHAI HOP NHAT (doi xung panel trai): nen toi ban trong suot + vien vang
+    // mong; thanh tab 2 icon o dinh (NGUOI / BIEU DO) cung ngon ngu highlight vang;
+    // than panel: tab NGUOI -> PvP la danh sach Scene2D ve de len, PvE ve thong tin
+    // nguoi choi; tab BIEU DO -> bang sat thuong ve tay.
+    private void drawRightPanel(float now) {
+        Assets a = game.assets;
+        // Dong bo thay/mat cua danh sach Scene2D voi tab dang chon NGAY TAI CHO VE:
+        // bat cu thay doi rightTab nao (cham tab, trang thai khac...) deu dung, danh
+        // sach khong bao gio ve de len tab BIEU DO.
+        playersBox.setVisible(rightTab == RTAB_PLAYERS);
+        float bottom = rPanelBottom();
+        drawShadowRect(RPANEL_X, bottom, RPANEL_W, RPANEL_TOP - bottom, 0.35f);
+        batch.setColor(0.05f, 0.04f, 0.11f, 0.78f);
+        batch.draw(a.whiteTex(), RPANEL_X, bottom, RPANEL_W, RPANEL_TOP - bottom);
+        batch.setColor(Color.WHITE);
+        drawBorder(RPANEL_X, bottom, RPANEL_W, RPANEL_TOP - bottom, new Color(1f, 0.85f, 0.3f, 0.35f), 2);
+        batch.setColor(1f, 0.85f, 0.3f, 0.25f);
+        batch.draw(a.whiteTex(), RPANEL_X + 2, RPANEL_TOP - RTAB_H - 2, RPANEL_W - 4, 2);
+        batch.setColor(Color.WHITE);
+        for (int t = 0; t < 2; t++) {
+            Rectangle r = rTabRect(t);
+            boolean sel = rightTab == t;
+            if (sel) {
+                batch.setColor(1f, 0.80f, 0.25f, 0.30f);
+                batch.draw(a.whiteTex(), r.x + 2, r.y + 2, r.width - 4, r.height - 2);
+            } else {
+                batch.setColor(0f, 0f, 0f, 0.30f);
+                batch.draw(a.whiteTex(), r.x + 2, r.y + 2, r.width - 4, r.height - 2);
+            }
+            batch.setColor(1, 1, 1, sel ? 1f : 0.5f);
+            batch.draw(t == RTAB_PLAYERS ? peopleTexture() : chartTexture(),
+                r.x + r.width / 2 - 13, r.y + r.height / 2 - 13, 26, 26);
+            batch.setColor(Color.WHITE);
+            if (sel) {
+                batch.setColor(Ui.GOLD);
+                batch.draw(a.whiteTex(), r.x + 2, r.y, r.width - 4, 3);
+                batch.setColor(Color.WHITE);
+            }
+        }
+        if (rightTab == RTAB_DAMAGE) drawDamageTab();
+        else if (!match.isPvp()) drawPveInfoTab();
+    }
+
+    // Dong sat thuong cho tab BIEU DO (co cache): pha tran -> CONG DON theo playT
+    // (khoa nua giay), pha khac -> bang toan tran cua tran gan nhat. Chua dau tran nao
+    // -> rong (tab hien dong "Chua co du lieu").
+    private List<Engine.DamageRow> damageRows() {
+        if (outcome == null || outcome.result == null) return new ArrayList<>();
+        int key = phase == Phase.BATTLE ? (int) (playT * 4) : -1; // khoa 0,25s: bang chay gan nhu truc tiep, khong ket du lieu rong cua frame dau tran
+        if (dmgCache != null && dmgCacheOutcome == outcome && dmgCacheKey == key) return dmgCache;
+        dmgCache = key >= 0 ? Engine.damageChartUpTo(outcome.result, playT) : Engine.damageChart(outcome.result);
+        dmgCacheOutcome = outcome;
+        dmgCacheKey = key;
+        return dmgCache;
+    }
+
+    // Than tab BIEU DO: bang sat thuong GON trong panel phai (icon + ten + thanh + so)
+    // de xem nhanh giua tran — KHONG thay cot sat thuong trong the ket qua cuoi vong.
+    // Bo cuc do theo hop glyph that: ten ve o ry+4 (glyph treo xuong ~13px), thanh
+    // sat thuong o ry-17 (duoi day glyph >= 2px), buoc dong 30px.
+    private void drawDamageTab() {
+        Assets a = game.assets;
+        float x0 = RPANEL_X + 8, w = RPANEL_W - 16;
+        List<Engine.DamageRow> rows = damageRows();
+        drawLeft(a.fontSmall, "SÁT THƯƠNG CỦA TRẬN", x0, RCONTENT_TOP - 6, Ui.GOLD);
+        if (!rows.isEmpty()) drawLeft(a.fontTiny, phase == Phase.BATTLE ? "Đang cập nhật theo trận" : "Của trận gần nhất", x0, RCONTENT_TOP - 25, Ui.TEXT_DIM);
+        if (rows.isEmpty()) {
+            drawCentered(a.fontSmall, "Chưa có dữ liệu", RPANEL_X + RPANEL_W / 2, RCONTENT_TOP - 74, Ui.TEXT_DIM);
+            drawCentered(a.fontSmall, "sát thương", RPANEL_X + RPANEL_W / 2, RCONTENT_TOP - 92, Ui.TEXT_DIM);
+            return;
+        }
+        // Do lai bang fontSmall THAT (khong gia lap): fitDamageName giu hau to sao nguyen ven
+        double max = Math.max(1, rows.get(0).damage);
+        int n = Math.min(rows.size(), DMG_MAX_ROWS);
+        for (int i = 0; i < n; i++) {
+            Engine.DamageRow r = rows.get(i);
+            float ry = RCONTENT_TOP - 56 - i * DMG_ROW_H; // diem ve dong ten
+            batch.draw(a.unit(r.artId, r.star), x0, ry - 12, 18, 18);
+            String val = String.valueOf((int) r.damage);
+            float valW = measureW(a.fontSmall, val);
+            String nm = fitDamageName(r.name, r.star, w - 24 - valW - 8, s -> { layout.setText(a.fontSmall, s); return layout.width; });
+            a.fontSmall.setColor(r.team == 0 ? new Color(0.45f, 0.95f, 0.6f, 1) : new Color(1, 0.55f, 0.55f, 1));
+            a.fontSmall.draw(batch, nm, x0 + 24, ry + 4);
+            a.fontSmall.setColor(Color.WHITE);
+            a.fontSmall.draw(batch, val, x0 + w - valW, ry + 4);
+            batch.setColor(0, 0, 0, 0.55f);
+            batch.draw(a.whiteTex(), x0 + 24, ry - 17, w - 24, 6);
+            batch.setColor(r.team == 0 ? new Color(0.3f, 0.85f, 0.45f, 1) : new Color(0.95f, 0.35f, 0.35f, 1));
+            batch.draw(a.whiteTex(), x0 + 24, ry - 17, (w - 24) * (float) (r.damage / max), 6);
+            batch.setColor(Color.WHITE);
+        }
+        a.fontSmall.setColor(Color.WHITE);
+    }
+
+    // Than tab NGUOI o che do PvE: khong co danh sach nguoi choi — hien ten + thanh
+    // mau + che do/man cua NGUOI CHOI de mau khong bien mat khoi man hinh sau khi bo
+    // plaque dinh (PvP thi danh sach Scene2D ve de len vung nay).
+    private void drawPveInfoTab() {
+        Assets a = game.assets;
+        Match.PlayerState h = match.human();
+        float x0 = RPANEL_X + 10, w = RPANEL_W - 20;
+        drawLeft(a.fontSmall, game.profile.name, x0, RCONTENT_TOP - 8, Ui.GOLD);
+        batch.setColor(0, 0, 0, 0.55f);
+        batch.draw(a.whiteTex(), x0, RCONTENT_TOP - 34, w - 4, 10);
+        batch.setColor(0.30f, 0.85f, 0.45f, 0.95f);
+        batch.draw(a.whiteTex(), x0, RCONTENT_TOP - 34, (w - 4) * Math.max(0, h.hp) / (float) Engine.HP_MAX, 10);
+        batch.setColor(Color.WHITE);
+        drawLeft(a.fontSmall, "Máu: " + h.hp + " / " + Engine.HP_MAX, x0, RCONTENT_TOP - 50, Color.WHITE);
+        drawLeft(a.fontSmall, match.mode == Match.Mode.WAVES ? "Sóng Quái Vô Tận" : "Chiến Dịch", x0, RCONTENT_TOP - 78, Ui.TEXT_DIM);
+        drawLeft(a.fontSmall, roundText, x0, RCONTENT_TOP - 98, Ui.TEXT_DIM);
+    }
+
+    // Bam thanh tab panel PHAI -> chuyen tab NGUOI <-> BIEU DO (dong bo an/hien danh
+    // sach Scene2D ngay). Tra ve true neu cham trung vung tab.
+    private boolean pressRightTab(float x, float y) {
+        for (int t = 0; t < 2; t++) {
+            if (rTabRect(t).contains(x, y)) {
+                if (rightTab != t) {
+                    rightTab = t;
+                    playersBox.setVisible(rightTab == RTAB_PLAYERS);
+                    game.sound().sfx("click");
+                }
+                return true;
+            }
+        }
+        return false;
     }
 
     // Than tab TRANG BI: khay do VE TAY nhu cu — moi mon do trong kho la 1 o icon rieng
@@ -1051,7 +1266,7 @@ public class MatchScreen extends ScreenAdapter {
         // --- Cap nhat trang thai ---
         if (toastT > 0) { toastT -= delta; msgLabel.setText(toast); }
         else if (phase == Phase.PLANNING) msgLabel.setText("Kéo tướng: đặt / cất / bán • Kéo đồ khay trái: ghép / đeo — hết giờ tự vào trận.");
-        else if (phase == Phase.BATTLE) msgLabel.setText("Đang giao tranh với " + (outcome != null ? outcome.opponentName : "") + "...");
+        else msgLabel.setText(""); // "Dang giao tranh voi X..." da chuyen len thanh dinh (topLabel)
         if (returnT >= 0) { returnT += delta; if (returnT >= RETURN_DUR) { returnT = -1; returnUid = null; } }
         // Luoi o mo dan theo thao tac: chi hien khi dang KEO tuong (dragActive) hoac dang CHON
         // mot tuong kieu cham (selUid) o pha chuan bi; con lai mo dan ve 0 (san sach khong o).
@@ -1068,9 +1283,9 @@ public class MatchScreen extends ScreenAdapter {
         for (int i = mergeFx.size() - 1; i >= 0; i--) { MergeFx fx = mergeFx.get(i); fx.ttl += delta; if (fx.ttl > 0.9f) mergeFx.remove(i); }
         if (phase == Phase.PLANNING) {
             planTimeLeft -= delta;
-            timerLabel.setText("Chuẩn bị: " + Math.max(0, (int) Math.ceil(planTimeLeft)) + "s");
             if (planTimeLeft <= 0) startBattle();
-        } else timerLabel.setText(phase == Phase.BATTLE ? "Giao tranh: " + String.format("%.1f", playT) + "s" : "");
+        }
+        updateTopBar();
         if (phase == Phase.DRAFT && draftChosen >= 0 && !draftApplied) {
             draftElapsed += delta;
             if (draftElapsed > 7 * 0.13f + 0.42f + 1.5f) {
@@ -1120,6 +1335,8 @@ public class MatchScreen extends ScreenAdapter {
         if (phase == Phase.BATTLE || phase == Phase.RESULT) drawBattleUnits(now);
         else { drawPlanningUnits(now); drawBench(now); if (shopOpen && phase == Phase.PLANNING) drawShop(); }
         drawLeftPanel(now);
+        drawRightPanel(now);
+        drawTopBar();
         drawMergeFx(now);
         // So sat thuong noi (phong Kanto: cam vang, chi mang to + "!")
         for (FloatText ft : floatTexts) {
@@ -1137,14 +1354,9 @@ public class MatchScreen extends ScreenAdapter {
         drawPows();
         battleFx.draw(batch, a, circleTex, ringTex); // hieu ung theo he: beam/set/vom khien/particle
         batch.end();
-        // --- Bong do cho khoi danh sach nguoi choi mep phai (Table khong nen, ve tay o day;
-        // cac nut/plaque/panel Scene2D con lai tu do bong qua Ui.ShadowTextButton/ShadowTable) ---
-        // Chi ve khi danh sach CO hang (PvP): PvE de trong -> khong de mang bong ma treo lo lung.
-        batch.begin();
-        if (playersBox.getChildren().size > 0)
-            drawShadowRect(playersBox.getX(), playersBox.getY(), playersBox.getWidth(), playersBox.getHeight(), 0.30f);
-        batch.end();
-        // --- HUD Scene2D (plaque, nut noi, danh sach gon) ---
+        // (Bong do rieng cua khoi danh sach nguoi choi da bo: panel phai hop nhat tu
+        // ve bong cua no trong drawRightPanel.)
+        // --- HUD Scene2D (thanh dinh, nut Thoat, danh sach nguoi choi trong tab NGUOI) ---
         stage.act(delta);
         stage.draw();
         // 2 nut tron dieu khien ve sau HUD (tren moi lop san/bench/shop) nhung duoi overlay:
@@ -2479,6 +2691,7 @@ public class MatchScreen extends ScreenAdapter {
             if (hit == null) { battleCardUid = null; return true; }
             return true; // cham lai dung tuong dang xem: giu nguyen the
         }
+        if (pressRightTab(x, y)) return true; // chuyen tab panel phai giua tran (sau the tran: vung tab chong mep tren cua the)
         String hit = battleUnitAt(x, y);
         if (hit != null) { battleCardUid = hit; game.sound().sfx("click"); return true; }
         return false;
@@ -2546,6 +2759,7 @@ public class MatchScreen extends ScreenAdapter {
                 return true;
             }
         }
+        if (pressRightTab(x, y)) return true; // chuyen tab NGUOI <-> BIEU DO (sau the tuong: vung tab chong mep tren cua the)
         // Bang thong tin do dang mo: cham nut X hoac cham ra ngoai bang = dong; cham vao icon
         // khac trong khay = xem mon do. Bang khong chan keo-tha tuong (dong xong moi thao tac tiep).
         if (itemInfoId != null) {

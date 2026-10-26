@@ -599,12 +599,20 @@ public final class Engine {
     }
 
     public static List<DamageRow> damageChart(BattleResult r) {
+        return damageChartUpTo(r, Double.MAX_VALUE);
+    }
+
+    // Bang sat thuong CONG DON toi thoi diem tMax (chi tinh su kien co e.t <= tMax):
+    // dung cho tab SAT THUONG xem TRUC TIEP giua tran (so lieu chay theo playT, khong
+    // lo truoc ket qua cuoi tran). tMax = vo cuc thi trung khop damageChart toan tran.
+    public static List<DamageRow> damageChartUpTo(BattleResult r, double tMax) {
         List<DamageRow> out = new ArrayList<>();
         if (r == null) return out;
         Map<String, FightUnit> units = new HashMap<>();
         for (BattleFrame f : r.frames) for (FightUnit u : f.units) units.put(u.uid, u);
         Map<String, Double> sums = new HashMap<>();
         for (BattleEvent e : r.events) {
+            if (e.t > tMax) continue;
             if (e.attackerUid == null || e.amount == null || e.amount <= 0) continue;
             if (!"attack".equals(e.type) && !"hit".equals(e.type)) continue;
             sums.put(e.attackerUid, sums.getOrDefault(e.attackerUid, 0.0) + e.amount);
