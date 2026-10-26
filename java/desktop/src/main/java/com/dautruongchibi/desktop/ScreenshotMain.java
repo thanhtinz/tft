@@ -42,6 +42,9 @@ import java.lang.reflect.Method;
 //   (chup cua so announcer o pha RESULT: tinh linh an mung / bi hat xui)
 // | fxfire/fxice/fxlightning/fxheal/fxbeam (chup dung khung hinh mot tuong tung chieu theo
 //   HE chi dinh — doi BattleFx.lastCastFx trung he roi chup ngay frame do)
+// | emotewheel / emotepop / emotefoe (VONG EMOTE: vong quay 6 o dang mo / sticker VUI
+//   bat tren tinh linh cua minh / sticker KHIEU KHICH cua bot o ria san dich — trang
+//   thai tiem bang reflection trong render)
 public class ScreenshotMain {
     static class ShotGame extends MainGame {
         final String mode;
@@ -182,6 +185,26 @@ public class ScreenshotMain {
                     Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
                     if (m.draftPending) m.pickDraft(0);
                     if (m.augmentPending) m.pickAugment(0);
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "emotewheel": case "emotepop": {
+                    // VONG EMOTE (sticker ve): pha chuan bi PvP day du cua benchShowcase
+                    // (tinh linh minh o ria nha). Trang thai emote (vong mo / sticker
+                    // bat) tiem bang reflection trong render().
+                    Match m = benchShowcase();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "emotefoe": {
+                    // Sticker cua BOT o ria san dich: can DOI THU THAT cua vong nen
+                    // dung battleItemsMatch (PvP vong 13) — vong 1-1 cua benchShowcase
+                    // la vong QUAI PvE (Engine.isPveStageRound) nen peekNextOpponent
+                    // = null, khong co tinh linh dich de bat sticker. Van o pha
+                    // CHUAN BI (khong startBattle), sticker tiem bang reflection.
+                    Match m = battleItemsMatch();
                     matchScreen = new MatchScreen(this, m);
                     setScreen(matchScreen);
                     break;
@@ -536,6 +559,23 @@ public class ScreenshotMain {
                     Field fCh = MatchScreen.class.getDeclaredField("draftChosen"); fCh.setAccessible(true); fCh.setInt(matchScreen, 0);
                     Field fEl = MatchScreen.class.getDeclaredField("draftElapsed"); fEl.setAccessible(true); fEl.setFloat(matchScreen, 1.45f);
                     dragSet = true;
+                }
+                if (("emotewheel".equals(mode) || "emotepop".equals(mode) || "emotefoe".equals(mode)) && frames > 40 && matchScreen != null) {
+                    // GHIM trang thai emote MOI frame toi luc chup (mac dinh frame 100)
+                    // nhu itempop: delta thuc duoi Xvfb luc khoi dong khong on dinh nen
+                    // dat 1 lan se troi mat. emotewheel = vong quay mo san 6 o;
+                    // emotepop = sticker VUI (0) tren tinh linh MINH ghim o t=0.55
+                    // (da phong het co 1.0, alpha 1); emotefoe = sticker KHIEU KHICH
+                    // (5) cua BOT o ria san dich, cung ghim t=0.55.
+                    if ("emotewheel".equals(mode)) {
+                        Field fW = MatchScreen.class.getDeclaredField("emoteWheelOpen"); fW.setAccessible(true); fW.setBoolean(matchScreen, true);
+                    } else if ("emotepop".equals(mode)) {
+                        Field fE = MatchScreen.class.getDeclaredField("myEmote"); fE.setAccessible(true); fE.setInt(matchScreen, 0);
+                        Field fT = MatchScreen.class.getDeclaredField("myEmoteT"); fT.setAccessible(true); fT.setFloat(matchScreen, 0.55f);
+                    } else {
+                        Field fE = MatchScreen.class.getDeclaredField("foeEmote"); fE.setAccessible(true); fE.setInt(matchScreen, 5);
+                        Field fT = MatchScreen.class.getDeclaredField("foeEmoteT"); fT.setAccessible(true); fT.setFloat(matchScreen, 0.55f);
+                    }
                 }
                 if ("arenaclick".equals(mode) && !dragSet && frames > 40 && matchScreen != null) {
                     // Kich hoat BUNG SAO cua diem bam tuong tac tren san bang reflection

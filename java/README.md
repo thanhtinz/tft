@@ -394,6 +394,34 @@ kiểm chứng headless mục 19–21):
   Kiểm chứng headless mục 26 (điều kiện thuần + bất biến 2 chiều trên trận PvP trọn vẹn) và mode chụp
   `boomwin` / `boomlose` / `finisherwin` / `finisherlose` / `finishercard` trong ScreenshotMain.
 
+### Vòng emote — Emote Wheel (đợt 2026-10-26)
+
+- **Bộ 6 sticker VẼ** (logic thuần ở `game/Emotes.java`, hình sinh bằng Pixmap trong `MatchScreen`): mỗi
+  sticker là **khuôn mặt thật của game** (cắt vùng đầu theo hộp alpha như `Assets.unitHeadRegion`) cộng
+  yếu tố biểu cảm vẽ đè — (0) **Vui**: mặt Gogo + mắt trái tim + má hồng; (1) **Cười lớn**: mặt Slime Hồng +
+  mắt nhắm ^^ + miệng cười to có lưỡi; (2) **Giận**: mặt Golem Đá + lông mày chéo + dấu gân giận đỏ;
+  (3) **Khóc**: mặt Nấm Độc + giọt nước mắt; (4) **Ngạc nhiên**: mặt Phù Thủy Rừng + huy hiệu "!" vàng +
+  miệng O; (5) **Khiêu khích**: mặt Goblin + nháy mắt + lè lưỡi + tia sao. Sticker được cắt tròn, nền trắng
+  + viền tối kiểu sticker dán nên đọc rõ trên cả 4 nền sân. **Tuyệt đối không dùng ký tự emoji** (luật sản
+  phẩm + emote TFT là tranh vẽ). Sticker bật ~**78px trên đầu tinh linh**, phóng 0.6→1.05→1.0 + lắc nhẹ,
+  sống **2,5s** rồi mờ dần trong 0,4s cuối (`Emotes.popScale` / `popAlpha`).
+- **Nút mở + vòng quay:** nút tròn nhỏ icon **bong bóng thoại** (Pixmap) ở **(282,168)** — ngay dưới nhà
+  tinh linh của mình trong dải sân trái, không đè đĩa MUA XP/SHOP, panel, bench, bàn cờ, vùng bấm nghịch
+  sân (300,100) hay thùng rác. Chạm → **vòng 6 ô** quanh nút (bán kính 70, ô trên cùng ở (282,238)); chạm
+  1 sticker → bật trên đầu tinh linh của mình + đóng vòng; chạm ra ngoài → đóng. Bắt chạm ở đầu
+  `planningPress` / `battlePress` (sau tab panel) nên dùng được ở **pha chuẩn bị và ngay giữa trận** —
+  trận không hề dừng. **Hồi chiêu 5s** sau mỗi lần dùng tay: nút xám đi + vòng cung vàng quanh nút chạy
+  ngược theo % còn lại (ngôn ngữ vòng XP); đang hồi mà chọn sticker trong vòng thì bị chặn kèm toast.
+- **Tự bật theo sự kiện:** thắng vòng → sticker **Vui** tự bật trên tinh linh của mình, *trừ khi* vòng đó
+  đã dùng emote tay (cờ đặt ở `useManualEmote`, reset ở `advanceFromResult`) hoặc đang có sticker khác
+  hiện (`Emotes.shouldAutoCelebrate`); bị loại thì không tự bật gì.
+- **Bot PvP đáp lại** (gieo hạt bằng `Random` từ seed trận — tất định theo trận): sau vòng đấu, bot đối
+  thủ bị mình **loại hẳn → Khóc** (chắc chắn); bot **thắng vòng** → **35%** bật Vui hoặc Khiêu khích;
+  mỗi vòng chuẩn bị → **8%** bot tự bật 1 sticker ngẫu nhiên. Mọi nguồn emote bot dùng chung **khoảng
+  cách tối thiểu 10s** (`Emotes.botMayPop` trên đồng hồ trận) nên bot không bao giờ spam. Kiểm chứng
+  headless mục 27 (mặt thật, hồi chiêu, đường cong pop, bảng chân lý tự bật, phân bố gieo hạt của bot)
+  và mode chụp `emotewheel` / `emotepop` / `emotefoe` trong ScreenshotMain.
+
 ## Cách build & chạy
 
 > **Lưu ý bản trên GitHub:** các file nhị phân (PNG sprite/scene, font TTF, `gradle-wrapper.jar`) được lưu

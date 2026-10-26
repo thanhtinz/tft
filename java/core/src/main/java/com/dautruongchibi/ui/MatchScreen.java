@@ -25,6 +25,7 @@ import com.dautruongchibi.data.GameData;
 import com.dautruongchibi.data.GameData.ChampDef;
 import com.dautruongchibi.data.GameData.SkillKind;
 import com.dautruongchibi.game.ArenaTheme;
+import com.dautruongchibi.game.Emotes;
 import com.dautruongchibi.game.Engine;
 import com.dautruongchibi.game.Match;
 import com.dautruongchibi.game.Rank;
@@ -293,6 +294,37 @@ public class MatchScreen extends ScreenAdapter {
     private float arenaBurstT = -1;      // >=0: dang bung tia sao tu diem bam
     private float arenaShakeT = 0;       // >0: nen san rung nhe sau khi bam
 
+    // ===== VONG EMOTE — STICKER VE (kieu TFT) =====
+    // Sticker 2D VE (tuyet doi khong ky tu emoji): khuon mat that cua game
+    // (Emotes.FACE_IDS) + bieu cam ve bang Pixmap, dan trong khung tron trang
+    // vien — bat tren dau TINH LINH ~2,5s (game/Emotes chua logic thuan).
+    // Nut mo: nut tron nho icon BONG BONG THOAI o (282,168) — ngay DUOI nha tinh
+    // linh cua minh (nha 282,252, sprite cao toi y=284; nut chiem y 147..189,
+    // cach chan tinh linh di dao thap nhat ~6px), trong dai san trai: khong de
+    // panel trai (x<=216), ban co (x>=357), dia MUA XP (x<=116), shop/bench,
+    // va cach vung bam nghich san ARENA_CLICK (300,100,r42) hon 63px (khong
+    // chong hit-test). Vong quay: 6 o tron r26 tren vong ban kinh 70 quanh nut,
+    // o tren cung o (282,238), cac o lech 60 do — chi la LOP PHU tam thoi (nhu
+    // the tuong phu panel phai), cham sticker = dung + dong vong, cham ra
+    // ngoai = dong. Dung duoc ca pha CHUAN BI lan GIUA TRAN (khong dung tran).
+    static final float EMOTE_BTN_CX = 282, EMOTE_BTN_CY = 168, EMOTE_BTN_R = 21;
+    static final float EMOTE_WHEEL_R = 70, EMOTE_SLOT_R = 26;
+    static final float EMOTE_SIZE = 78;      // canh sticker khi bat tren dau tinh linh
+    static final float EMOTE_LIFT = 76;      // tam sticker cao hon tam tinh linh bay nhieu (day sticker ~ +37 tren dau)
+    private Texture[] emoteTex;              // 6 sticker sinh bang Pixmap (lazy, xem emoteTexture)
+    private Texture emoteBtnTex;             // icon bong bong thoai cua nut mo (lazy)
+    private boolean emoteWheelOpen = false;
+    private float emoteCd = 0;               // hoi chieu emote thu cong con lai (giay)
+    private int myEmote = -1;                // sticker dang bat tren tinh linh MINH (-1 = khong)
+    private float myEmoteT = 0;              // thoi gian sticker cua minh da bat (giay)
+    private int foeEmote = -1;               // sticker dang bat tren tinh linh DICH (PvP)
+    private float foeEmoteT = 0;
+    private boolean manualEmoteThisRound = false; // vong nay da dung emote tay chua (chan sticker Vui tu bat trung)
+    private java.util.Random emoteRng;       // gieo tu seed tran (constructor) — bot tat dinh theo tran
+    private float emoteClock = 0;            // dong ho tich luy ca tran cho khoang cach chong spam cua bot
+    private float botEmoteLastAt = -100f;    // moc emoteClock lan bot bat sticker gan nhat
+    private int botAmbientRound = -1;        // vong da gieo xac suat ambient cua bot (moi vong gieo 1 lan)
+
     private boolean pickupArmed = false;  // tran nay co do roi (outcome.droppedItem != null)
     private boolean pickupDone = false;
     private boolean orbActive = false;    // cau do dang hien tren san
@@ -361,6 +393,9 @@ public class MatchScreen extends ScreenAdapter {
         String ar = game.profile != null ? game.profile.arenaId : null;
         myArenaChoice = ArenaTheme.isChoice(ar) ? ar : ArenaTheme.AUTO;
         match.human().arenaId = myArenaChoice;
+        // RNG rieng cho emote cua bot: gieo tu seed tran nen moi tran mot day
+        // phan ung tat dinh (test/chup anh on dinh), khong dung chung Rng gameplay.
+        emoteRng = new java.util.Random(match.seed ^ 0xE40735L);
     }
 
     @Override
@@ -466,6 +501,16 @@ public class MatchScreen extends ScreenAdapter {
         markedOpponent = match.isPvp() ? match.peekNextOpponent() : null;
         buildPlayerList();
         detectMerges();
+        // EMOTE ambient cua bot: MOI VONG chuan bi gieo xac suat 1 lan (refreshPlanning
+        // duoc goi lai sau moi thao tac mua/ban nen phai khoa theo so vong) — doi khi
+        // tinh linh dich tu bat mot sticker ngau nhien o ria san dich; ton khoang
+        // cach chong spam chung cua bot (botMayPop).
+        if (match.isPvp() && markedOpponent != null && botAmbientRound != match.round) {
+            botAmbientRound = match.round;
+            int amb = Emotes.botPlanningAmbient(emoteRng);
+            if (amb >= 0 && Emotes.botMayPop(botEmoteLastAt, emoteClock, Emotes.BOT_MIN_GAP))
+                popFoeEmote(amb);
+        }
     }
 
     // Xay (lai) cac hang nguoi choi o cot phai: avatar = MAT TINH LINH cua nguoi do
@@ -1371,6 +1416,12 @@ public class MatchScreen extends ScreenAdapter {
         else if (battleCardUid != null && liveUnit(battleCardUid) == null) battleCardUid = null; // tuong dang xem da bi ha
         if (popupT > 0) { popupT -= delta; if (popupT <= 0) popupItemId = null; }
         updateLegend(delta);
+        // VONG EMOTE: dong ho tran (cho khoang cach bot) + hoi chieu cua minh +
+        // tien trinh 2 sticker dang bat (het DURATION thi tu tat o moi pha)
+        emoteClock += delta;
+        if (emoteCd > 0) emoteCd -= delta;
+        if (myEmote >= 0) { myEmoteT += delta; if (myEmoteT >= Emotes.DURATION) myEmote = -1; }
+        if (foeEmote >= 0) { foeEmoteT += delta; if (foeEmoteT >= Emotes.DURATION) foeEmote = -1; }
         // Trang tri san phan ung: dem hoi chieu diem bam + tien trinh bung sao/rung nen
         if (arenaClickCd > 0) arenaClickCd -= delta;
         if (arenaBurstT >= 0) { arenaBurstT += delta; if (arenaBurstT > 0.65f) arenaBurstT = -1; }
@@ -1411,6 +1462,20 @@ public class MatchScreen extends ScreenAdapter {
                     legendT = 0;
                 }
                 game.sound().sfx(outcome.humanWon ? "win" : "lose");
+                // EMOTE THEO SU KIEN (chay cung cua so announcer, thuan hieu ung):
+                // minh thang -> sticker VUI tu bat tren tinh linh cua minh (tru khi
+                // vong nay minh da dung emote tay — Emotes.shouldAutoCelebrate);
+                // bot doi thu dap lai theo Emotes.botReaction: bi minh loai han ->
+                // KHOC, thang vong -> doi khi VUI/KHIEU KHICH; ca hai nguon deu
+                // ton khoang cach chong spam cua bot (botMayPop).
+                if (Emotes.shouldAutoCelebrate(outcome.humanWon, manualEmoteThisRound, myEmote >= 0))
+                    popMyEmote(Emotes.HAPPY);
+                if (match.isPvp() && markedOpponent != null) {
+                    boolean foeElim = Match.finisherKind(outcome) == 1;
+                    int react = Emotes.botReaction(emoteRng, !outcome.humanWon, foeElim);
+                    if (react >= 0 && Emotes.botMayPop(botEmoteLastAt, emoteClock, Emotes.BOT_MIN_GAP))
+                        popFoeEmote(react);
+                }
                 // BOOM (tia sao ben thang -> tinh linh ben thua) + KET LIEU (neu vong
                 // nay co nguoi bi loai han): ca hai chay trong cua so announcer nay,
                 // truoc the ket qua — khong doi ket qua tran, thuan hieu ung.
@@ -1458,6 +1523,7 @@ public class MatchScreen extends ScreenAdapter {
         if (phase == Phase.BATTLE || phase == Phase.RESULT) drawBattleUnits(now);
         else { drawPlanningUnits(now); drawBench(now); if (shopOpen && phase == Phase.PLANNING) drawShop(); }
         drawLegends(now); // tinh linh 2 ben + cau do: cung lop don vi, duoi panel/HUD
+        drawEmoteStickers(); // sticker emote bat tren dau 2 tinh linh (cung lop, tren tinh linh)
         drawArenaDecor(now); // trang tri san phan ung (co/lap lanh chuoi thang, goc + hao quang theo cap, bung sao diem bam)
         drawLeftPanel(now);
         drawRightPanel(now);
@@ -1488,6 +1554,9 @@ public class MatchScreen extends ScreenAdapter {
         // 2 nut tron dieu khien ve sau HUD (tren moi lop san/bench/shop) nhung duoi overlay:
         // chi o pha chuan bi — vao giao tranh la bien mat, khong con nut thua.
         if (phase == Phase.PLANNING) drawRoundButtons(now);
+        // Nut mo + VONG EMOTE: ve cung lop sau HUD nhu 2 dia tron, o ca pha chuan
+        // bi lan GIUA TRAN (emote dung duoc khi dang danh, khong dung tran lai)
+        if (phase == Phase.PLANNING || phase == Phase.BATTLE) drawEmoteUi(now);
         // Lop keo-tha ve sau HUD de sprite bam tro + vung thung rac nam tren cung (chi pha chuan bi)
         if (phase == Phase.PLANNING) drawDragOverlay(now);
         // Bang thong tin do (modal nhe): mo tu khay/the o pha chuan bi, hoac tu o do cua
@@ -2770,6 +2839,296 @@ public class MatchScreen extends ScreenAdapter {
             batch.draw(a.itemIcon(outcome.droppedItem), ox - 10, oy - 10, 20, 20);
     }
 
+    // ================= VONG EMOTE: LOGIC BAM + VE =================
+    // Thu tu uu tien trong planningPress/battlePress: sau tab panel trai, TRUOC
+    // moi thao tac san — vong dang mo thi nuot moi cham (cham sticker = dung,
+    // cham ra ngoai = dong), de cac o lech ra mep (de len goc panel/ban co) khong
+    // roi xuong thao tac phia duoi.
+    private boolean emoteUiPress(float x, float y) {
+        if (emoteWheelOpen) {
+            for (int i = 0; i < Emotes.COUNT; i++) {
+                float[] c = emoteSlotCenter(i);
+                if (Math.hypot(x - c[0], y - c[1]) <= EMOTE_SLOT_R + 5) {
+                    if (Emotes.canUse(emoteCd)) useManualEmote(i);
+                    else { emoteWheelOpen = false; toast("Emote đang hồi chiêu…"); game.sound().sfx("click"); }
+                    return true;
+                }
+            }
+            emoteWheelOpen = false; // cham ra ngoai vong = dong vong
+            return true;
+        }
+        if (Math.hypot(x - EMOTE_BTN_CX, y - EMOTE_BTN_CY) <= EMOTE_BTN_R + 6) {
+            emoteWheelOpen = true;
+            game.sound().sfx("click");
+            return true;
+        }
+        return false;
+    }
+
+    // Tam o sticker thu i tren vong quay: o 0 o DUNG TREN CUNG, xoay deu 60 do
+    private float[] emoteSlotCenter(int i) {
+        double ang = Math.toRadians(90 + i * 60);
+        return new float[]{EMOTE_BTN_CX + (float) Math.cos(ang) * EMOTE_WHEEL_R,
+                           EMOTE_BTN_CY + (float) Math.sin(ang) * EMOTE_WHEEL_R};
+    }
+
+    // Dung emote THU CONG: bat sticker + bat dau hoi chieu 5s + danh dau vong nay
+    // da dung tay (chan sticker Vui tu bat khi thang — Emotes.shouldAutoCelebrate)
+    private void useManualEmote(int idx) {
+        popMyEmote(idx);
+        emoteCd = Emotes.COOLDOWN;
+        manualEmoteThisRound = true;
+        emoteWheelOpen = false;
+        game.sound().sfx("sparkle");
+    }
+
+    private void popMyEmote(int idx) { myEmote = idx; myEmoteT = 0; }
+
+    // Bot bat sticker: ghi moc thoi gian de nguon emote bot tiep theo (phan ung
+    // hay ambient) phai ton khoang cach BOT_MIN_GAP (Emotes.botMayPop)
+    private void popFoeEmote(int idx) {
+        foeEmote = idx; foeEmoteT = 0;
+        botEmoteLastAt = emoteClock;
+    }
+
+    // Sticker dang bat tren dau 2 tinh linh: ve CUNG LOP don vi ngay sau
+    // drawLegends (render goi) — tinh linh minh o vi tri dong (legendX/legendY,
+    // dang di dao/chay nhat cau sticker van bam theo), tinh linh dich co dinh o
+    // ria san dich nhu cach ve cua no.
+    private void drawEmoteStickers() {
+        if (foeEmote >= 0 && match.isPvp() && markedOpponent != null)
+            drawEmotePop(foeEmote, LEGEND_EHOME_X, LEGEND_EHOME_Y + EMOTE_LIFT, foeEmoteT);
+        if (myEmote >= 0)
+            drawEmotePop(myEmote, legendX, legendY + EMOTE_LIFT, myEmoteT);
+    }
+
+    // Mot sticker dang bat: phong 0.6 -> 1.05 -> 1.0 + lac nhe luc moi bat (goc
+    // tan dan), mo dan 0.4s cuoi — duong cong nam o Emotes.popScale/popAlpha.
+    private void drawEmotePop(int idx, float cx, float cy, float t) {
+        float alpha = Emotes.popAlpha(t);
+        if (alpha <= 0f) return;
+        float s = EMOTE_SIZE * Emotes.popScale(t);
+        float rot = (float) Math.sin(t * 10f) * 5f * Math.max(0f, 1f - t * 2.2f);
+        Texture tex = emoteTexture(idx);
+        batch.setColor(1, 1, 1, alpha);
+        batch.draw(tex, cx - s / 2, cy - s / 2, s / 2, s / 2, s, s, 1f, 1f, rot,
+            0, 0, tex.getWidth(), tex.getHeight(), false, false);
+        batch.setColor(Color.WHITE);
+    }
+
+    // Nut mo + vong quay: ve o lop SAU HUD nhu 2 dia dieu khien (render goi o
+    // pha PLANNING va BATTLE). Nut = dia toi cung ngon ngu dia MUA XP/SHOP +
+    // icon bong bong ve Pixmap; dang hoi chieu thi dia xam di + vong cung vang
+    // quanh nut chay nguoc theo % hoi chieu con lai (cung ngon ngu vong XP).
+    private void drawEmoteUi(float now) {
+        Assets a = game.assets;
+        boolean cooling = !Emotes.canUse(emoteCd);
+        if (cooling) {
+            shapes.begin(ShapeRenderer.ShapeType.Filled);
+            shapes.setColor(1f, 0.82f, 0.25f, 0.85f);
+            shapes.arc(EMOTE_BTN_CX, EMOTE_BTN_CY, EMOTE_BTN_R + 4, 90, -360f * Math.min(1f, emoteCd / Emotes.COOLDOWN), 32);
+            shapes.end();
+        }
+        batch.begin();
+        if (emoteWheelOpen) {
+            // Nen toi mem sau ca vong de sticker tach khoi tranh san
+            float R = EMOTE_WHEEL_R + EMOTE_SLOT_R + 10;
+            batch.setColor(0.02f, 0.02f, 0.08f, 0.38f);
+            batch.draw(discTex, EMOTE_BTN_CX - R, EMOTE_BTN_CY - R, R * 2, R * 2);
+            batch.setColor(Color.WHITE);
+            for (int i = 0; i < Emotes.COUNT; i++) {
+                float[] c = emoteSlotCenter(i);
+                float ss = EMOTE_SLOT_R * 2f;
+                batch.setColor(0.05f, 0.04f, 0.12f, 0.55f);
+                batch.draw(discTex, c[0] - EMOTE_SLOT_R - 2, c[1] - EMOTE_SLOT_R - 2, ss + 4, ss + 4);
+                batch.setColor(1, 1, 1, cooling ? 0.45f : 1f); // dang hoi chieu: o mo di (dung se bi chan + bao toast)
+                batch.draw(emoteTexture(i), c[0] - ss / 2, c[1] - ss / 2, ss, ss);
+                batch.setColor(Color.WHITE);
+            }
+        }
+        float d = EMOTE_BTN_R * 2;
+        batch.setColor(0, 0, 0, 0.35f);
+        batch.draw(discTex, EMOTE_BTN_CX - EMOTE_BTN_R - 2, EMOTE_BTN_CY - EMOTE_BTN_R - 2, d, d);
+        batch.setColor(0.10f, 0.08f, 0.22f, 1);
+        batch.draw(discTex, EMOTE_BTN_CX - EMOTE_BTN_R, EMOTE_BTN_CY - EMOTE_BTN_R, d, d);
+        float in = EMOTE_BTN_R - 3.5f;
+        batch.setColor(cooling ? new Color(0.34f, 0.32f, 0.44f, 1) : new Color(0.23f, 0.19f, 0.44f, 1));
+        batch.draw(discTex, EMOTE_BTN_CX - in, EMOTE_BTN_CY - in, in * 2, in * 2);
+        batch.setColor(1, 1, 1, cooling ? 0.45f : 0.22f);
+        batch.draw(a.glowTex(), EMOTE_BTN_CX - in, EMOTE_BTN_CY + 1, in * 2, in - 3);
+        batch.setColor(1, 1, 1, cooling ? 0.55f : 1f);
+        float is = 26;
+        batch.draw(emoteButtonTexture(), EMOTE_BTN_CX - is / 2, EMOTE_BTN_CY - is / 2, is, is);
+        batch.setColor(Color.WHITE);
+        batch.end();
+    }
+
+    // Icon BONG BONG THOAI cua nut mo (Pixmap 48x48, ve 1 lan): bong trang vien
+    // toi + duoi nhon + 3 cham noi — khong dung emoji/ky tu.
+    private Texture emoteButtonTexture() {
+        if (emoteBtnTex != null) return emoteBtnTex;
+        Pixmap pm = new Pixmap(48, 48, Pixmap.Format.RGBA8888);
+        pm.setColor(0, 0, 0, 0); pm.fill();
+        Color dark = new Color(0.13f, 0.10f, 0.24f, 1);
+        pm.setColor(dark);
+        pm.fillCircle(24, 21, 14);
+        pm.fillTriangle(13, 29, 25, 29, 15, 41);
+        pm.setColor(Color.WHITE);
+        pm.fillCircle(24, 21, 11);
+        pm.fillTriangle(16, 28, 23, 28, 18, 37);
+        pm.setColor(0.30f, 0.25f, 0.48f, 1);
+        pm.fillCircle(17, 21, 2); pm.fillCircle(24, 21, 2); pm.fillCircle(31, 21, 2);
+        emoteBtnTex = new Texture(pm);
+        emoteBtnTex.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        pm.dispose();
+        return emoteBtnTex;
+    }
+
+    // ================= STICKER: SINH TEXTURE BANG PIXMAP =================
+    // Moi sticker la canvas 96x96 (toa do Pixmap: y XUONG DONG nhu anh): khuon
+    // mat that cat tu sprite (hop alpha, phan tren 55% — cung quy uoc
+    // Assets.unitHeadRegion) thu vao giua, cat tron r<=42.5, phia ngoai la vien
+    // toi 3px + nen trang kieu sticker dan; bieu cam ve de len tren cung.
+    private Texture emoteTexture(int idx) {
+        if (emoteTex == null) emoteTex = new Texture[Emotes.COUNT];
+        if (emoteTex[idx] != null) return emoteTex[idx];
+        emoteTex[idx] = buildEmoteTexture(idx);
+        return emoteTex[idx];
+    }
+
+    private Texture buildEmoteTexture(int idx) {
+        final int S = 96, C = 48;
+        Pixmap pm = new Pixmap(S, S, Pixmap.Format.RGBA8888);
+        pm.setColor(0, 0, 0, 0); pm.fill();
+        // --- Khuon mat nen: nap thang file sprite (khong qua Assets vi can Pixmap nguon) ---
+        Pixmap face = null;
+        try { face = new Pixmap(Gdx.files.internal("units/" + Emotes.FACE_IDS[idx] + ".png")); }
+        catch (Exception e) { face = null; }
+        if (face != null) {
+            int minX = face.getWidth(), minY = face.getHeight(), maxX = -1, maxY = -1;
+            for (int y = 0; y < face.getHeight(); y++) for (int x = 0; x < face.getWidth(); x++) {
+                if ((face.getPixel(x, y) & 0xFF) > 10) {
+                    if (x < minX) minX = x; if (x > maxX) maxX = x;
+                    if (y < minY) minY = y; if (y > maxY) maxY = y;
+                }
+            }
+            if (maxX < 0) { minX = 0; minY = 0; maxX = face.getWidth() - 1; maxY = face.getHeight() - 1; }
+            int sw = maxX - minX + 1;
+            int sh = Math.max(1, Math.round((maxY - minY + 1) * 0.55f));
+            int dw = 66, dh = Math.max(10, Math.min(62, Math.round(dw * (float) sh / sw)));
+            pm.drawPixmap(face, minX, minY, sw, sh, C - dw / 2, 49 - dh / 2, dw, dh);
+            face.dispose();
+        } else { // fallback khong crash: khoi hong nhu Assets.unit
+            pm.setColor(1, 0.6f, 0.8f, 1); pm.fillCircle(C, C, 30);
+        }
+        // --- Cat tron + vien + nen trang: ghi truc tiep tung pixel (Blending.None) ---
+        pm.setBlending(Pixmap.Blending.None);
+        Color ring = new Color(0.16f, 0.12f, 0.24f, 1);
+        for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
+            double dd = Math.hypot(x + 0.5 - C, y + 0.5 - C);
+            if (dd > 45.5) { pm.setColor(0, 0, 0, 0); pm.drawPixel(x, y); }
+            else if (dd > 42.5) { pm.setColor(ring); pm.drawPixel(x, y); }
+            else if ((pm.getPixel(x, y) & 0xFF) < 16) { pm.setColor(Color.WHITE); pm.drawPixel(x, y); }
+        }
+        pm.setBlending(Pixmap.Blending.SourceOver);
+        // --- Bieu cam ve de (toa do anh: y xuong; mat ~y36-45, mieng ~y56-70) ---
+        switch (idx) {
+            case Emotes.HAPPY: { // mat trai tim hong dam + ma hong 2 ben
+                Color heart = new Color(0.93f, 0.25f, 0.45f, 1);
+                drawHeart(pm, 31, 37, 7, heart);
+                drawHeart(pm, 65, 37, 7, heart);
+                pm.setColor(1f, 0.55f, 0.65f, 0.50f);
+                pm.fillCircle(22, 56, 6); pm.fillCircle(74, 56, 6);
+                break;
+            }
+            case Emotes.LAUGH: { // mat nham hinh ^ ^ + mieng cuoi to (nua duoi dia tron, luoi o day)
+                Color dark = new Color(0.15f, 0.10f, 0.12f, 1);
+                thickLine(pm, 25, 45, 33, 35, 4.5f, dark); thickLine(pm, 33, 35, 41, 45, 4.5f, dark);
+                thickLine(pm, 55, 45, 63, 35, 4.5f, dark); thickLine(pm, 63, 35, 71, 45, 4.5f, dark);
+                pm.setBlending(Pixmap.Blending.None);
+                for (int y = 46; y <= 68; y++) for (int x = 37; x <= 59; x++) {
+                    if (Math.hypot(x + 0.5 - 48, y + 0.5 - 56) <= 10.5 && y >= 56) {
+                        pm.setColor(y >= 64 ? new Color(0.98f, 0.55f, 0.60f, 1) : new Color(0.45f, 0.12f, 0.15f, 1));
+                        pm.drawPixel(x, y);
+                    }
+                }
+                pm.setBlending(Pixmap.Blending.SourceOver);
+                break;
+            }
+            case Emotes.ANGRY: { // long may cheo gian + dau GAN GIAN do o goc tren-phai
+                Color dark = new Color(0.15f, 0.10f, 0.12f, 1);
+                thickLine(pm, 24, 31, 42, 41, 5f, dark);
+                thickLine(pm, 72, 31, 54, 41, 5f, dark);
+                pm.setColor(0.90f, 0.22f, 0.18f, 1);
+                pm.fillCircle(71, 12, 5); pm.fillCircle(71, 28, 5);
+                pm.fillCircle(63, 20, 5); pm.fillCircle(79, 20, 5);
+                pm.fillCircle(71, 20, 5);
+                break;
+            }
+            case Emotes.CRY: { // 2 giot nuoc mat to chay tu mat xuong + 1 giot nho
+                Color tear = new Color(0.35f, 0.70f, 0.95f, 1);
+                drawTeardrop(pm, 20, tear); drawTeardrop(pm, 76, tear);
+                pm.fillTriangle(24, 67, 32, 67, 28, 58); pm.fillCircle(28, 69, 4);
+                pm.setColor(1, 1, 1, 0.85f);
+                pm.fillCircle(17, 52, 2); pm.fillCircle(73, 52, 2);
+                break;
+            }
+            case Emotes.SURPRISE: { // huy hieu vang goc tren-phai chua dau "!" ve + mieng O
+                pm.setColor(0.25f, 0.18f, 0.05f, 1); pm.fillCircle(74, 20, 11);
+                pm.setColor(1f, 0.78f, 0.20f, 1); pm.fillCircle(74, 20, 9);
+                pm.setColor(0.30f, 0.20f, 0.02f, 1);
+                pm.fillRectangle(72, 12, 4, 10); pm.fillCircle(74, 26, 2);
+                pm.setColor(0.20f, 0.10f, 0.12f, 1); pm.fillCircle(48, 63, 5);
+                break;
+            }
+            case Emotes.TAUNT: { // nhay 1 mat (vang ngang) + le luoi hong duoi mieng + tia sao vang
+                Color dark = new Color(0.15f, 0.10f, 0.12f, 1);
+                thickLine(pm, 54, 38, 70, 38, 4.5f, dark);
+                pm.setColor(0.97f, 0.50f, 0.58f, 1);
+                pm.fillRectangle(41, 62, 14, 8); pm.fillCircle(48, 70, 7);
+                pm.setColor(0.85f, 0.32f, 0.40f, 1);
+                pm.drawLine(48, 64, 48, 73);
+                pm.setColor(1f, 0.80f, 0.25f, 1);
+                pm.fillTriangle(22, 9, 15, 21, 29, 21);
+                pm.fillTriangle(22, 33, 15, 21, 29, 21);
+                break;
+            }
+            default: break;
+        }
+        Texture t = new Texture(pm);
+        t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        pm.dispose();
+        return t;
+    }
+
+    // Trai tim ve bang 2 vong tron tren + 1 tam giac duoi (tam o (cx,cy), ban kinh r)
+    private static void drawHeart(Pixmap pm, int cx, int cy, int r, Color c) {
+        pm.setColor(c);
+        int lr = Math.max(2, Math.round(r * 0.62f));
+        pm.fillCircle(cx - Math.round(r * 0.52f), cy - Math.round(r * 0.30f), lr);
+        pm.fillCircle(cx + Math.round(r * 0.52f), cy - Math.round(r * 0.30f), lr);
+        pm.fillTriangle(cx - r, cy - Math.round(r * 0.05f), cx + r, cy - Math.round(r * 0.05f), cx, cy + Math.round(r * 1.15f));
+    }
+
+    // Giot nuoc mat: tam giac nhon o tren + vong tron o duoi, tam x = cx, dinh ~y38, day ~y62
+    private static void drawTeardrop(Pixmap pm, int cx, Color c) {
+        pm.setColor(c);
+        pm.fillTriangle(cx - 6, 52, cx + 6, 52, cx, 38);
+        pm.fillCircle(cx, 56, 7);
+    }
+
+    // Duong day (cho long may / mat nham / nhay mat): day cac vong tron nho doc
+    // doan thang — Pixmap khong co stroke day san.
+    private static void thickLine(Pixmap pm, float x1, float y1, float x2, float y2, float w, Color c) {
+        pm.setColor(c);
+        int steps = Math.max(2, (int) (Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) * 2));
+        int r = Math.max(1, Math.round(w / 2f));
+        for (int i = 0; i <= steps; i++) {
+            float t = i / (float) steps;
+            pm.fillCircle(Math.round(x1 + (x2 - x1) * t), Math.round(y1 + (y2 - y1) * t), r);
+        }
+    }
+
     private void drawItemPopup() {
         GameData.ItemDef it = GameData.itemById(popupItemId);
         if (it == null) return;
@@ -3067,6 +3426,7 @@ public class MatchScreen extends ScreenAdapter {
         selUid = null; itemInfoId = null; dragItemIndex = -1; itemDragActive = false;
         dragUid = null; dragUnit = null; dragActive = false; returnT = -1; returnUid = null;
         battleCardUid = null; battleUnitPos.clear();
+        emoteWheelOpen = false; // vao giao tranh: vong emote tu dong (sticker dang bat thi cu chay not)
         // Tinh linh ve vi tri XEM TRAN o ria san nha; tran co do roi thi chuan bi doan
         // chay nhat cau (cau se hien khi playT >= 0.7 trong updateLegend).
         legendState = LegendState.WATCH; legendT = 0;
@@ -3081,6 +3441,7 @@ public class MatchScreen extends ScreenAdapter {
 
     private void advanceFromResult() {
         finisherT = 0; boomT = -1; boomShots.clear(); boomBursts.clear(); // don sach hieu ung ket qua vong cu
+        manualEmoteThisRound = false; emoteWheelOpen = false; // vong moi: lam sach co emote tay + dong vong neu con mo
         // Tinh linh dung day ve nha (het an mung/xui/doan nhat cau), san sang pha sau
         legendState = LegendState.IDLE; legendT = 0; legendIdleWait = 1.4f;
         legendX = LEGEND_HOME_X; legendY = LEGEND_HOME_Y;
@@ -3236,6 +3597,7 @@ public class MatchScreen extends ScreenAdapter {
     // 3) Chua co the: cham trung tuong (bat ky phe nao) -> mo the cua tuong do.
     private boolean battlePress(float x, float y) {
         if (pressPanelTab(x, y)) return true; // dang dau van chuyen tab panel trai duoc
+        if (emoteUiPress(x, y)) return true; // vong emote dung duoc giua tran (nut/vong nam tren lop thao tac)
         if (itemInfoId != null) {
             if (INFO_CLOSE.contains(x, y) || !INFO_PANEL.contains(x, y)) { itemInfoId = null; game.sound().sfx("click"); }
             return true;
@@ -3283,6 +3645,7 @@ public class MatchScreen extends ScreenAdapter {
 
     private boolean planningPress(float x, float y) {
         if (pressPanelTab(x, y)) return true; // chuyen tab TOC/HE <-> TRANG BI
+        if (emoteUiPress(x, y)) return true; // nut mo / vong emote: o tren moi lop thao tac san (ke ca shop dang mo)
         Match.PlayerState h = match.human();
         if (shopOpen) {
             for (int i = 0; i < 5; i++) {
@@ -3690,5 +4053,7 @@ public class MatchScreen extends ScreenAdapter {
         if (discTex != null) discTex.dispose();
         if (shieldTex != null) shieldTex.dispose();
         if (bagTex != null) bagTex.dispose();
+        if (emoteTex != null) for (Texture t : emoteTex) if (t != null) t.dispose();
+        if (emoteBtnTex != null) emoteBtnTex.dispose();
     }
 }

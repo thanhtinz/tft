@@ -503,6 +503,63 @@ public class HeadlessMain {
             predOk && invOk,
             "pred=" + predOk + ", so vong loai doi thu quan sat=" + elimRounds + ", vong minh bi loai=" + humanDeathRounds + (invOk ? "" : "; loi: " + invFail));
 
+        // 27) Vong emote: logic thuan o game/Emotes — bo 6 sticker co khuon mat THAT
+        // trong game, hoi chieu chan dung lien tuc, duong cong pop dung hinh dang,
+        // sticker Vui tu bat dung bang chan ly, va bot gieo hat KHONG SPAM: bi loai
+        // -> KHOC chac chan, thang vong -> ti le dap lai trong dai mong doi va chi
+        // ra VUI/KHIEU KHICH, ambient hiem va hop le, khoang cach toi thieu ton dung.
+        boolean facesOk = com.dautruongchibi.game.Emotes.FACE_IDS.length == com.dautruongchibi.game.Emotes.COUNT;
+        for (String fid : com.dautruongchibi.game.Emotes.FACE_IDS) {
+            boolean isChamp = true;
+            try { GameData.champById(fid); } catch (Exception e) { isChamp = false; }
+            if (!isChamp && !GameData.isMonsterId(fid)) facesOk = false;
+        }
+        boolean cdOk = com.dautruongchibi.game.Emotes.canUse(0f) && com.dautruongchibi.game.Emotes.canUse(-1f)
+            && !com.dautruongchibi.game.Emotes.canUse(0.01f) && !com.dautruongchibi.game.Emotes.canUse(2.5f);
+        float ps0 = com.dautruongchibi.game.Emotes.popScale(0f), psMid = com.dautruongchibi.game.Emotes.popScale(0.16f),
+              psSet = com.dautruongchibi.game.Emotes.popScale(0.30f), psLate = com.dautruongchibi.game.Emotes.popScale(2.0f);
+        boolean scaleOk = Math.abs(ps0 - 0.6f) < 0.001f && Math.abs(psMid - 1.05f) < 0.001f
+            && Math.abs(psSet - 1.0f) < 0.001f && Math.abs(psLate - 1.0f) < 0.001f;
+        boolean alphaOk = com.dautruongchibi.game.Emotes.popAlpha(-0.1f) == 0f
+            && com.dautruongchibi.game.Emotes.popAlpha(0.5f) == 1f
+            && com.dautruongchibi.game.Emotes.popAlpha(com.dautruongchibi.game.Emotes.DURATION) == 0f
+            && com.dautruongchibi.game.Emotes.popAlpha(2.3f) > 0f && com.dautruongchibi.game.Emotes.popAlpha(2.3f) < 1f;
+        boolean autoOk = com.dautruongchibi.game.Emotes.shouldAutoCelebrate(true, false, false)
+            && !com.dautruongchibi.game.Emotes.shouldAutoCelebrate(true, true, false)
+            && !com.dautruongchibi.game.Emotes.shouldAutoCelebrate(true, false, true)
+            && !com.dautruongchibi.game.Emotes.shouldAutoCelebrate(false, false, false);
+        java.util.Random erng = new java.util.Random(1234);
+        boolean elimOk = true;
+        for (int i = 0; i < 200; i++)
+            if (com.dautruongchibi.game.Emotes.botReaction(erng, i % 2 == 0, true) != com.dautruongchibi.game.Emotes.CRY) elimOk = false;
+        int reactHits = 0; boolean reactKindOk = true;
+        for (int i = 0; i < 4000; i++) {
+            int r = com.dautruongchibi.game.Emotes.botReaction(erng, true, false);
+            if (r >= 0) {
+                reactHits++;
+                if (r != com.dautruongchibi.game.Emotes.HAPPY && r != com.dautruongchibi.game.Emotes.TAUNT) reactKindOk = false;
+            }
+        }
+        double reactFrac = reactHits / 4000.0;
+        boolean lostSilent = true;
+        for (int i = 0; i < 500; i++)
+            if (com.dautruongchibi.game.Emotes.botReaction(erng, false, false) != -1) lostSilent = false;
+        int ambHits = 0; boolean ambKindOk = true;
+        for (int i = 0; i < 4000; i++) {
+            int r = com.dautruongchibi.game.Emotes.botPlanningAmbient(erng);
+            if (r >= 0) { ambHits++; if (r >= com.dautruongchibi.game.Emotes.COUNT) ambKindOk = false; }
+        }
+        double ambFrac = ambHits / 4000.0;
+        boolean gapOk = com.dautruongchibi.game.Emotes.botMayPop(-100f, 0f, com.dautruongchibi.game.Emotes.BOT_MIN_GAP)
+            && !com.dautruongchibi.game.Emotes.botMayPop(10f, 15f, com.dautruongchibi.game.Emotes.BOT_MIN_GAP)
+            && com.dautruongchibi.game.Emotes.botMayPop(10f, 20f, com.dautruongchibi.game.Emotes.BOT_MIN_GAP);
+        boolean emoteOk = facesOk && cdOk && scaleOk && alphaOk && autoOk && elimOk && reactKindOk
+            && reactFrac > 0.28 && reactFrac < 0.42 && lostSilent && ambKindOk
+            && ambFrac > 0.03 && ambFrac < 0.14 && gapOk;
+        check("Vong emote: 6 sticker mat that, hoi chieu chan spam, pop dung duong cong, Vui tu bat dung luat, bot gieo hat khong spam (loai->khoc, thang dap ~35%, ambient ~8%)",
+            emoteOk, "mat=" + facesOk + " cd=" + cdOk + " pop=" + (scaleOk && alphaOk) + " tuBat=" + autoOk
+                + " loaiKhoc=" + elimOk + " dapLai=" + reactFrac + " ambient=" + ambFrac + " khoangCach=" + gapOk);
+
         System.out.println("=== TONG KET: " + pass + " PASS / " + fail + " FAIL ===");
         if (fail > 0) { System.out.println("Muc fail: " + failures); System.exit(1); }
     }
