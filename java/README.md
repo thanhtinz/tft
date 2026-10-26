@@ -260,9 +260,10 @@ kiểm chứng headless mục 19–21):
   (icon biểu đồ), Học Chơi (sách), Âm thanh (loa vẽ Pixmap, có bản gạch chéo khi tắt). Cột trái
   giữa: 3 mục nút-tròn-kèm-chữ — CHIẾN DỊCH (dòng phụ tiến độ + thanh tiến độ CHIA 12 ĐOẠN
   trên nền pill tối), SÓNG QUÁI (kỷ lục), HỒ SƠ (hạng/LP) — bấm đi thẳng màn tương ứng. Góc
-  dưới-trái: thẻ nổi bật CHIẾN DỊCH (banner chương + mô tả 2 dòng + tiến độ). Nửa phải: **linh
-  vật Gogo Hiệp Sĩ phóng lớn ~402px bằng Nearest** (cắt theo hộp alpha thật, có bóng chân +
-  nhấp nhô nhẹ), không che nút CHƠI/hàng icon. Góc dưới-phải: nút **CHƠI** thật to (nền vàng +
+  dưới-trái: thẻ nổi bật CHIẾN DỊCH (banner chương + mô tả 2 dòng + tiến độ). Nửa phải: để
+  trống tranh lobby — **sảnh sạch không linh vật** (bản đầu có linh vật Gogo phóng lớn ~402px
+  bằng Nearest, user chê xấu và đã chốt bỏ hẳn theo mockup "Kiểu 2" trong 3 kiểu thử; cột trái
+  đồng thời nới giãn cách `{516, 404, 292}`). Góc dưới-phải: nút **CHƠI** thật to (nền vàng +
   quầng sáng thở + mũi tên vẽ Pixmap) mở **lớp chọn chế độ**: panel tối ở giữa, đủ 5 chế độ
   (Chiến Dịch / Sóng Quái / PvP Thường / PvP Hạng / PvP Đấu Tập) kèm mô tả ngắn — mọi chế độ
   tới được trong tối đa 2 chạm.

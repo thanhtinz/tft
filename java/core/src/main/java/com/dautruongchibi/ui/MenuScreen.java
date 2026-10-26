@@ -29,8 +29,9 @@ import com.dautruongchibi.game.Stages;
 // cua game minh): toan man hinh la tranh lobby; goc tren-trai avatar tron + ten +
 // hang/cap tren dai gradient toi mo; goc tren-phai 3 nut tron (Ho So / Hoc Choi /
 // Am thanh); cot trai giua 3 muc nut-tron-kem-chu (CHIEN DICH co thanh tien do doan,
-// SONG QUAI, HO SO); the noi bat CHIEN DICH o duoi-trai; linh vat Gogo Hiep Si dung
-// LON o nua phai; nut CHOI that to o duoi-phai mo LOP CHON CHE DO (5 che do, chu nam
+// SONG QUAI, HO SO); the noi bat CHIEN DICH o duoi-trai; nua phai de trong tranh
+// lobby — sanh SACH khong linh vat (user chot mockup Kieu 2, bo ban linh vat phong
+// lon); nut CHOI that to o duoi-phai mo LOP CHON CHE DO (5 che do, chu nam
 // tren panel toi — het canh chu chim tren tranh). Sua ten: cham avatar/ten -> lop
 // sua ten (Stage rieng chua TextField + Luu/Huy, tai dung quy tac luu cu).
 public class MenuScreen extends ScreenAdapter {
@@ -47,15 +48,16 @@ public class MenuScreen extends ScreenAdapter {
     private boolean editing = false;
     private float time = 0;
 
-    // Texture sinh rieng cho sanh (Pixmap, loc Nearest cho linh vat dung chat pixel)
+    // Texture sinh rieng cho sanh (Pixmap; mascotTex loc Nearest — nguon cat avatar)
     private Texture mascotTex, gradTopTex, gradLeftTex, discTex, ringDiscTex, speakerTex, speakerOffTex, playTriTex;
-    private TextureRegion mascotRegion, avatarRegion;
+    private TextureRegion avatarRegion;
 
     // Hinh hoc cac vung cham
     private static final Rectangle AVATAR_ZONE = new Rectangle(24, 596, 330, 112);
     private static final Rectangle CARD_RECT = new Rectangle(24, 22, 380, 122);
     private static final Rectangle PLAY_RECT = new Rectangle(924, 26, 330, 94);
-    private static final float[] ENTRY_CY = {502, 406, 310};
+    // Cot trai noi rong hon so voi ban co linh vat (mockup Kieu 2 — sanh sach)
+    private static final float[] ENTRY_CY = {516, 404, 292};
     // Chu phu o sanh: sang hon TEXT_DIM de doc ro tren tranh (nam tren dai gradient toi)
     private static final Color SUB_COLOR = new Color(0.88f, 0.89f, 0.94f, 1f);
     private static final float[] ICON_CX = {1128, 1184, 1240};
@@ -106,8 +108,8 @@ public class MenuScreen extends ScreenAdapter {
 
     // ---------- Texture rieng cua sanh ----------
     private void buildTextures() {
-        // Linh vat: nap rieng sprite gogo tu file (ban trong Assets loc MipMapLinear —
-        // ban nay loc NEAREST de phong lon dung chat pixel), cat theo hop alpha that.
+        // Avatar: nap rieng sprite gogo tu file (ban trong Assets loc MipMapLinear —
+        // ban nay loc NEAREST cho net), cat theo hop alpha that lay phan dau + vai.
         try {
             Pixmap pm = new Pixmap(Gdx.files.internal("units/gogo.png"));
             int minX = pm.getWidth(), minY = pm.getHeight(), maxX = -1, maxY = -1;
@@ -122,11 +124,10 @@ public class MenuScreen extends ScreenAdapter {
             mascotTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
             pm.dispose();
             int bw = maxX - minX + 1, bh = maxY - minY + 1;
-            mascotRegion = new TextureRegion(mascotTex, minX, minY, bw, bh);
             // Avatar: cat phan DAU + VAI (tren 55% hop alpha)
             avatarRegion = new TextureRegion(mascotTex, minX, minY, bw, Math.round(bh * 0.55f));
         } catch (Exception e) {
-            mascotTex = null; mascotRegion = null; avatarRegion = null;
+            mascotTex = null; avatarRegion = null;
         }
         // Dai gradient toi o dinh: alpha 0.66 o tren cung -> 0 o day dai (Pixmap: hang 0 = dinh)
         Pixmap gt = new Pixmap(4, 128, Pixmap.Format.RGBA8888);
@@ -314,7 +315,6 @@ public class MenuScreen extends ScreenAdapter {
         batch.draw(a.lobbyTex, 0, 0, 1280, 720);
         batch.draw(gradLeftTex, 0, 0, 660, 720);
         batch.draw(gradTopTex, 0, 592, 1280, 128);
-        drawMascot(a);
         drawTopLeft(a);
         drawTopRight(a);
         drawEntries(a);
@@ -324,17 +324,6 @@ public class MenuScreen extends ScreenAdapter {
         batch.end();
         stage.act(delta);
         stage.draw();
-    }
-
-    // Linh vat Gogo Hiep Si dung lon o nua phai (sprite pixel phong bang Nearest, co
-    // bong mem duoi chan va nhac nhe theo nhip tho). Khong che nut CHOI (ve truoc nut)
-    // va khong cham hang icon tren-phai (dinh linh vat ~502 < 641).
-    private void drawMascot(Assets a) {
-        if (mascotRegion == null) return;
-        float h = 402, w = h * mascotRegion.getRegionWidth() / mascotRegion.getRegionHeight();
-        float cx = 1006, bottom = 100 + (float) Math.sin(time * 1.2f) * 4;
-        Ui.drawShadow(batch, a, cx - w / 2 - 14, 74, w + 28, 40, 0.30f);
-        batch.draw(mascotRegion, cx - w / 2, bottom, w, h);
     }
 
     private void drawTopLeft(Assets a) {
