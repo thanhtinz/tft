@@ -1,5 +1,7 @@
 package com.dautruongchibi.game;
 
+import com.dautruongchibi.data.GameData;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -18,6 +20,9 @@ public final class Profile {
     public int matches = 0, top1 = 0, top4 = 0, placementSum = 0;
     public int campaignCleared = 0; // man chien dich cao nhat da qua
     public int wavesBest = 0;
+    // Tinh linh dong hanh (Little Legend kieu TFT): id mot quai trong GameData.MONSTERS,
+    // chon o man Ho So, mac dinh la con dau tien cua bo ("slime").
+    public String legendId = "slime";
 
     public double avgPlacement() { return matches > 0 ? (double) placementSum / matches : 0; }
     public String rankLabel() { return Rank.rankLabel(rank); }
@@ -71,7 +76,8 @@ public final class Profile {
         b.append("  \"top4\": ").append(top4).append(",\n");
         b.append("  \"placementSum\": ").append(placementSum).append(",\n");
         b.append("  \"campaignCleared\": ").append(campaignCleared).append(",\n");
-        b.append("  \"wavesBest\": ").append(wavesBest).append("\n");
+        b.append("  \"wavesBest\": ").append(wavesBest).append(",\n");
+        b.append("  \"legendId\": \"").append(esc(legendId == null ? "slime" : legendId)).append("\"\n");
         b.append("}\n");
         return b.toString();
     }
@@ -135,6 +141,8 @@ public final class Profile {
         if ((v = intVal(json, "placementSum")) != null) p.placementSum = v;
         if ((v = intVal(json, "campaignCleared")) != null) p.campaignCleared = v;
         if ((v = intVal(json, "wavesBest")) != null) p.wavesBest = v;
+        String lg = strVal(json, "legendId");
+        if (GameData.isMonsterId(lg)) p.legendId = lg; // id la/khong co -> giu mac dinh "slime"
         return p;
     }
 

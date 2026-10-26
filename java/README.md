@@ -319,6 +319,29 @@ kiểm chứng headless mục 19–21):
   di qua 1 tướng đang đeo thành phần ghép được → hiện **chip xem trước** món hoàn chỉnh sẽ tạo thành cạnh
   tướng; tướng đã đủ 3 ô và không hợp nhất được thì ô đích tô viền đỏ (thả vào sẽ bị từ chối như luật cũ).
 
+### Tinh linh đồng hành — Little Legend (đợt 2026-10-25)
+
+- **Bộ tinh linh = 10 quái PvE** (`GameData.MONSTERS`: Slime Hồng, Nấm Độc, Goblin Tinh Nghịch, Sói Xám
+  Con, Golem Đá, Xương Khô Cười, Phù Thủy Rừng, Rồng Boss Lửa, Boss Băng Giá, Vua Quái Vật) — sinh vật
+  tách biệt với tướng như tinh linh của TFT. Người chơi chọn trong màn **Hồ Sơ** (lưới chọn 5×2, chạm là
+  chọn + lưu ngay vào `Profile.legendId`, mặc định `slime`); bot PvP được `Match.startPvp` gán ngẫu nhiên.
+- **Avatar theo tinh linh:** mặt tinh linh đang chọn (cắt đầu + vai theo hộp alpha, `Assets.unitHeadRegion`)
+  thay avatar cũ ở **sảnh chính**, ở **từng hàng của tab NGƯỜI** (panel phải trong trận — của mình là con
+  đã chọn, bot là con đã gán; giữ nguyên dấu kiếm chéo + highlight đối thủ), và ở ô chọn trong Hồ Sơ.
+- **Hành vi trên sân (MatchScreen, máy trạng thái riêng):** nhà ở dải sân trái bàn cờ (282,252) — ngoài
+  lưới ô, ngoài panel/2 đĩa/shop. Pha chuẩn bị: nhún idle + thỉnh thoảng **đi dạo** quanh nhà rồi về.
+  Pha trận: ngồi xem ở rìa sân nhà. **Nhặt cầu đồ:** trận có đồ rơi → ở `playT ≥ 0.7` một **cầu đồ phát
+  sáng** (quầng vàng + icon món) hiện giữa sân `cellCenter(1.5, 3.5)`, tinh linh **chạy thật tới nhặt**
+  (~470px/s), cầu **bay vòng cung vào người**, *xong mới* hiện popup nhận đồ như cũ (toàn đoạn ~1–1,3s,
+  không đổi nhịp tự chuyển pha; nếu trận quá ngắn, đoạn nhặt chạy nốt trong cửa sổ announcer). Pha kết
+  quả: **thắng → nhảy ăn mừng + xoay nhẹ + tia sao**; **thua → ngã nghiêng + sao quay trên đầu**, sang
+  pha sau tự đứng dậy về nhà. Tinh linh **đối thủ** đứng ở rìa sân địch (282,556) trong PvP và phản ứng
+  ngược (mình thắng → nó xụi, mình thua → nó ăn mừng); PvE không có tinh linh địch.
+- **Vẽ:** tái dùng bản tiếp đất + bóng chân/contact AO của tướng (`unitOnGround` + `drawUnitGrounding`),
+  chuyển động bằng squash/hop/rotation (không thêm khung hình), vẽ cùng lớp đơn vị — dưới panel/HUD,
+  không che thanh máu. Kiểm chứng headless mục 24 + mode chụp `legendplan` / `legendlist` /
+  `legendpickup` / `legendwin` / `legendlose` trong ScreenshotMain.
+
 ## Cách build & chạy
 
 > **Lưu ý bản trên GitHub:** các file nhị phân (PNG sprite/scene, font TTF, `gradle-wrapper.jar`) được lưu

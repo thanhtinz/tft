@@ -233,6 +233,14 @@ public final class GameData {
         throw new IllegalArgumentException("Unknown monster " + id);
     }
 
+    // Kiem tra id quai hop le ma KHONG nem exception (monsterById nem) — dung cho
+    // truong tinh linh dong hanh (Profile.legendId / PlayerState.legendId) doc tu file.
+    public static boolean isMonsterId(String id) {
+        if (id == null) return false;
+        for (MonsterDef m : MONSTERS) if (m.id.equals(id)) return true;
+        return false;
+    }
+
     public static final class CampaignStage {
         public final int id, chapter, reward; public final String name;
         public final List<String[]> enemies; // moi phan tu: {monsterId, count}

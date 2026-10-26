@@ -31,6 +31,8 @@ public class Assets {
 
     public BitmapFont font, fontBig, fontSmall, fontTitle, fontTiny;
     private final Map<String, Texture> unitTex = new HashMap<>();
+    private final Map<String, TextureRegion> headRegions = new HashMap<>(); // vung DAU (avatar): cat theo hop alpha
+    private final List<Texture> headTex = new ArrayList<>(); // texture rieng cua headRegions (loc Nearest), dispose cung
     private final Map<String, Texture> unitGroundTex = new HashMap<>(); // ban "tiep dat": gradient toi nhe o dai chan
     private final Set<String> unitStarMiss = new HashSet<>(); // id dang tien hoa da biet la khong co file
     private final Map<String, Texture> sceneTex = new HashMap<>();
@@ -279,6 +281,37 @@ public class Assets {
         return unit(artId);
     }
 
+    // Vung DAU cua sprite lam AVATAR (sanh chinh, hang nguoi choi trong tran, o chon o
+    // Ho So): quet hop alpha that cua file roi cat phan tren 55% (dau + vai) — cung quy
+    // uoc ban avatar Gogo cu o MenuScreen, nay dung chung cho TINH LINH. Nap bang Pixmap
+    // rieng loc Nearest cho net pixel; loi nap (moi truong web...) -> fallback ca sprite.
+    public TextureRegion unitHeadRegion(String artId) {
+        String id = artId == null ? "slime" : artId;
+        TextureRegion r = headRegions.get(id);
+        if (r != null) return r;
+        try {
+            Pixmap pm = new Pixmap(Gdx.files.internal("units/" + id + ".png"));
+            int minX = pm.getWidth(), minY = pm.getHeight(), maxX = -1, maxY = -1;
+            for (int y = 0; y < pm.getHeight(); y++) for (int x = 0; x < pm.getWidth(); x++) {
+                if ((pm.getPixel(x, y) & 0xFF) > 10) {
+                    if (x < minX) minX = x; if (x > maxX) maxX = x;
+                    if (y < minY) minY = y; if (y > maxY) maxY = y;
+                }
+            }
+            if (maxX < 0) { minX = 0; minY = 0; maxX = pm.getWidth() - 1; maxY = pm.getHeight() - 1; }
+            Texture t = new Texture(pm);
+            t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+            pm.dispose();
+            headTex.add(t);
+            int bw = maxX - minX + 1, bh = maxY - minY + 1;
+            r = new TextureRegion(t, minX, minY, bw, Math.max(1, Math.round(bh * 0.55f)));
+        } catch (Exception e) {
+            r = new TextureRegion(unit(id));
+        }
+        headRegions.put(id, r);
+        return r;
+    }
+
     // Ban TIEP DAT cua sprite (chi dung khi ve tuong DUNG TREN SAN, file tranh goc khong doi):
     // gradient toi nhe o dai chan (11% duoi cua than, toi da -20% o hang chan) ap dung
     // thang len tung pixel co alpha — chan "chìm" xuong mat dat thay vi bi cat cung.
@@ -420,6 +453,7 @@ public class Assets {
         if (fontTiny != null) fontTiny.dispose();
         if (fontTitle != null) fontTitle.dispose();
         for (Texture t : unitTex.values()) t.dispose();
+        for (Texture t : headTex) t.dispose();
         for (Texture t : unitGroundTex.values()) t.dispose();
         for (Texture t : sceneTex.values()) t.dispose();
         for (Texture t : uiTex) t.dispose();

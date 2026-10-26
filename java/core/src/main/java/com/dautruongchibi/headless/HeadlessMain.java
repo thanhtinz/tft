@@ -413,6 +413,22 @@ public class HeadlessMain {
         check("Cat ten bang sat thuong: giu nguyen hau to sao, ten dai cat kem '...' truoc hau to",
             fitOk, "ngan='" + fitShort + "' vua='" + fitFull + "' cat='" + fitCut + "' cat3='" + fitCut3 + "'");
 
+        // 24) Tinh linh dong hanh: bot PvP duoc gan tinh linh hop le (id quai co that),
+        // ho so luu/doc legendId dung, id la trong file -> ve mac dinh "slime"
+        Match lgm = Match.startPvp(Match.Mode.PVP_RANKED, 42, "LegendQA");
+        boolean botsLegendOk = lgm.players.size() == 8;
+        for (int i = 1; i < lgm.players.size(); i++) {
+            if (!GameData.isMonsterId(lgm.players.get(i).legendId)) botsLegendOk = false;
+        }
+        Profile lp = new Profile();
+        lp.legendId = "golem";
+        Profile lback = Profile.fromJson(lp.toJson());
+        Profile lbad = Profile.fromJson("{\"name\": \"X\", \"legendId\": \"khong-co-that\"}");
+        boolean legendOk = botsLegendOk && "golem".equals(lback.legendId) && "slime".equals(lbad.legendId)
+            && new Profile().legendId.equals("slime");
+        check("Tinh linh: bot PvP gan tinh linh hop le, ho so luu/doc lua chon, id sai ve mac dinh",
+            legendOk, "bot dau=" + lgm.players.get(1).legendId + ", doc lai=" + lback.legendId);
+
         System.out.println("=== TONG KET: " + pass + " PASS / " + fail + " FAIL ===");
         if (fail > 0) { System.out.println("Muc fail: " + failures); System.exit(1); }
     }

@@ -108,27 +108,12 @@ public class MenuScreen extends ScreenAdapter {
 
     // ---------- Texture rieng cua sanh ----------
     private void buildTextures() {
-        // Avatar: nap rieng sprite gogo tu file (ban trong Assets loc MipMapLinear —
-        // ban nay loc NEAREST cho net), cat theo hop alpha that lay phan dau + vai.
-        try {
-            Pixmap pm = new Pixmap(Gdx.files.internal("units/gogo.png"));
-            int minX = pm.getWidth(), minY = pm.getHeight(), maxX = -1, maxY = -1;
-            for (int y = 0; y < pm.getHeight(); y++) for (int x = 0; x < pm.getWidth(); x++) {
-                if ((pm.getPixel(x, y) & 0xFF) > 10) {
-                    if (x < minX) minX = x; if (x > maxX) maxX = x;
-                    if (y < minY) minY = y; if (y > maxY) maxY = y;
-                }
-            }
-            if (maxX < 0) { minX = 0; minY = 0; maxX = pm.getWidth() - 1; maxY = pm.getHeight() - 1; }
-            mascotTex = new Texture(pm);
-            mascotTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-            pm.dispose();
-            int bw = maxX - minX + 1, bh = maxY - minY + 1;
-            // Avatar: cat phan DAU + VAI (tren 55% hop alpha)
-            avatarRegion = new TextureRegion(mascotTex, minX, minY, bw, Math.round(bh * 0.55f));
-        } catch (Exception e) {
-            mascotTex = null; avatarRegion = null;
-        }
+        // Avatar: MAT TINH LINH dang chon cua nguoi choi (Assets.unitHeadRegion cat
+        // dau + vai theo hop alpha that, loc NEAREST cho net) — chon tinh linh khac o
+        // man Ho So la avatar sanh doi theo. Texture thuoc ve Assets nen man nay KHONG
+        // dispose (mascotTex giu null nhu mot o trong danh sach giai phong o hide()).
+        avatarRegion = game.assets.unitHeadRegion(game.profile.legendId);
+        mascotTex = null;
         // Dai gradient toi o dinh: alpha 0.66 o tren cung -> 0 o day dai (Pixmap: hang 0 = dinh)
         Pixmap gt = new Pixmap(4, 128, Pixmap.Format.RGBA8888);
         for (int j = 0; j < 128; j++) {
@@ -327,7 +312,7 @@ public class MenuScreen extends ScreenAdapter {
     }
 
     private void drawTopLeft(Assets a) {
-        // Avatar tron: dia vien vang day + cat dau/vai cua linh vat
+        // Avatar tron: dia vien vang day + cat dau/vai cua TINH LINH dang chon
         batch.draw(ringDiscTex, 32, 604, 92, 92);
         if (avatarRegion != null) {
             float w = 74, h = w * avatarRegion.getRegionHeight() / avatarRegion.getRegionWidth();

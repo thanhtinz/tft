@@ -35,6 +35,11 @@ import java.lang.reflect.Method;
 //   cong don theo thoi gian tran, xem nhanh giua tran khong can cho the ket qua)
 // | dmgplan (pha chuan bi + tab SAT THUONG mo san — trang thai rong "chua co du lieu")
 // | menumodes (sanh moi + LOP CHON CHE DO mo san sau nut CHOI)
+// | legendplan (chuan bi: TINH LINH dung/di dao o ria san nha + tinh linh dich o ria
+//   san dich; ho so ep legendId=golem) | legendlist (chuan bi PvP: tab NGUOI voi
+//   avatar = mat tinh linh tung nguoi) | legendpickup (tran that + tiem do roi qua
+//   reflection: chup GIUA doan tinh linh chay nhat cau do) | legendwin / legendlose
+//   (chup cua so announcer o pha RESULT: tinh linh an mung / bi hat xui)
 // | fxfire/fxice/fxlightning/fxheal/fxbeam (chup dung khung hinh mot tuong tung chieu theo
 //   HE chi dinh — doi BattleFx.lastCastFx trung he roi chup ngay frame do)
 public class ScreenshotMain {
@@ -106,6 +111,52 @@ public class ScreenshotMain {
                 }
                 case "benchshow": case "benchshop": {
                     Match m = benchShowcase();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "legendplan": {
+                    // Pha chuan bi day du (benchShowcase): tinh linh cua minh (ep ho so
+                    // sang Golem Da) o ria san nha, tinh linh doi thu o ria san dich
+                    profile.legendId = "golem";
+                    Match m = benchShowcase();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "legendlist": {
+                    // Danh sach nguoi choi PvP: avatar tung hang = mat tinh linh cua
+                    // nguoi do (minh = Golem Da da ep, bot = con gan ngau nhien)
+                    profile.legendId = "golem";
+                    Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
+                    m.autoPlan();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "legendpickup": {
+                    // Tran danh that vong 13; do roi duoc TIEM qua reflection trong
+                    // render() (vong PvP khong tu roi do) de chup doan chay nhat cau
+                    profile.legendId = "witchmob";
+                    Match m = battleItemsMatch();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "legendwin": {
+                    // Doi hinh sao cao danh man chien dich 3 (thang gan nhu chac chan):
+                    // chup cua so announcer — tinh linh NHAY AN MUNG
+                    Match m = starBattleMatch();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "legendlose": {
+                    // Ban trong -> thua chac vong PvE 1-1: chup cua so announcer —
+                    // tinh linh BI HAT XUI (sao quay tren dau)
+                    Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
+                    if (m.draftPending) m.pickDraft(0);
+                    if (m.augmentPending) m.pickAugment(0);
                     matchScreen = new MatchScreen(this, m);
                     setScreen(matchScreen);
                     break;
@@ -463,13 +514,13 @@ public class ScreenshotMain {
                     dragSet = true;
                 }
                 boolean fxMode = mode.startsWith("fx");
-                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || "battleitems".equals(mode) || "battlesunset".equals(mode) || "battleice".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode) || "battlecard".equals(mode) || "battlecardinfo".equals(mode) || "oppbattle".equals(mode) || "battletab".equals(mode) || "battledmg".equals(mode) || fxMode;
+                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || "battleitems".equals(mode) || "battlesunset".equals(mode) || "battleice".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode) || "battlecard".equals(mode) || "battlecardinfo".equals(mode) || "oppbattle".equals(mode) || "battletab".equals(mode) || "battledmg".equals(mode) || "legendpickup".equals(mode) || "legendwin".equals(mode) || "legendlose".equals(mode) || fxMode;
                 if (battleMode && !battleStarted && frames > 30 && matchScreen != null) {
                     Method mb = MatchScreen.class.getDeclaredMethod("startBattle");
                     mb.setAccessible(true);
                     mb.invoke(matchScreen);
                     battleStarted = true;
-                    if ("result".equals(mode) || "resultpanel".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode)) {
+                    if ("result".equals(mode) || "resultpanel".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode) || "legendwin".equals(mode) || "legendlose".equals(mode)) {
                         // Tang toc playback x3 de vao pha RESULT nhanh (announcer chi keo 1,5s)
                         Field fs = MatchScreen.class.getDeclaredField("speed");
                         fs.setAccessible(true);
@@ -494,8 +545,28 @@ public class ScreenshotMain {
                     }
                     dragSet = true;
                 }
+                if ("legendpickup".equals(mode) && battleStarted && !dragSet && matchScreen != null) {
+                    // Tiem DO ROI vao outcome + bat co doan nhat cau: startBattle that
+                    // khong tu arm vi vong 13 PvP khong roi do. Cau dat o
+                    // cellCenter(1.5, 3.5) = (525, 432) nhu code that tu tinh.
+                    Field fOut = MatchScreen.class.getDeclaredField("outcome"); fOut.setAccessible(true);
+                    Object oc = fOut.get(matchScreen);
+                    Field fDrop = oc.getClass().getDeclaredField("droppedItem"); fDrop.setAccessible(true);
+                    fDrop.set(oc, "tpkiem");
+                    Field fArm = MatchScreen.class.getDeclaredField("pickupArmed"); fArm.setAccessible(true); fArm.setBoolean(matchScreen, true);
+                    Field fOx = MatchScreen.class.getDeclaredField("orbX"); fOx.setAccessible(true); fOx.setFloat(matchScreen, 525f);
+                    Field fOy = MatchScreen.class.getDeclaredField("orbY"); fOy.setAccessible(true); fOy.setFloat(matchScreen, 432f);
+                    dragSet = true;
+                }
                 boolean due;
-                if ("battledmg".equals(mode) && battleStarted) {
+                if ("legendpickup".equals(mode) && battleStarted) {
+                    // Chup GIUA doan chay nhat cau: tinh linh dang o TO_ORB va da roi
+                    // nha > ~90px (cau do dang hien o giua san)
+                    Field fSt = MatchScreen.class.getDeclaredField("legendState"); fSt.setAccessible(true);
+                    Field fX = MatchScreen.class.getDeclaredField("legendX"); fX.setAccessible(true);
+                    boolean mid = "TO_ORB".equals(String.valueOf(fSt.get(matchScreen))) && fX.getFloat(matchScreen) > 370f;
+                    due = mid || frames >= 2400;
+                } else if ("battledmg".equals(mode) && battleStarted) {
                     // Chup MUON (playT >= 3s) de tab SAT THUONG co so lieu cong don that
                     // (chup som theo pow dau tien thi bang con rong vi chua don nao dan)
                     java.lang.reflect.Field fp = MatchScreen.class.getDeclaredField("phase");
@@ -578,7 +649,7 @@ public class ScreenshotMain {
                     }
                     if ("OVER".equals(ph)) overFrames++;
                     due = overFrames >= 12 || frames >= 2400;
-                } else if ("result".equals(mode) && battleStarted) {
+                } else if (("result".equals(mode) || "legendwin".equals(mode) || "legendlose".equals(mode)) && battleStarted) {
                     Field fp = MatchScreen.class.getDeclaredField("phase");
                     fp.setAccessible(true);
                     boolean inResult = "RESULT".equals(String.valueOf(fp.get(matchScreen)));

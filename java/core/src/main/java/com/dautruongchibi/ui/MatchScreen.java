@@ -231,6 +231,30 @@ public class MatchScreen extends ScreenAdapter {
     private String battleArenaKey = null; // khoa san chot tai startBattle (match.round da tang sau fight())
     private String popupItemId = null;
     private float popupT = 0;
+
+    // ===== TINH LINH DONG HANH (Little Legend kieu TFT) =====
+    // Hien than cua nguoi choi tren san: dung o dai san ben trai ban co (x 250..314,
+    // ngoai luoi o 357..945, ngoai panel trai ket thuc o 216, tren shop/2 dia goc) —
+    // khong che o co, dia, panel hay bench o bat ky pha nao. Trang thai:
+    // IDLE/WANDER (chuan bi: nhun + di dao quanh nha), WATCH (ngoi xem o ria san nha
+    // trong luc danh), TO_ORB -> ORB_FLY -> RETURN (chay nhat cau do roi ve), CELEBRATE
+    // (thang: nhay + xoay nhe + tia sao), DOWN (thua: nga nghieng + sao quay tren dau).
+    enum LegendState { IDLE, WANDER, WATCH, TO_ORB, ORB_FLY, RETURN, CELEBRATE, DOWN }
+    static final float LEGEND_HOME_X = 282, LEGEND_HOME_Y = 252;   // nha cua MINH (ria duoi-trai ban)
+    static final float LEGEND_EHOME_X = 282, LEGEND_EHOME_Y = 556; // ria san DICH (PvP)
+    static final float LEGEND_SIZE = 64;
+    private String myLegendId = "slime"; // = Profile.legendId (constructor gan vao human())
+    private float legendX = LEGEND_HOME_X, legendY = LEGEND_HOME_Y;
+    private LegendState legendState = LegendState.IDLE;
+    private float legendT = 0;            // thoi gian da o trong trang thai hien tai
+    private float legendTargetX = LEGEND_HOME_X, legendTargetY = LEGEND_HOME_Y;
+    private float legendIdleWait = 2.0f;  // con bao lau thi di dao tiep (pha chuan bi)
+    private boolean legendFlip = false;   // huong mat theo chieu di chuyen ngang
+    private boolean pickupArmed = false;  // tran nay co do roi (outcome.droppedItem != null)
+    private boolean pickupDone = false;
+    private boolean orbActive = false;    // cau do dang hien tren san
+    private float orbX = 0, orbY = 0;     // vi tri cau do (o giua san, cellCenter(1.5, 3.5))
+    private float orbFromX = 0, orbFromY = 0; // diem bat dau cua doan cau bay vao tinh linh
     private final List<MergeFx> mergeFx = new ArrayList<>();
     private final Map<String, Integer> starSnapshot = new HashMap<>();
     private boolean snapshotReady = false;
@@ -284,6 +308,11 @@ public class MatchScreen extends ScreenAdapter {
     public MatchScreen(MainGame game, Match match) {
         this.game = game;
         this.match = match;
+        // Tinh linh cua nguoi choi that = lua chon luu trong ho so (bot da duoc
+        // startPvp gan ngau nhien). Id la -> ve con dau tien cua bo.
+        String lg = game.profile != null ? game.profile.legendId : null;
+        myLegendId = GameData.isMonsterId(lg) ? lg : "slime";
+        match.human().legendId = myLegendId;
     }
 
     @Override
@@ -391,7 +420,8 @@ public class MatchScreen extends ScreenAdapter {
         detectMerges();
     }
 
-    // Xay (lai) cac hang nguoi choi o cot phai: avatar tron + ten + mau + thanh mau mong.
+    // Xay (lai) cac hang nguoi choi o cot phai: avatar = MAT TINH LINH cua nguoi do
+    // (minh = con da chon trong ho so, bot = con duoc gan ngau nhien) + ten + mau + thanh mau mong.
     // Hang cua minh: lop vang nhe. Hang DOI THU (markedOpponent): nen trong vang + VIEN
     // VANG 2px (opponentRowBg) + icon KIEM CHEO 16px ngay sau avatar + ten vang. Moi hang
     // deu danh san mot o 16px cho dau kiem nen bo cuc ten/mau khong xich giua cac hang va
@@ -400,20 +430,17 @@ public class MatchScreen extends ScreenAdapter {
     private void buildPlayerList() {
         playersBox.clear();
         if (!match.isPvp()) return;
-        Color[] dots = {new Color(0.96f, 0.77f, 0.26f, 1), new Color(0.45f, 0.8f, 1, 1), new Color(1, 0.55f, 0.65f, 1),
-            new Color(0.55f, 0.95f, 0.6f, 1), new Color(0.78f, 0.62f, 1, 1), new Color(1, 0.75f, 0.4f, 1),
-            new Color(0.5f, 0.9f, 0.9f, 1), new Color(0.9f, 0.7f, 0.9f, 1)};
-        int idx = 0;
         for (Match.PlayerState p : match.players) {
             Table row = new Table();
             boolean isOpp = p == markedOpponent;
             if (isOpp) row.background(opponentRowBg());
             else if (p.human) row.background(Ui.bg(game.assets, new Color(1f, 0.84f, 0.3f, 0.16f)));
             row.pad(2, 4, 2, 4);
+            String faceId = GameData.isMonsterId(p.legendId) ? p.legendId : "slime";
             com.badlogic.gdx.scenes.scene2d.ui.Image av = new com.badlogic.gdx.scenes.scene2d.ui.Image(
-                new com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable(new com.badlogic.gdx.graphics.g2d.TextureRegion(game.assets.avatarTex)));
-            av.setColor(p.alive ? dots[idx % dots.length] : new Color(0.4f, 0.4f, 0.45f, 1));
-            row.add(av).width(20).height(20).padRight(4);
+                new com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable(game.assets.unitHeadRegion(faceId)));
+            av.setColor(p.alive ? Color.WHITE : new Color(0.4f, 0.4f, 0.45f, 1));
+            row.add(av).width(24).height(24).padRight(4);
             // O dau kiem cheo co dinh 16px sau avatar: hang doi thu ve icon, hang khac de o
             // trong cung be rong — vi tri ten/mau cua moi hang giong het nhau.
             if (isOpp) {
@@ -437,7 +464,6 @@ public class MatchScreen extends ScreenAdapter {
             bar.setAnimateDuration(0);
             row.add(bar).colspan(4).width(164).height(5).padTop(1);
             playersBox.add(row).width(172).padBottom(2).row();
-            idx++;
         }
     }
 
@@ -1279,6 +1305,7 @@ public class MatchScreen extends ScreenAdapter {
         if (phase != Phase.BATTLE) { battleCardUid = null; if (phase == Phase.RESULT || phase == Phase.OVER) itemInfoId = null; }
         else if (battleCardUid != null && liveUnit(battleCardUid) == null) battleCardUid = null; // tuong dang xem da bi ha
         if (popupT > 0) { popupT -= delta; if (popupT <= 0) popupItemId = null; }
+        updateLegend(delta);
         if (combineFlashT > 0) { combineFlashT -= delta; if (combineFlashT <= 0) combineFlashIndex = -1; }
         for (int i = mergeFx.size() - 1; i >= 0; i--) { MergeFx fx = mergeFx.get(i); fx.ttl += delta; if (fx.ttl > 0.9f) mergeFx.remove(i); }
         if (phase == Phase.PLANNING) {
@@ -1307,6 +1334,13 @@ public class MatchScreen extends ScreenAdapter {
                 announceT = 1.5f; // announcer phong to giua san roi moi hien panel ket qua
                 resultT = 0;
                 if (outcome.droppedItem != null) { popupItemId = outcome.droppedItem; popupT = 2.3f; }
+                // Tinh linh phan ung ket qua NGAY khi announcer bat dau — tru khi dang
+                // chay nhat cau do: doan nhat chay not trong cua so announcer, xong
+                // stepPickup moi chuyen no sang an mung/xui.
+                if (legendState != LegendState.TO_ORB && legendState != LegendState.ORB_FLY && legendState != LegendState.RETURN) {
+                    legendState = outcome.humanWon ? LegendState.CELEBRATE : LegendState.DOWN;
+                    legendT = 0;
+                }
                 game.sound().sfx(outcome.humanWon ? "win" : "lose");
             }
         }
@@ -1334,6 +1368,7 @@ public class MatchScreen extends ScreenAdapter {
         battleFx.drawGround(batch, circleTex); // vet dat theo he (chay/doc/bang) nam duoi chan tuong
         if (phase == Phase.BATTLE || phase == Phase.RESULT) drawBattleUnits(now);
         else { drawPlanningUnits(now); drawBench(now); if (shopOpen && phase == Phase.PLANNING) drawShop(); }
+        drawLegends(now); // tinh linh 2 ben + cau do: cung lop don vi, duoi panel/HUD
         drawLeftPanel(now);
         drawRightPanel(now);
         drawTopBar();
@@ -2231,6 +2266,190 @@ public class MatchScreen extends ScreenAdapter {
     // tieu de neo theo DINH popup, icon + ten neo theo khoang duoi tieu de, dong chi so neo theo
     // DAY popup — moi toa do deu suy ra tu pw/ph (da nhan he so pop) nen ca luc pop-in cung
     // khong con chu nao de/chay ra ngoai khung. Ten 1 dong thi so do trung khop ban cu tung pixel.
+    // ================= TINH LINH: CAP NHAT TRANG THAI =================
+    private void updateLegend(float delta) {
+        legendT += delta;
+        switch (phase) {
+            case PLANNING: case DRAFT: case AUGMENT: {
+                if (legendState == LegendState.WANDER) {
+                    if (moveLegendToward(legendTargetX, legendTargetY, 130f, delta)) {
+                        legendState = LegendState.IDLE; legendT = 0;
+                        legendIdleWait = 1.6f + (float) Math.random() * 2.8f;
+                    }
+                } else if (legendState != LegendState.IDLE) {
+                    legendState = LegendState.IDLE; legendT = 0; legendIdleWait = 1.0f;
+                } else if (legendT >= legendIdleWait) {
+                    // Di dao: mot diem ngau nhien quanh nha (lech toi da ~46px ngang,
+                    // ~25px doc — van trong dai san an toan ben trai ban co)
+                    double ang = Math.random() * Math.PI * 2;
+                    float r = 16f + (float) Math.random() * 30f;
+                    legendTargetX = LEGEND_HOME_X + (float) Math.cos(ang) * r;
+                    legendTargetY = LEGEND_HOME_Y + (float) Math.sin(ang) * r * 0.55f;
+                    legendState = LegendState.WANDER; legendT = 0;
+                }
+                break;
+            }
+            case BATTLE: {
+                if (pickupArmed && !pickupDone && legendState == LegendState.WATCH && playT >= 0.7f) {
+                    orbActive = true; legendState = LegendState.TO_ORB; legendT = 0;
+                }
+                if (legendState == LegendState.TO_ORB || legendState == LegendState.ORB_FLY || legendState == LegendState.RETURN) {
+                    stepPickup(delta, LegendState.WATCH);
+                } else if (Math.abs(legendX - LEGEND_HOME_X) > 2 || Math.abs(legendY - LEGEND_HOME_Y) > 2) {
+                    moveLegendToward(LEGEND_HOME_X, LEGEND_HOME_Y, 320f, delta);
+                }
+                break;
+            }
+            case RESULT: {
+                // Doan nhat cau chay not trong cua so announcer; xong, stepPickup tu
+                // chuyen tinh linh sang CELEBRATE/DOWN theo ket qua (qua RETURN ve nha)
+                if (legendState == LegendState.TO_ORB || legendState == LegendState.ORB_FLY || legendState == LegendState.RETURN) {
+                    stepPickup(delta, outcome != null && outcome.humanWon ? LegendState.CELEBRATE : LegendState.DOWN);
+                }
+                break;
+            }
+            default: break;
+        }
+    }
+
+    // Cac buoc cua doan NHAT CAU DO: chay toi cau -> cau bay vao nguoi (0.28s; chi khi
+    // doan ket thuc ngay trong pha tran, popup nhan do MOI hien — dung yeu cau "nhat
+    // xong moi hien popup") -> chay ve nha -> chuyen sang trang thai "after".
+    private void stepPickup(float delta, LegendState after) {
+        if (legendState == LegendState.TO_ORB) {
+            if (moveLegendToward(orbX, orbY, 470f, delta)) {
+                legendState = LegendState.ORB_FLY; legendT = 0;
+                orbFromX = orbX; orbFromY = orbY;
+            }
+        } else if (legendState == LegendState.ORB_FLY) {
+            if (legendT >= 0.28f) {
+                orbActive = false; pickupDone = true;
+                if (phase == Phase.BATTLE && outcome != null && outcome.droppedItem != null) {
+                    popupItemId = outcome.droppedItem; popupT = 2.3f;
+                }
+                legendState = LegendState.RETURN; legendT = 0;
+            }
+        } else if (legendState == LegendState.RETURN) {
+            if (moveLegendToward(LEGEND_HOME_X, LEGEND_HOME_Y, 400f, delta)) {
+                legendState = after; legendT = 0;
+            }
+        }
+    }
+
+    // Di chuyen tinh linh ve diem dich voi toc do cho truoc; true khi da toi noi.
+    // Huong mat lat theo chieu ngang cua buoc di (sprite mac dinh quay phai).
+    private boolean moveLegendToward(float tx, float ty, float speed, float delta) {
+        float dx = tx - legendX, dy = ty - legendY;
+        float dist = (float) Math.hypot(dx, dy);
+        float step = speed * delta;
+        if (dist <= Math.max(step, 1.5f)) { legendX = tx; legendY = ty; return true; }
+        legendX += dx / dist * step;
+        legendY += dy / dist * step;
+        if (Math.abs(dx) > 4) legendFlip = dx < 0;
+        return false;
+    }
+
+    // ================= TINH LINH: VE =================
+    private void drawLegends(float now) {
+        // Tinh linh DOI THU (chi PvP, khi da biet doi thu cua vong): dung o ria san
+        // dich; pha ket qua phan ung NGUOC voi minh (minh thang -> no xui, minh thua
+        // -> no an mung). PvE khong co tinh linh dich.
+        if (match.isPvp() && markedOpponent != null && GameData.isMonsterId(markedOpponent.legendId)) {
+            LegendState es = LegendState.WATCH;
+            if (phase == Phase.RESULT && outcome != null) es = outcome.humanWon ? LegendState.DOWN : LegendState.CELEBRATE;
+            drawOneLegend(markedOpponent.legendId, LEGEND_EHOME_X, LEGEND_EHOME_Y, es, now, true, 0.92f);
+        }
+        if (orbActive) drawOrb(now); // cau ve TRUOC: tinh linh dem len cau o khoanh khac cham
+        drawOneLegend(myLegendId, legendX, legendY, legendState, now, legendFlip, 1f);
+    }
+
+    // Ve mot tinh linh: bong chan + contact AO nhu tuong (drawUnitGrounding), than
+    // sprite ban tiep dat co squash/hop/rotation theo trang thai (khong ve khung hinh).
+    private void drawOneLegend(String artId, float cx, float cy, LegendState st, float now, boolean flip, float alpha) {
+        Assets a = game.assets;
+        float hop = 0, rot = 0, squashY = 1f;
+        switch (st) {
+            case CELEBRATE: {
+                float cyc = (legendT % 0.55f) / 0.55f; // chu ky nhay 0.55s
+                hop = (float) Math.sin(cyc * Math.PI) * 24f;
+                squashY = 1f + 0.09f * (float) Math.sin(cyc * Math.PI) - (cyc < 0.16f ? 0.10f : 0f);
+                rot = (float) Math.sin(legendT * 9f) * 7f; // lac nhe khi nhay
+                break;
+            }
+            case DOWN:
+                rot = flip ? 64f : -64f; // bi hat nga: nghieng han sang ben, nam xui
+                break;
+            case TO_ORB: case RETURN: case WANDER: {
+                hop = Math.abs((float) Math.sin(legendT * 15f)) * 6.5f; // nhay coc theo buoc chay
+                squashY = 1f + 0.05f * (float) Math.sin(legendT * 15f);
+                break;
+            }
+            default: { // IDLE / WATCH: nhun song nhe (pha theo cx de 2 tinh linh khong nhun cung nhip)
+                hop = (float) Math.sin(now * 3.1f + cx) * 2.2f;
+                squashY = 1f + 0.03f * (float) Math.sin(now * 3.1f + cx);
+                break;
+            }
+        }
+        float squashX = 1f + (1f - squashY) * 0.8f;
+        drawUnitGrounding(cx, cy, LEGEND_SIZE, Math.min(1f, Math.max(0f, hop / 24f)) * 0.7f);
+        drawLegendSprite(artId, cx, st == LegendState.DOWN ? cy - 4 : cy + hop, squashX, squashY, rot, flip, alpha);
+        if (st == LegendState.CELEBRATE) { // tia sao xoay quanh nguoi
+            for (int i = 0; i < 3; i++) {
+                double ang = now * 3.4 + i * (Math.PI * 2 / 3);
+                float sx = cx + (float) Math.cos(ang) * 40, sy = cy + 30 + (float) Math.sin(ang) * 13;
+                batch.setColor(1f, 0.85f, 0.3f, 0.95f * alpha);
+                batch.draw(a.icon("star"), sx - 6, sy - 6, 12, 12);
+            }
+            batch.setColor(Color.WHITE);
+        } else if (st == LegendState.DOWN) { // sao quay tren dau (choang vang)
+            for (int i = 0; i < 3; i++) {
+                double ang = now * 4.4 + i * (Math.PI * 2 / 3);
+                float sx = cx + (float) Math.cos(ang) * 19, sy = cy + 46 + (float) Math.sin(ang) * 5;
+                batch.setColor(1f, 0.85f, 0.3f, 0.95f * alpha);
+                batch.draw(a.icon("star"), sx - 5, sy - 5, 10, 10);
+            }
+            batch.setColor(Color.WHITE);
+        }
+    }
+
+    // Sprite tinh linh co SQUASH (drawUnitSprite khong co tham so nay): cung cong
+    // thuc ve tam + lat huong nhu drawUnitSprite, them scaleX/scaleY rieng.
+    private void drawLegendSprite(String artId, float cx, float cy, float squashX, float squashY, float rotation, boolean flip, float alpha) {
+        Assets a = game.assets;
+        com.badlogic.gdx.graphics.Texture tex = a.unitOnGround(artId, 1);
+        batch.setColor(1, 1, 1, alpha);
+        batch.draw(tex, cx - LEGEND_SIZE / 2f, cy - LEGEND_SIZE / 2f, LEGEND_SIZE / 2f, LEGEND_SIZE / 2f,
+            LEGEND_SIZE, LEGEND_SIZE, squashX * (flip ? -1 : 1), squashY, rotation,
+            0, 0, tex.getWidth(), tex.getHeight(), false, false);
+        batch.setColor(Color.WHITE);
+    }
+
+    // Cau do phat sang: quang vang dap nhip + loi cau + icon mon do o giua. Khi
+    // ORB_FLY, cau bay vong cung tu vi tri roi ve nguoi tinh linh.
+    private void drawOrb(float now) {
+        Assets a = game.assets;
+        float ox = orbX, oy = orbY;
+        if (legendState == LegendState.ORB_FLY) {
+            float f = Math.min(1f, legendT / 0.28f);
+            float e = f * f;
+            ox = orbFromX + (legendX - orbFromX) * e;
+            oy = orbFromY + (legendY - orbFromY) * e + (float) Math.sin(f * Math.PI) * 26f;
+        }
+        float pulse = 0.75f + 0.25f * (float) Math.sin(now * 6f);
+        batch.setColor(1f, 0.80f, 0.30f, 0.62f * pulse);
+        batch.draw(a.glowTex(), ox - 48, oy - 48, 96, 96);
+        float r = 16f + 3f * pulse;
+        // Vien cam dam quanh loi sang: san sang (sa mac/bang) lam quang vang + loi nhat
+        // bi nuot mau — vien dam giu cau doc duoc tren moi nen san
+        batch.setColor(0.85f, 0.42f, 0.08f, 0.90f);
+        batch.draw(circleTex, ox - r - 5, oy - r - 5, (r + 5) * 2, (r + 5) * 2);
+        batch.setColor(1f, 0.93f, 0.58f, 0.95f);
+        batch.draw(circleTex, ox - r, oy - r, r * 2, r * 2);
+        batch.setColor(Color.WHITE);
+        if (outcome != null && outcome.droppedItem != null)
+            batch.draw(a.itemIcon(outcome.droppedItem), ox - 10, oy - 10, 20, 20);
+    }
+
     private void drawItemPopup() {
         GameData.ItemDef it = GameData.itemById(popupItemId);
         if (it == null) return;
@@ -2521,12 +2740,23 @@ public class MatchScreen extends ScreenAdapter {
         selUid = null; itemInfoId = null; dragItemIndex = -1; itemDragActive = false;
         dragUid = null; dragUnit = null; dragActive = false; returnT = -1; returnUid = null;
         battleCardUid = null; battleUnitPos.clear();
+        // Tinh linh ve vi tri XEM TRAN o ria san nha; tran co do roi thi chuan bi doan
+        // chay nhat cau (cau se hien khi playT >= 0.7 trong updateLegend).
+        legendState = LegendState.WATCH; legendT = 0;
+        legendX = LEGEND_HOME_X; legendY = LEGEND_HOME_Y;
+        pickupDone = false; orbActive = false;
+        pickupArmed = outcome != null && outcome.droppedItem != null;
+        if (pickupArmed) { float[] oc = cellCenter(1.5, 3.5); orbX = oc[0]; orbY = oc[1]; }
         if (outcome == null || outcome.result == null) { phase = Phase.RESULT; return; }
         game.sound().sfx("start");
         phase = Phase.BATTLE;
     }
 
     private void advanceFromResult() {
+        // Tinh linh dung day ve nha (het an mung/xui/doan nhat cau), san sang pha sau
+        legendState = LegendState.IDLE; legendT = 0; legendIdleWait = 1.4f;
+        legendX = LEGEND_HOME_X; legendY = LEGEND_HOME_Y;
+        orbActive = false; pickupArmed = false; pickupDone = false;
         if (match.over) { enterOver(); return; }
         if (match.draftPending) { enterDraft(); return; }
         if (match.augmentPending) { phase = Phase.AUGMENT; return; }

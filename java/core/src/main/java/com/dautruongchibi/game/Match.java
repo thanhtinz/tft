@@ -27,6 +27,9 @@ public final class Match {
         public int placement = 0;
         public int lastHpDelta = 0;
         public String lastOpponent = "";
+        // Tinh linh dong hanh (id quai GameData.MONSTERS): bot duoc gan ngau nhien khi
+        // startPvp; nguoi choi that do MatchScreen gan tu Profile.legendId. "" = chua co.
+        public String legendId = "";
     }
 
     public final Mode mode;
@@ -69,6 +72,7 @@ public final class Match {
         for (int i = 0; i < 7; i++) {
             PlayerState b = new PlayerState();
             b.name = names.get(i); b.human = false; b.gold = 5; b.level = 1;
+            b.legendId = GameData.MONSTERS.get(m.rng.nextInt(GameData.MONSTERS.size())).id;
             m.players.add(b);
         }
         m.beginRound(true);
