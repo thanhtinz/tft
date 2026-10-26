@@ -28,6 +28,9 @@ import java.lang.reflect.Method;
 //   vong 20 = stage 4 bang — kiem chung 2 san chua tung co anh tran)
 // | battlecard (tran dang chay + THE TUONG PHA TRAN mo tren Gogo 3 sao deo 3 mon)
 // | battlecardinfo (nhu battlecard + bang thong tin mon hoan chinh mo tu o do cua the)
+// | tabtraits / tabitems / tabdrag (PANEL TRAI HOP NHAT 2 tab: chuan bi voi tab TOC/HE
+//   mac dinh / tab TRANG BI mo san / dang keo do trong tab TRANG BI)
+// | battletab (tran dang chay + tab TRANG BI mo san — panel van dung/chuyen duoc o pha tran)
 // | fxfire/fxice/fxlightning/fxheal/fxbeam (chup dung khung hinh mot tuong tung chieu theo
 //   HE chi dinh — doi BattleFx.lastCastFx trung he roi chup ngay frame do)
 public class ScreenshotMain {
@@ -101,6 +104,27 @@ public class ScreenshotMain {
                 }
                 case "stars": {
                     Match m = starShowcase();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "tabtraits": case "tabitems": case "tabdrag": {
+                    // PANEL TRAI HOP NHAT 2 tab: doi hinh nhu mode "items" (benchShowcase +
+                    // kho 8 mon). tabtraits giu mac dinh tab TOC/HE; tabitems/tabdrag mo
+                    // san tab TRANG BI bang reflection trong render().
+                    Match m = benchShowcase();
+                    Match.PlayerState h = m.human();
+                    h.inventory.add("tpkiem"); h.inventory.add("tptim"); h.inventory.add("tpcung");
+                    h.inventory.add("tpgang"); h.inventory.add("tpgiap"); h.inventory.add("tpgay");
+                    h.inventory.add("vuot"); h.inventory.add("tim");
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "battletab": {
+                    // Tran danh that (battleItemsMatch) + tab TRANG BI mo san: kiem chung
+                    // panel hop nhat van gon/dung dung o pha tran, dia duoi-trai khong bi che
+                    Match m = battleItemsMatch();
                     matchScreen = new MatchScreen(this, m);
                     setScreen(matchScreen);
                     break;
@@ -375,8 +399,32 @@ public class ScreenshotMain {
                     Field fEl = MatchScreen.class.getDeclaredField("draftElapsed"); fEl.setAccessible(true); fEl.setFloat(matchScreen, 1.45f);
                     dragSet = true;
                 }
+                if (("tabitems".equals(mode) || "tabdrag".equals(mode) || "battletab".equals(mode)) && !dragSet && frames > 5 && matchScreen != null) {
+                    // frames > 5 (khong phai 50): mode tran co the chup RAT som khi pow no
+                    // (playT ~0,2s) — set tab muon la anh chup van o tab mac dinh
+                    // Mo san tab TRANG BI cua panel trai (panelTab = 1) bang reflection
+                    Field fTab = MatchScreen.class.getDeclaredField("panelTab"); fTab.setAccessible(true); fTab.setInt(matchScreen, 1);
+                    if ("tabdrag".equals(mode)) {
+                        // Chuan hoa kho nhu mode itemdrag: [tpkiem, tptim, ...] — roi gia
+                        // lap dang keo tpkiem (o 0) sang dung tam o 1 (tptim, ghep duoc):
+                        // icon bam tro + quang khay + vien xanh o dich phai hien nhu cu.
+                        // Tam o 1 theo hinh hoc panel moi: x = 16 + 48 + 24 = 88,
+                        // y = 618 - 24 = 594.
+                        Field fMatchD = MatchScreen.class.getDeclaredField("match");
+                        fMatchD.setAccessible(true);
+                        Match md = (Match) fMatchD.get(matchScreen);
+                        md.human().inventory.clear();
+                        md.human().inventory.add("tpkiem"); md.human().inventory.add("tptim");
+                        md.human().inventory.add("tpcung"); md.human().inventory.add("tpgang");
+                        Field fIdx = MatchScreen.class.getDeclaredField("dragItemIndex"); fIdx.setAccessible(true); fIdx.setInt(matchScreen, 0);
+                        Field fActI = MatchScreen.class.getDeclaredField("itemDragActive"); fActI.setAccessible(true); fActI.setBoolean(matchScreen, true);
+                        Field fX = MatchScreen.class.getDeclaredField("dragX"); fX.setAccessible(true); fX.setFloat(matchScreen, 88f);
+                        Field fY = MatchScreen.class.getDeclaredField("dragY"); fY.setAccessible(true); fY.setFloat(matchScreen, 594f);
+                    }
+                    dragSet = true;
+                }
                 boolean fxMode = mode.startsWith("fx");
-                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || "battleitems".equals(mode) || "battlesunset".equals(mode) || "battleice".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode) || "battlecard".equals(mode) || "battlecardinfo".equals(mode) || "oppbattle".equals(mode) || fxMode;
+                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || "battleitems".equals(mode) || "battlesunset".equals(mode) || "battleice".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode) || "battlecard".equals(mode) || "battlecardinfo".equals(mode) || "oppbattle".equals(mode) || "battletab".equals(mode) || fxMode;
                 if (battleMode && !battleStarted && frames > 30 && matchScreen != null) {
                     Method mb = MatchScreen.class.getDeclaredMethod("startBattle");
                     mb.setAccessible(true);

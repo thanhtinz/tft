@@ -230,6 +230,24 @@ kiểm chứng headless mục 19–21):
   tranh với X..." trên đầu pha trận giữ nguyên. Mode chụp mới: `oppmark` (chuẩn bị PvP vòng 13),
   `oppbattle` (đang đấu), `pveplan` (Chiến Dịch) — ảnh `tools/shot24-*.png` đã soi: dấu đúng hàng
   Bé Na ở cả 2 pha, PvE sạch dấu/hộp/bóng ma.
+- **Panel trái hợp nhất 2 tab icon (kiểu TFT Mobile):** hai khối tách rời ở mép trái (chip tộc/hệ xếp
+  dọc phía trên + khay đồ phía dưới kèm nhãn "TRANG BỊ" Scene2D riêng) đã gộp thành **MỘT panel duy
+  nhất** (`MatchScreen.drawLeftPanel`, x 8..216, đỉnh y=668) với **thanh tab 2 icon ở trên cùng**:
+  tab **KHIÊN** = tộc/hệ, tab **TÚI** = trang bị — cả hai icon đều **vẽ bằng Pixmap** (khiên vàng
+  viền/xanh lòng/sao vàng; túi nâu dây vàng/đồng xu — không emoji). Tab đang chọn: nền vàng mờ +
+  gạch vàng dưới chân + icon sáng rõ; tab còn lại nền tối + icon mờ 50%. **Mặc định vào trận mở tab
+  tộc/hệ**; trạng thái tab (`panelTab`) giữ nguyên suốt trận, chuyển pha không tự nhảy, và bấm tab
+  được ở cả pha chuẩn bị lẫn pha trận (`pressPanelTab` xử lý trước mọi thao tác khác trong
+  `planningPress`/`battlePress`). Chiều cao thân panel lấy theo nội dung **lớn hơn** trong 2 tab
+  (chip tộc/hệ hoặc lưới đồ + gợi ý) nên chuyển tab không đổi kích thước; đáy panel không bao giờ
+  xuống dưới y=126 (đĩa cấp + MUA XP kết thúc ở 112). Mọi tương tác đồ giữ nguyên 100% nhưng **chỉ
+  diễn ra khi tab trang bị đang mở** (chạm xem thông tin, kéo ghép/đeo, chip GHÉP, tô sáng đích,
+  quầng khay khi kéo); lưới đồ dời vào trong panel (ô đầu ở y 570..618), kho trống không khung ma
+  như cũ. Hai lỗi bắt được khi soi ảnh đợt này: dòng gợi ý 1 dòng (~281px) **tràn khỏi thân panel**
+  (rộng 192) → tách 2 dòng ngắn; và công cụ chụp set tab ở frame 50 nhưng mode trận chụp sớm theo
+  pow (playT ~0,2s) → set tab từ frame 5. Mode chụp mới: `tabtraits`, `tabitems`, `tabdrag`,
+  `battletab` — ảnh `tools/shot25-*.png` đã soi (kèm hồi quy `unitcard`/`iteminfo_full`/`pveplan`).
+  GuideScreen bổ sung 3 dòng hướng dẫn panel 2 tab.
 
 ### Nét pixel cho tranh nền + kiểm chứng sân hoàng hôn/băng (đợt 2026-10-25)
 

@@ -49,7 +49,8 @@ import java.util.Set;
 // trai = cap + mua XP, nut tron vang goc duoi phai = vang + mo/dong SHOP (shop la lop mo/dong nam
 // DUOI hang cho, sat mep duoi man hinh, reroll tron chi co trong shop, cham vung trong thi dong shop); tran TU DONG bat dau
 // khi het 45s chuan bi; pha ket qua tu chuyen sau ~4s va bang sat thuong tu hien o pha do.
-// Toc/he = chip nho doc mep trai; danh sach nguoi choi = hang gon mep phai; nhat ky = nut icon nho.
+// Panel trai HOP NHAT 2 tab icon kieu TFT Mobile (khien = toc/he, tui = khay trang bi);
+// danh sach nguoi choi = hang gon mep phai.
 // Giu nguyen trinh dien: pow truyen tranh, announcer, popup trang bi, xoay gop sao, keo-tha + thung rac, VFX theo he.
 public class MatchScreen extends ScreenAdapter {
     enum Phase { PLANNING, DRAFT, AUGMENT, BATTLE, RESULT, OVER }
@@ -110,9 +111,27 @@ public class MatchScreen extends ScreenAdapter {
     private String itemInfoId = null; // bang thong tin cua mon do nay dang mo (null = dong)
     private int combineFlashIndex = -1; // o khay vua nhan do ghep xong (loe sang)
     private float combineFlashT = 0;
-    // Hinh hoc khay: luoi 4 cot o mep trai duoi chip toc/he, moi o 48px (icon 44 + vien 2)
-    static final float TRAY_X = 8, TRAY_TOP = 446, TRAY_SLOT = 48;
-    static final int TRAY_COLS = 4;
+    // PANEL TRAI HOP NHAT kieu TFT Mobile: MOT panel duy nhat neo mep trai chua 2 TAB ICON
+    // o dau panel — tab KHIEN = toc/he dang kich, tab TUI = khay trang bi — bam tab la
+    // chuyen noi dung than panel. (Truoc day la 2 khoi tach roi xep chong: chip toc/he o
+    // tren + khay do o duoi kem nhan "TRANG BI" rieng; nay gop lam mot nhu TFT Mobile.)
+    static final float PANEL_X = 8, PANEL_W = 208, PANEL_TOP = 668, TAB_H = 40, TAB_W = PANEL_W / 2;
+    // Thanh tab chiem y 628..668; noi dung than panel bat dau o CONTENT_TOP (dem 10 duoi
+    // thanh tab). Day panel do panelBottom() tinh theo noi dung LON HON trong 2 tab va
+    // khong bao gio xuong duoi 126 — dia cap + MUA XP o goc duoi-trai ket thuc o y=112.
+    static final float CONTENT_TOP = 618;
+    // Trang thai tab: 0 = TOC/HE (mac dinh khi vao tran — dau tran nguoi choi thuong xem
+    // toc/he truoc), 1 = TRANG BI. Giu nguyen suot tran, chuyen pha khong tu nhay tab.
+    private int panelTab = 0;
+    static final int TAB_TRAITS = 0, TAB_ITEMS = 1;
+    // Icon 2 tab VE BANG PIXMAP (khong emoji/ky tu): khien vang-xanh (toc/he), tui do (trang bi)
+    private Texture shieldTex, bagTex;
+    private Rectangle tabRect(int t) {
+        return new Rectangle(PANEL_X + t * TAB_W, PANEL_TOP - TAB_H, TAB_W, TAB_H);
+    }
+    // Hinh hoc khay TRONG tab trang bi: luoi 4 cot, moi o 48px (icon 44 + vien 2)
+    static final float TRAY_X = PANEL_X + 8, TRAY_TOP = CONTENT_TOP, TRAY_SLOT = 48;
+    static final int TRAY_COLS = 4, TRAY_MAX = 36; // toi da 9 hang x 4 cot nam gon trong panel
     private Rectangle traySlotRect(int i) {
         int col = i % TRAY_COLS, row = i / TRAY_COLS;
         return new Rectangle(TRAY_X + col * TRAY_SLOT, TRAY_TOP - (row + 1) * TRAY_SLOT, TRAY_SLOT, TRAY_SLOT);
@@ -294,12 +313,8 @@ public class MatchScreen extends ScreenAdapter {
         playersBox.align(com.badlogic.gdx.utils.Align.top | com.badlogic.gdx.utils.Align.left);
         stage.addActor(playersBox);
 
-        // Mep trai duoi: nhan TRANG BI — khay do gio VE TAY hoan toan (luoi icon o drawItemTray,
-        // cham/keo xu ly trong BoardInput), khong con bang nut Scene2D nhu truoc.
-        Label invTitle = Ui.labelSmall(a, "TRANG BỊ", Ui.GOLD);
-        invTitle.setPosition(10, 454);
-        invTitle.setSize(120, 18);
-        stage.addActor(invTitle);
+        // Mep trai: PANEL HOP NHAT 2 tab (toc/he + trang bi) VE TAY hoan toan trong render
+        // (drawLeftPanel) — khong con nhan "TRANG BI" Scene2D rieng ben duoi chip toc/he.
 
         // SO DO DIEU KHIEN MOI (TFT Mobile): khong con cum nut chu nhat o 2 goc duoi.
         // Nut tron mua XP (duoi-trai) + nut tron vang/mo shop (duoi-phai) + nut reroll tron trong
@@ -517,16 +532,116 @@ public class MatchScreen extends ScreenAdapter {
         return null;
     }
 
-    // Khay trang bi VE TAY: moi mon do trong kho la 1 o icon rieng (icon ve tay that, khong
-    // con chu + vong tron mau). Kho trong -> KHONG ve khung o nao (kieu TFT: co do thi icon
-    // hien, khong co thi trong tron). O vua nhan do ghep xong loe sang vang.
-    private void drawItemTray(float now) {
+    // Icon tab TOC/HE: KHIEN ve bang Pixmap 48x48 — vo khien vang dong, long khien xanh
+    // dam, ngoi sao vang o tam. Tao 1 lan, loc Nearest nhu cac icon ve tay khac.
+    private Texture shieldTexture() {
+        if (shieldTex != null) return shieldTex;
+        Pixmap pm = new Pixmap(48, 48, Pixmap.Format.RGBA8888);
+        pm.setColor(0.98f, 0.78f, 0.30f, 1f);
+        pm.fillRectangle(10, 6, 28, 20);
+        pm.fillTriangle(10, 26, 38, 26, 24, 42);
+        pm.setColor(0.13f, 0.20f, 0.45f, 1f);
+        pm.fillRectangle(14, 10, 20, 15);
+        pm.fillTriangle(14, 25, 34, 25, 24, 38);
+        pm.setColor(1f, 0.85f, 0.35f, 1f);
+        pm.fillTriangle(24, 12, 29, 19, 19, 19);
+        pm.fillTriangle(24, 26, 29, 19, 19, 19);
+        shieldTex = new Texture(pm);
+        shieldTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        pm.dispose();
+        return shieldTex;
+    }
+
+    // Icon tab TRANG BI: TUI DO ve bang Pixmap 48x48 — co tui nau, day vang ngang, than
+    // tui nau da, dong xu vang o tam than. Tao 1 lan, loc Nearest.
+    private Texture bagTexture() {
+        if (bagTex != null) return bagTex;
+        Pixmap pm = new Pixmap(48, 48, Pixmap.Format.RGBA8888);
+        pm.setColor(0.35f, 0.22f, 0.10f, 1f);
+        pm.fillRectangle(19, 5, 10, 7);
+        pm.setColor(1f, 0.78f, 0.30f, 1f);
+        pm.fillRectangle(15, 12, 18, 5);
+        pm.setColor(0.55f, 0.36f, 0.18f, 1f);
+        pm.fillCircle(24, 31, 13);
+        pm.setColor(0.68f, 0.47f, 0.25f, 1f);
+        pm.fillCircle(19, 26, 5);
+        pm.setColor(1f, 0.80f, 0.30f, 1f);
+        pm.fillCircle(24, 32, 5);
+        pm.setColor(0.80f, 0.55f, 0.10f, 1f);
+        pm.fillCircle(24, 32, 2);
+        bagTex = new Texture(pm);
+        bagTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        pm.dispose();
+        return bagTex;
+    }
+
+    // So hang luoi do theo kho hien tai (toi thieu 2 hang nhu khay cu, toi da 9 hang de
+    // luoi khong bao gio vuot day panel an toan).
+    private int trayRows() {
+        int n = match.human().inventory.size();
+        return Math.min(9, Math.max(2, (n + TRAY_COLS - 1) / TRAY_COLS));
+    }
+
+    // Day panel: chieu cao than panel lay theo noi dung LON HON trong 2 tab (chip toc/he
+    // hoac luoi do + dong goi y) cong dem — chuyen tab KHONG lam panel doi kich thuoc.
+    // Chan duoi cung 126: dia cap/MUA XP (goc duoi-trai) ket thuc o y=112, giu dem >= 14.
+    private float panelBottom() {
+        float synH = synChips.size() * 28f + 16f;
+        float itemH = trayRows() * TRAY_SLOT + 54f; // luoi + 2 dong goi y + dem
+        float bodyH = Math.max(synH, itemH);
+        return Math.max(PANEL_TOP - TAB_H - bodyH, 126f);
+    }
+
+    // PANEL TRAI HOP NHAT (thay 2 khoi roi chip toc/he + khay do): nen toi ban trong suot
+    // + vien vang mong; thanh tab 2 icon o dinh (tab dang chon: nen vang mo + gach vang
+    // duoi chan + icon sang ro; tab con lai: nen toi + icon mo 50%); than panel ve theo tab.
+    private void drawLeftPanel(float now) {
+        Assets a = game.assets;
+        float bottom = panelBottom();
+        drawShadowRect(PANEL_X, bottom, PANEL_W, PANEL_TOP - bottom, 0.35f);
+        batch.setColor(0.05f, 0.04f, 0.11f, 0.78f);
+        batch.draw(a.whiteTex(), PANEL_X, bottom, PANEL_W, PANEL_TOP - bottom);
+        batch.setColor(Color.WHITE);
+        drawBorder(PANEL_X, bottom, PANEL_W, PANEL_TOP - bottom, new Color(1f, 0.85f, 0.3f, 0.35f), 2);
+        // Duong ke phan cach duoi thanh tab
+        batch.setColor(1f, 0.85f, 0.3f, 0.25f);
+        batch.draw(a.whiteTex(), PANEL_X + 2, PANEL_TOP - TAB_H - 2, PANEL_W - 4, 2);
+        batch.setColor(Color.WHITE);
+        for (int t = 0; t < 2; t++) {
+            Rectangle r = tabRect(t);
+            boolean sel = panelTab == t;
+            if (sel) {
+                batch.setColor(1f, 0.80f, 0.25f, 0.30f);
+                batch.draw(a.whiteTex(), r.x + 2, r.y + 2, r.width - 4, r.height - 2);
+            } else {
+                batch.setColor(0f, 0f, 0f, 0.30f);
+                batch.draw(a.whiteTex(), r.x + 2, r.y + 2, r.width - 4, r.height - 2);
+            }
+            batch.setColor(1, 1, 1, sel ? 1f : 0.5f);
+            batch.draw(t == TAB_TRAITS ? shieldTexture() : bagTexture(),
+                r.x + r.width / 2 - 13, r.y + r.height / 2 - 13, 26, 26);
+            batch.setColor(Color.WHITE);
+            if (sel) { // gach vang duoi chan tab dang chon (cung ngon ngu highlight vang)
+                batch.setColor(Ui.GOLD);
+                batch.draw(a.whiteTex(), r.x + 2, r.y, r.width - 4, 3);
+                batch.setColor(Color.WHITE);
+            }
+        }
+        if (panelTab == TAB_TRAITS) drawTraitTab(bottom);
+        else drawItemTab(now);
+    }
+
+    // Than tab TRANG BI: khay do VE TAY nhu cu — moi mon do trong kho la 1 o icon rieng
+    // (icon ve tay that, khong chu + vong tron mau). Kho trong -> KHONG ve khung o nao
+    // (kieu TFT: co do thi icon hien, khong co thi trong tron). O vua nhan do ghep xong
+    // loe sang vang. Dong goi y nam trong than panel, duoi luoi do.
+    private void drawItemTab(float now) {
         Assets a = game.assets;
         Match.PlayerState h = match.human();
-        int n = h.inventory.size();
-        int rows = Math.max(2, (n + TRAY_COLS - 1) / TRAY_COLS);
-        // Dang keo do: quang sang mo sau vung khay lam goi y vung tha/ghep (CHI hien luc keo,
-        // khong ve thuong truc nhu khung o cu).
+        int n = Math.min(h.inventory.size(), TRAY_MAX);
+        int rows = trayRows();
+        // Dang keo do: quang sang mo sau vung luoi lam goi y vung tha/ghep (CHI hien luc
+        // keo, khong ve thuong truc nhu khung o cu).
         if (itemDragActive && dragItemIndex >= 0) {
             float pulse = 0.10f + 0.045f * (float) Math.sin(now * 6);
             float gx = TRAY_X - 4, gy = TRAY_TOP - rows * TRAY_SLOT - 4;
@@ -549,7 +664,11 @@ public class MatchScreen extends ScreenAdapter {
                 drawBorder(r.x, r.y, 48, 48, new Color(1, 0.85f, 0.3f, Math.min(1, combineFlashT / 0.3f)), 3);
             }
         }
-        drawLeft(a.fontSmall, "Kéo để ghép/đeo • chạm xem chi tiết", 10, TRAY_TOP - rows * TRAY_SLOT - 8, Ui.TEXT_DIM);
+        // Goi y 2 dong: ban 1 dong dai ~281px TRAN khoi than panel (rong 192) — da do tren
+        // anh shot25 va tach lam 2 dong ngan nam gon trong panel.
+        float hy = TRAY_TOP - rows * TRAY_SLOT - 8;
+        drawLeft(a.fontSmall, "Kéo để ghép/đeo", PANEL_X + 8, hy, Ui.TEXT_DIM);
+        drawLeft(a.fontSmall, "Chạm xem chi tiết", PANEL_X + 8, hy - 16, Ui.TEXT_DIM);
     }
 
     // Bang thong tin do (cham vao icon trong khay): icon lon + ten + loai + chi so/mo ta;
@@ -1000,8 +1119,7 @@ public class MatchScreen extends ScreenAdapter {
         battleFx.drawGround(batch, circleTex); // vet dat theo he (chay/doc/bang) nam duoi chan tuong
         if (phase == Phase.BATTLE || phase == Phase.RESULT) drawBattleUnits(now);
         else { drawPlanningUnits(now); drawBench(now); if (shopOpen && phase == Phase.PLANNING) drawShop(); }
-        drawSynergyChips();
-        drawItemTray(now);
+        drawLeftPanel(now);
         drawMergeFx(now);
         // So sat thuong noi (phong Kanto: cam vang, chi mang to + "!")
         for (FloatText ft : floatTexts) {
@@ -1148,23 +1266,24 @@ public class MatchScreen extends ScreenAdapter {
         }
     }
 
-    // Chip toc/he doc mep trai: nen ban trong suot, bac kich hoat co thanh vang o mep chip.
-    private void drawSynergyChips() {
+    // Than tab TOC/HE: chip toc/he doc trong panel — nen ban trong suot, bac kich hoat
+    // co thanh vang o mep chip. Khong con dong tieu de "TOC / HE" rieng (tab khien o dinh
+    // panel da noi ro dang xem gi). Chip chay tu CONTENT_TOP xuong, dung truoc day panel.
+    private void drawTraitTab(float panelBottom) {
         Assets a = game.assets;
-        drawLeft(a.fontSmall, "TỘC / HỆ", 10, 656, Ui.GOLD);
-        float top = 632;
+        float top = CONTENT_TOP;
         for (String[] chip : synChips) {
             boolean active = "1".equals(chip[1]);
             layout.setText(a.fontSmall, chip[0]);
-            float w = Math.min(200, layout.width + 20);
-            drawShadowRect(10, top - 24, w, 24, 0.32f);
+            float w = Math.min(PANEL_W - 16, layout.width + 20);
+            if (top - 24 < panelBottom + 6) break; // chip khong duoc cham day panel
+            drawShadowRect(PANEL_X + 8, top - 24, w, 24, 0.32f);
             batch.setColor(0.07f, 0.05f, 0.15f, active ? 0.78f : 0.60f);
-            batch.draw(a.whiteTex(), 10, top - 24, w, 24);
-            if (active) { batch.setColor(Ui.GOLD); batch.draw(a.whiteTex(), 10, top - 24, 3, 24); }
+            batch.draw(a.whiteTex(), PANEL_X + 8, top - 24, w, 24);
+            if (active) { batch.setColor(Ui.GOLD); batch.draw(a.whiteTex(), PANEL_X + 8, top - 24, 3, 24); }
             batch.setColor(Color.WHITE);
-            drawLeft(a.fontSmall, chip[0], 19, top - 7, active ? Color.WHITE : Ui.TEXT_DIM);
+            drawLeft(a.fontSmall, chip[0], PANEL_X + 17, top - 7, active ? Color.WHITE : Ui.TEXT_DIM);
             top -= 28;
-            if (top < 480) break; // khong lan xuong vung trang bi
         }
     }
 
@@ -2341,6 +2460,7 @@ public class MatchScreen extends ScreenAdapter {
     //    vung trong -> dong the.
     // 3) Chua co the: cham trung tuong (bat ky phe nao) -> mo the cua tuong do.
     private boolean battlePress(float x, float y) {
+        if (pressPanelTab(x, y)) return true; // dang dau van chuyen tab panel trai duoc
         if (itemInfoId != null) {
             if (INFO_CLOSE.contains(x, y) || !INFO_PANEL.contains(x, y)) { itemInfoId = null; game.sound().sfx("click"); }
             return true;
@@ -2372,7 +2492,21 @@ public class MatchScreen extends ScreenAdapter {
     // 4) Tuong o bench/ban -> UNG VIEN KEO (cham thuong se chon o touchUp, keo qua nguong thi keo that).
     // 5) Khong cham gi ca (vung san trong) -> neu shop dang mo thi DONG SHOP (dung y user:
     //    "bam vao man hinh trong ben duoi (ben tren shop) la tat shop"), con khong thi bo chon.
+    // Bam vao thanh tab cua panel trai -> chuyen tab (tra ve true neu cham trung vung
+    // tab). Xu ly TRUOC moi thao tac khac o ca planningPress lan battlePress: vung tab
+    // (y 628..668, x 8..216) khong trung shop/dia tron/the tuong/ban co nao ca.
+    private boolean pressPanelTab(float x, float y) {
+        for (int t = 0; t < 2; t++) {
+            if (tabRect(t).contains(x, y)) {
+                if (panelTab != t) { panelTab = t; game.sound().sfx("click"); }
+                return true;
+            }
+        }
+        return false;
+    }
+
     private boolean planningPress(float x, float y) {
+        if (pressPanelTab(x, y)) return true; // chuyen tab TOC/HE <-> TRANG BI
         Match.PlayerState h = match.human();
         if (shopOpen) {
             for (int i = 0; i < 5; i++) {
@@ -2415,20 +2549,28 @@ public class MatchScreen extends ScreenAdapter {
         // Bang thong tin do dang mo: cham nut X hoac cham ra ngoai bang = dong; cham vao icon
         // khac trong khay = xem mon do. Bang khong chan keo-tha tuong (dong xong moi thao tac tiep).
         if (itemInfoId != null) {
-            for (int i = 0; i < h.inventory.size(); i++) {
-                if (traySlotRect(i).contains(x, y)) { itemInfoId = h.inventory.get(i); game.sound().sfx("click"); return true; }
+            // Doi mon dang xem bang cach cham icon khac trong khay — chi khi tab TRANG BI
+            // dang mo (icon khay chi hien o tab do).
+            if (panelTab == TAB_ITEMS) {
+                for (int i = 0; i < Math.min(h.inventory.size(), TRAY_MAX); i++) {
+                    if (traySlotRect(i).contains(x, y)) { itemInfoId = h.inventory.get(i); game.sound().sfx("click"); return true; }
+                }
             }
             itemInfoId = null;
             game.sound().sfx("click");
             return true;
         }
-        // Khay trang bi: cham xuong tren icon = ung vien KEO DO (touchUp phan biet cham thuong
-        // -> mo bang thong tin, keo qua nguong -> keo do ghep/deo). Khay khong trung vung ban/bench.
-        for (int i = 0; i < h.inventory.size(); i++) {
-            if (traySlotRect(i).contains(x, y)) {
-                dragItemIndex = i; itemDragActive = false;
-                pressX = dragX = x; pressY = dragY = y;
-                return true;
+        // Khay trang bi — CHI khi tab TRANG BI dang mo (dung ban chat tab: do chi thao
+        // tac trong tab cua no; tab TOC/HE mo thi vung nay la chip toc/he, khong an do).
+        // Cham xuong tren icon = ung vien KEO DO (touchUp phan biet cham thuong -> mo bang
+        // thong tin, keo qua nguong -> keo do ghep/deo). Khay khong trung vung ban/bench.
+        if (panelTab == TAB_ITEMS) {
+            for (int i = 0; i < Math.min(h.inventory.size(), TRAY_MAX); i++) {
+                if (traySlotRect(i).contains(x, y)) {
+                    dragItemIndex = i; itemDragActive = false;
+                    pressX = dragX = x; pressY = dragY = y;
+                    return true;
+                }
             }
         }
         for (int i = 0; i < 9; i++) {
@@ -2526,7 +2668,7 @@ public class MatchScreen extends ScreenAdapter {
         Match.PlayerState h = match.human();
         if (dragItemIndex < 0 || dragItemIndex >= h.inventory.size()) return;
         String itemId = h.inventory.get(dragItemIndex);
-        for (int i = 0; i < h.inventory.size(); i++) {
+        for (int i = 0; i < Math.min(h.inventory.size(), TRAY_MAX); i++) {
             if (i == dragItemIndex) continue;
             if (traySlotRect(i).contains(dragX, dragY)) {
                 String other = h.inventory.get(i);
@@ -2615,7 +2757,7 @@ public class MatchScreen extends ScreenAdapter {
                 String dragId = h.inventory.get(dragItemIndex);
                 // Phan hoi kieu TFT: MOI thanh phan trong khay ghep duoc voi mon dang keo deu
                 // phat sang vien xanh nhip — khong chi o dang di chuot qua.
-                for (int i = 0; i < h.inventory.size(); i++) {
+                for (int i = 0; i < Math.min(h.inventory.size(), TRAY_MAX); i++) {
                     if (i == dragItemIndex) continue;
                     if (GameData.combineResult(dragId, h.inventory.get(i)) != null) {
                         Rectangle r = traySlotRect(i);
@@ -2624,7 +2766,7 @@ public class MatchScreen extends ScreenAdapter {
                     }
                 }
                 boolean overSlot = false;
-                for (int i = 0; i < h.inventory.size(); i++) {
+                for (int i = 0; i < Math.min(h.inventory.size(), TRAY_MAX); i++) {
                     if (i == dragItemIndex) continue;
                     if (traySlotRect(i).contains(dragX, dragY)) {
                         Rectangle r = traySlotRect(i);
@@ -2765,5 +2907,7 @@ public class MatchScreen extends ScreenAdapter {
         if (circleTex != null) circleTex.dispose();
         if (ringTex != null) ringTex.dispose();
         if (discTex != null) discTex.dispose();
+        if (shieldTex != null) shieldTex.dispose();
+        if (bagTex != null) bagTex.dispose();
     }
 }
