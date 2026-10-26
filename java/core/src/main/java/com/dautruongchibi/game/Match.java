@@ -472,6 +472,30 @@ public final class Match {
         public int goldGained = 0; // vang da cong vao kho sau vong (chi de HIEN thi o the ket qua, khong doi so lieu)
         public String droppedItem = null; // trang bi roi tu tran PvE thang (popup mo qua)
         public String summary = "";
+        // KET LIEU (chi PvP): ten doi thu bi CHINH vong nay cua nguoi choi ha guc han
+        // (mau ve 0 -> bi loai khoi tran). "" = khong co ai bi loai boi vong nay.
+        public String eliminatedOpponent = "";
+        // KET LIEU (chi PvP): nguoi choi bi loai o vong nay (tran cuoi cua minh).
+        public boolean humanEliminated = false;
+    }
+
+    // BOOM (hieu ung va cham sau moi vong, kieu TFT): chi chay khi ben thang CON tuong
+    // song de ban tia sao. Ca 2 ben cung bi quet sach (winner=0 chi nho thang tieu chi
+    // phu tong mau khi het gio) = hoa -> khong Boom. Logic thuan de kiem tra headless.
+    public static boolean boomFires(FightOutcome out) {
+        if (out == null || out.result == null) return false;
+        int winSurvivors = out.humanWon ? out.result.survivors : out.result.enemySurvivors;
+        return winSurvivors > 0;
+    }
+
+    // KET LIEU: 0 = khong ai bi loai boi vong nay; 1 = minh loai doi thu (chu lon
+    // "KET LIEU!"); 2 = chinh minh bi loai ("BAN BI LOAI"). PvE khong bao gio co
+    // (2 truong tren chi duoc gan trong nhanh PvP cua fight()).
+    public static int finisherKind(FightOutcome out) {
+        if (out == null) return 0;
+        if (out.humanEliminated) return 2;
+        if (out.eliminatedOpponent != null && !out.eliminatedOpponent.isEmpty()) return 1;
+        return 0;
     }
 
     public FightOutcome fight() {
@@ -533,6 +557,13 @@ public final class Match {
             }
         }
         resolveEliminations(aliveBefore, hpBefore);
+
+        // Du lieu KET LIEU cho lop giao dien — noi thang vao du lieu loai san co:
+        // oppBot bi loai khoi vong bot-dau-bot (vong do chi tru mau cua no khi nguoi
+        // choi thang) nen !alive ngay sau resolveEliminations = bi chinh vong nay
+        // ha guc; nguoi choi con song o dau fight() ma chet o day = bi loai vong nay.
+        if (oppBot != null && !oppBot.alive) out.eliminatedOpponent = oppBot.name;
+        if (!h.alive) out.humanEliminated = true;
 
         if (h.alive && aliveCount() <= 1) {
             over = true; humanPlacement = 1; h.placement = 1;

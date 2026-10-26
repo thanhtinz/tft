@@ -370,6 +370,30 @@ kiểm chứng headless mục 19–21):
   không đụng gameplay. Kiểm chứng bằng mode chụp `arenaprofile` / `arenasunset` / `arenawinstreak` /
   `arenalosestreak` / `arenalevel6` / `arenalevel8` / `arenaclick` trong ScreenshotMain.
 
+### Kết liễu & Boom — Finisher & Boom (đợt 2026-10-26)
+
+- **Boom — hiệu ứng va chạm sau mỗi vòng** (`MatchScreen.startBoom` / `drawBoom`, điều kiện thuần ở
+  `Match.boomFires`): khi vòng đấu kết thúc và vào cửa sổ announcer, các tướng **còn sống của bên thắng**
+  (tối đa 8 tia, chọn đều khắp đội hình từ khung hình cuối của trận) bắn loạt **tia sao vàng bay vòng cung**
+  sang **nhà của tinh linh bên thua** — mình thắng: sang rìa sân địch (282,556); mình thua: tướng địch bắn
+  vào tinh linh của mình (282,252), đồng bộ lúc nó ngã xụi. Tia bay 0,5s, lệch nhịp 0,05s/tia (cả loạt
+  ~0,85s), chạm đích nổ chùm sao + vòng lan; sfx `sparkle` lúc bắn, `burst` ở tia chạm đầu tiên. Chạy gọn
+  trong cửa sổ announcer 1,5s sẵn có — **không kéo dài pha**. Cả 2 bên cùng bị quét sạch (thắng chỉ nhờ
+  tiêu chí phụ tổng máu khi hết giờ — coi như hòa) → không Boom. Áp cho cả PvP lẫn PvE (Chiến Dịch /
+  Sóng Quái không có tinh linh địch: sao vẫn nổ ở rìa sân địch).
+- **Kết liễu — Finisher** (dữ liệu: `Match.FightOutcome.eliminatedOpponent` / `humanEliminated`, phân loại
+  thuần `Match.finisherKind`): nối thẳng vào dữ liệu loại sẵn có của `Match.fight()` nhánh PvP — đối thủ
+  của vòng (`oppBot`, vốn bị loại khỏi vòng bot-đấu-bot nên chỉ nhận sát thương từ trận của người chơi)
+  chết sau `resolveEliminations` → `eliminatedOpponent`; người chơi chết ở vòng này → `humanEliminated`
+  (kể cả chết ở vòng PvE trong trận PvP). Hoạt cảnh **1,8 giây** phủ toàn màn TRƯỚC thẻ kết quả
+  (`MatchScreen.drawFinisher`): màn tối dần (scrim), chùm sao bùng lớn ở giữa + rung nhẹ giảm dần, chữ lớn
+  **"KẾT LIỄU!"** (vàng, dòng phụ là tên nạn nhân) hoặc **"BẠN BỊ LOẠI"** (đỏ, dòng phụ là hạng dừng lại) —
+  chữ đo bằng GlyphLayout ở đúng scale vẽ, tự hạ scale nếu vượt 1120px; sfx `burst` cộng tiếng thắng/thua
+  sẵn có. Tổng cửa sổ trước thẻ chỉ dài hơn ~0,3s so với announcer thường; chạm màn hình để bỏ qua hoạt
+  cảnh sang thẻ. PvE (Chiến Dịch / Sóng Quái) không có "người chơi bị loại" → không kết liễu, chỉ Boom.
+  Kiểm chứng headless mục 26 (điều kiện thuần + bất biến 2 chiều trên trận PvP trọn vẹn) và mode chụp
+  `boomwin` / `boomlose` / `finisherwin` / `finisherlose` / `finishercard` trong ScreenshotMain.
+
 ## Cách build & chạy
 
 > **Lưu ý bản trên GitHub:** các file nhị phân (PNG sprite/scene, font TTF, `gradle-wrapper.jar`) được lưu
@@ -381,7 +405,7 @@ Máy có mạng bình thường (Gradle tự tải dependency từ Maven Central
 ```bash
 cd java
 ./gradlew :desktop:run            # chay ban desktop
-./gradlew :desktop:verifyHeadless # chay bo kiem tra logic (phai dat 22 PASS / 0 FAIL)
+./gradlew :desktop:verifyHeadless # chay bo kiem tra logic (phai dat 26 PASS / 0 FAIL)
 ./gradlew :web:buildWeb           # dung ban web TeaVM -> web/build/webapp (index.html + game.js + assets)
 ./gradlew :android:assembleDebug  # build APK debug (can Android SDK; module chi kich hoat khi co
                                   # local.properties chua sdk.dir hoac bien ANDROID_HOME)

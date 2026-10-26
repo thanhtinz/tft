@@ -450,6 +450,59 @@ public class HeadlessMain {
         check("San dau: bot PvP gan theme hop le, ho so luu/doc lua chon, khoa sai ve 'auto', theme co dinh ghi de forStage",
             arenaChoiceOk, "bot dau=" + arm.players.get(1).arenaId + ", doc lai=" + aback.arenaId);
 
+        // 26) Ket lieu + Boom: dieu kien THUAN tren FightOutcome gia lap (Boom chi chay
+        // khi ben thang con tuong song — ca 2 ben quet sach = hoa thi khong; finisherKind
+        // phan loai dung) + BAT BIEN 2 CHIEU khi choi tran PvP tron ven: eliminatedOpponent
+        // phai dung bang "doi thu cua vong (opponentName) chet o vong nay VA nguoi choi
+        // thang vong"; humanEliminated phai dung bang "nguoi choi chet o vong nay".
+        Match.FightOutcome fake = new Match.FightOutcome();
+        Engine.BattleResult fr = new Engine.BattleResult();
+        fr.survivors = 3; fr.enemySurvivors = 0;
+        fake.result = fr; fake.humanWon = true;
+        boolean predOk = Match.boomFires(fake) && Match.finisherKind(fake) == 0;
+        fr.survivors = 0; fr.enemySurvivors = 0;
+        predOk = predOk && !Match.boomFires(fake); // hoa (quet sach ca 2 ben) -> khong Boom
+        fr.survivors = 0; fr.enemySurvivors = 2; fake.humanWon = false;
+        predOk = predOk && Match.boomFires(fake); // thua nhung dich con 2 tuong song -> dich ban Boom vao minh
+        fake.eliminatedOpponent = "Bot A";
+        predOk = predOk && Match.finisherKind(fake) == 1;
+        fake.humanEliminated = true;
+        predOk = predOk && Match.finisherKind(fake) == 2;
+        predOk = predOk && !Match.boomFires(null) && Match.finisherKind(null) == 0 && !Match.boomFires(new Match.FightOutcome());
+        boolean invOk = true; int elimRounds = 0, humanDeathRounds = 0;
+        StringBuilder invFail = new StringBuilder();
+        for (long s : new long[]{5, 21}) {
+            Match m = Match.startPvp(Match.Mode.PVP_RANKED, s, "FinTest");
+            int guard = 0;
+            while (!m.over && guard++ < 60) {
+                m.autoPlan();
+                java.util.Map<String, Boolean> aliveBefore = new java.util.HashMap<>();
+                for (Match.PlayerState p : m.players) aliveBefore.put(p.name, p.alive);
+                Match.FightOutcome fo = m.fight();
+                boolean oppDied = false;
+                for (Match.PlayerState p : m.players) {
+                    Boolean was = aliveBefore.get(p.name);
+                    if (was != null && was && !p.alive && p.name.equals(fo.opponentName)) oppDied = true;
+                }
+                boolean expectElim = oppDied && fo.humanWon && fo.result != null;
+                boolean gotElim = !fo.eliminatedOpponent.isEmpty() && fo.eliminatedOpponent.equals(fo.opponentName);
+                if (expectElim != gotElim) { invOk = false; invFail.append("seed ").append(s).append(" vong ").append(m.round).append(": expectElim=").append(expectElim).append(" got='").append(fo.eliminatedOpponent).append("'; "); }
+                if (gotElim) elimRounds++;
+                Boolean hWas = aliveBefore.get(m.human().name);
+                boolean humanDied = hWas != null && hWas && !m.human().alive;
+                if (humanDied != fo.humanEliminated) { invOk = false; invFail.append("seed ").append(s).append(": humanDied=").append(humanDied).append(" co=").append(fo.humanEliminated).append("; "); }
+                if (fo.humanEliminated) humanDeathRounds++;
+                // Boom khong bao gio chay nguoc: thang thi ben minh phai con tuong song
+                if (fo.result != null && Match.boomFires(fo)) {
+                    int ws = fo.humanWon ? fo.result.survivors : fo.result.enemySurvivors;
+                    if (ws <= 0) invOk = false;
+                }
+            }
+        }
+        check("Ket lieu + Boom: dieu kien thuan dung (hoa khong Boom) + truong loai khop bat bien 2 chieu tren tran PvP tron ven",
+            predOk && invOk,
+            "pred=" + predOk + ", so vong loai doi thu quan sat=" + elimRounds + ", vong minh bi loai=" + humanDeathRounds + (invOk ? "" : "; loi: " + invFail));
+
         System.out.println("=== TONG KET: " + pass + " PASS / " + fail + " FAIL ===");
         if (fail > 0) { System.out.println("Muc fail: " + failures); System.exit(1); }
     }

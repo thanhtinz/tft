@@ -228,6 +228,31 @@ public class MatchScreen extends ScreenAdapter {
     private final Map<String, Float> lastHeavyHitAt = new HashMap<>();
     private final Map<String, Engine.FightUnit> unitIndex = new HashMap<>();
     private float announceT = 0; // >0: dang hien chu ho lon giua san o pha RESULT
+    // ===== BOOM + KET LIEU (kieu TFT) =====
+    // BOOM: sau MOI vong phan thang thua, tuong con song cua ben thang ban loat TIA
+    // SAO sang nha cua TINH LINH ben thua (minh thang -> ria san dich 282,556; minh
+    // thua -> nha minh 282,252, dong bo luc tinh linh nga xui). Chay gon trong cua
+    // so announcer 1,5s san co (tia bay 0,5s, lech nhip 0,05s/tia, no 0,4s — ca
+    // loat ~1,25s) nen KHONG keo dai pha. Dieu kien thuan o Match.boomFires.
+    static final class BoomShot {
+        float sx, sy, tx, ty, delay, dur, seed; boolean arrived;
+        BoomShot(float sx, float sy, float tx, float ty, float delay, float dur, float seed) {
+            this.sx = sx; this.sy = sy; this.tx = tx; this.ty = ty;
+            this.delay = delay; this.dur = dur; this.seed = seed;
+        }
+    }
+    static final class BoomBurst { float x, y, ttl, seed; BoomBurst(float x, float y, float seed) { this.x = x; this.y = y; this.seed = seed; } }
+    private final List<BoomShot> boomShots = new ArrayList<>();
+    private final List<BoomBurst> boomBursts = new ArrayList<>();
+    private float boomT = -1;        // >=0: Boom dang chay (giay ke tu tia dau)
+    private float boomEndT = 0;      // thoi diem Boom ket thuc han (tia cuoi + no xong)
+    private boolean boomImpactSfx = false;
+    // KET LIEU: hoat canh ~1,8s phu toan man chi khi co nguoi bi LOAI HAN o vong nay
+    // (Match.finisherKind): scrim toi dan + chum sao bung lon + chu "KET LIEU!" /
+    // "BAN BI LOAI", chay TRUOC the ket qua (ghi de len announcer, tong cua so chi
+    // dai hon ~0,3s). finisherT dem nguoc nhu announceT; cham man hinh = bo qua.
+    static final float FINISHER_DUR = 1.8f;
+    private float finisherT = 0;     // >0: hoat canh ket lieu dang chay
     private String battleArenaKey = null; // khoa san chot tai startBattle (match.round da tang sau fight())
     private String popupItemId = null;
     private float popupT = 0;
@@ -1326,6 +1351,20 @@ public class MatchScreen extends ScreenAdapter {
         if (gridWanted && gridFade < 1f) gridFade = Math.min(1f, gridFade + delta / 0.15f);
         else if (!gridWanted && gridFade > 0f) gridFade = Math.max(0f, gridFade - delta / 0.15f);
         if (announceT > 0) announceT -= delta;
+        if (finisherT > 0) finisherT -= delta;
+        // BOOM: tien trinh tia sao + chum no tai dich (chi chay o pha RESULT)
+        if (boomT >= 0) {
+            boomT += delta;
+            for (BoomShot s : boomShots) {
+                if (!s.arrived && boomT >= s.delay + s.dur) {
+                    s.arrived = true;
+                    boomBursts.add(new BoomBurst(s.tx, s.ty, s.seed));
+                    if (!boomImpactSfx) { boomImpactSfx = true; game.sound().sfx("burst"); }
+                }
+            }
+            for (int i = boomBursts.size() - 1; i >= 0; i--) { BoomBurst b = boomBursts.get(i); b.ttl += delta; if (b.ttl > 0.4f) boomBursts.remove(i); }
+            if (boomT > boomEndT) { boomT = -1; boomShots.clear(); boomBursts.clear(); }
+        }
         // The tran chi song trong pha BATTLE: roi pha la tu dong (ke ca bang thong tin do
         // mo tu the tran — tranh de sot sang pha ket qua/chuan bi cua vong sau).
         if (phase != Phase.BATTLE) { battleCardUid = null; if (phase == Phase.RESULT || phase == Phase.OVER) itemInfoId = null; }
@@ -1372,11 +1411,21 @@ public class MatchScreen extends ScreenAdapter {
                     legendT = 0;
                 }
                 game.sound().sfx(outcome.humanWon ? "win" : "lose");
+                // BOOM (tia sao ben thang -> tinh linh ben thua) + KET LIEU (neu vong
+                // nay co nguoi bi loai han): ca hai chay trong cua so announcer nay,
+                // truoc the ket qua — khong doi ket qua tran, thuan hieu ung.
+                startBoom();
+                if (Match.finisherKind(outcome) != 0) {
+                    finisherT = FINISHER_DUR;
+                    game.sound().sfx("burst");
+                }
             }
         }
         // Pha ket qua: sau announcer, tu dong chuyen tiep sau ~4 giay (cham man hinh = di ngay,
         // xu ly o BoardInput nhanh RESULT). Overlay ket thuc tran (OVER) giu nguyen nut bam.
-        if (phase == Phase.RESULT && announceT <= 0) {
+        // Hoat canh KET LIEU (neu co) chay truoc: resultT chi dem khi ca announcer lan
+        // ket lieu da xong, de the ket qua khong hien de len hoat canh.
+        if (phase == Phase.RESULT && announceT <= 0 && finisherT <= 0) {
             resultT += delta;
             if (resultT >= 4.0f) advanceFromResult();
         }
@@ -1428,6 +1477,7 @@ public class MatchScreen extends ScreenAdapter {
         }
         drawProjectiles();
         drawPows();
+        drawBoom(); // tia sao Boom o cua so ket qua (duoi overlay announcer/ket lieu)
         battleFx.draw(batch, a, circleTex, ringTex); // hieu ung theo he: beam/set/vom khien/particle
         batch.end();
         // (Bong do rieng cua khoi danh sach nguoi choi da bo: panel phai hop nhat tu
@@ -2361,6 +2411,128 @@ public class MatchScreen extends ScreenAdapter {
         drawCentered(a.font, sub, 640, 306, Color.WHITE);
     }
 
+    // ================= BOOM + KET LIEU =================
+    // Khoi dong Boom khi tran vua ket thuc: nguoi ban = tuong CON SONG cua ben thang
+    // o KHUNG HINH CUOI (vi tri quy ve tam o bang cellCenter nhu drawBattleUnits),
+    // toi da 8 tia chon deu khap doi hinh; dich = nha cua tinh linh BEN THUA.
+    private void startBoom() {
+        boomShots.clear(); boomBursts.clear(); boomT = -1; boomImpactSfx = false;
+        if (!Match.boomFires(outcome)) return;
+        List<Engine.BattleFrame> frames = outcome.result.frames;
+        if (frames.isEmpty()) return;
+        Engine.BattleFrame last = frames.get(frames.size() - 1);
+        int winTeam = outcome.humanWon ? 0 : 1;
+        // Minh thang -> ban sang ria san dich (PvE khong co tinh linh dich: sao van
+        // no o ria dich); minh thua -> ban vao nha minh, dong bo luc tinh linh nga.
+        float tx = LEGEND_HOME_X, ty = outcome.humanWon ? LEGEND_EHOME_Y : LEGEND_HOME_Y;
+        List<Engine.FightUnit> shooters = new ArrayList<>();
+        for (Engine.FightUnit u : last.units) if (u.alive && u.team == winTeam) shooters.add(u);
+        int n = Math.min(shooters.size(), 8);
+        float maxEnd = 0;
+        for (int i = 0; i < n; i++) {
+            Engine.FightUnit u = shooters.get(n == shooters.size() ? i : (int) ((long) i * shooters.size() / n));
+            float[] p = cellCenter(u.x, u.y);
+            float delay = i * 0.05f;
+            boomShots.add(new BoomShot(p[0], p[1] + 16, tx, ty, delay, 0.5f, i * 1.37f));
+            maxEnd = delay + 0.5f;
+        }
+        if (boomShots.isEmpty()) return;
+        boomEndT = maxEnd + 0.45f; // tia cuoi cham dich + chum no chay het
+        boomT = 0;
+        game.sound().sfx("sparkle");
+    }
+
+    // Ve Boom: tia sao vang bay theo duong cong bezier (diem dieu khien day len 90px
+    // o trung diem) kem vet sang mo phia sau; cham dich thi no chum sao + vong lan.
+    private void drawBoom() {
+        if (boomT < 0) return;
+        Assets a = game.assets;
+        for (BoomShot s : boomShots) {
+            if (s.arrived) continue;
+            float k = (boomT - s.delay) / s.dur;
+            if (k < 0) continue;
+            k = Math.min(1, k);
+            float mx = (s.sx + s.tx) / 2, my = (s.sy + s.ty) / 2 + 90;
+            for (int g = 2; g >= 1; g--) { // vet sang: 2 bong mo vang phia sau tia
+                float kg = k - g * 0.07f;
+                if (kg < 0) continue;
+                float gx = (1 - kg) * (1 - kg) * s.sx + 2 * (1 - kg) * kg * mx + kg * kg * s.tx;
+                float gy = (1 - kg) * (1 - kg) * s.sy + 2 * (1 - kg) * kg * my + kg * kg * s.ty;
+                batch.setColor(1f, 0.85f, 0.3f, g == 2 ? 0.16f : 0.26f);
+                float gr = g == 2 ? 9f : 6.5f;
+                batch.draw(circleTex, gx - gr, gy - gr, gr * 2, gr * 2);
+            }
+            float x = (1 - k) * (1 - k) * s.sx + 2 * (1 - k) * k * mx + k * k * s.tx;
+            float y = (1 - k) * (1 - k) * s.sy + 2 * (1 - k) * k * my + k * k * s.ty;
+            batch.setColor(1f, 0.88f, 0.35f, 0.98f);
+            batch.draw(a.icon("star"), x - 9, y - 9, 18, 18);
+        }
+        for (BoomBurst b : boomBursts) {
+            float prog = Math.min(1, b.ttl / 0.4f);
+            float alpha = 1 - prog;
+            float rr = 10 + prog * 46;
+            batch.setColor(1f, 0.85f, 0.3f, alpha * 0.8f);
+            batch.draw(ringTex, b.x - rr, b.y - rr, rr * 2, rr * 2);
+            for (int i = 0; i < 6; i++) {
+                double ang = b.seed + i * (Math.PI * 2 / 6);
+                float d = 8 + prog * 34;
+                float sx = b.x + (float) Math.cos(ang) * d, sy = b.y + (float) Math.sin(ang) * d;
+                float sz = 13 * (1 - prog * 0.5f);
+                batch.setColor(1f, 0.9f, 0.45f, alpha);
+                batch.draw(a.icon("star"), sx - sz / 2, sy - sz / 2, sz, sz);
+            }
+        }
+        batch.setColor(Color.WHITE);
+    }
+
+    // Hoat canh KET LIEU (chi PvP, khi co nguoi bi loai han o vong nay): man toi dan
+    // (scrim vao nhanh, mo dan 0,3s cuoi), chum sao bung lon o giua kem rung nhe giam
+    // dan, chu lon phong qua 1.0 ve ~1.5 nhu ngon ngu announcer. Chu duoc DO bang
+    // GlyphLayout o dung scale se ve va tu ha scale neu vuot 1120px — khong tran vien.
+    private void drawFinisher() {
+        Assets a = game.assets;
+        int kind = Match.finisherKind(outcome);
+        float p = 1 - finisherT / FINISHER_DUR; // 0 -> 1
+        float scrim = p < 0.14f ? p / 0.14f : (finisherT < 0.3f ? Math.max(0, finisherT / 0.3f) : 1f);
+        batch.setColor(0.02f, 0.02f, 0.08f, 0.78f * scrim);
+        batch.draw(a.whiteTex(), 0, 0, 1280, 720);
+        batch.setColor(Color.WHITE);
+        float shake = (1 - p) * 3f;
+        float cx = 640 + (float) Math.sin(finisherT * 90f) * shake;
+        float cy = 440 + (float) Math.cos(finisherT * 76f) * shake * 0.7f;
+        float burstP = Math.min(1, p / 0.45f);
+        if (a.glowTex() != null) {
+            float gr = 150 + burstP * 130;
+            batch.setColor(1f, 0.84f, 0.3f, 0.35f * (1 - burstP * 0.5f) * scrim);
+            batch.draw(a.glowTex(), cx - gr, cy - gr, gr * 2, gr * 2);
+        }
+        float rr = 20 + burstP * 190;
+        batch.setColor(1f, 0.85f, 0.3f, Math.max(0.001f, 0.85f * (1 - burstP) * scrim));
+        batch.draw(ringTex, cx - rr, cy - rr * 0.62f, rr * 2, rr * 1.24f);
+        for (int i = 0; i < 10; i++) {
+            double ang = i * (Math.PI * 2 / 10) + 0.31;
+            float d = 26 + burstP * (150 + (i % 3) * 34);
+            float sx = cx + (float) Math.cos(ang) * d, sy = cy + (float) Math.sin(ang) * d * 0.62f;
+            float sz = 22 * (1 - burstP * 0.45f);
+            batch.setColor(1f, 0.9f, 0.45f, (1 - burstP * 0.6f) * scrim);
+            batch.draw(a.icon("star"), sx - sz / 2, sy - sz / 2, sz, sz);
+        }
+        batch.setColor(Color.WHITE);
+        float scale = p < 0.18f ? 0.5f + 1.05f * (p / 0.18f) * 1.06f : 1.55f - 0.05f * Math.min(1, (p - 0.18f) / 0.3f);
+        float alpha = finisherT < 0.3f ? Math.max(0, finisherT / 0.3f) : 1f;
+        String title = kind == 1 ? "KẾT LIỄU!" : "BẠN BỊ LOẠI";
+        Color tc = kind == 1 ? new Color(1f, 0.84f, 0.30f, alpha) : new Color(1f, 0.42f, 0.42f, alpha);
+        a.fontTitle.getData().setScale(scale);
+        layout.setText(a.fontTitle, title);
+        if (layout.width > 1120) a.fontTitle.getData().setScale(scale * 1120f / layout.width);
+        drawCentered(a.fontTitle, title, cx, 486, tc);
+        a.fontTitle.getData().setScale(1f);
+        String sub = kind == 1
+            ? outcome.eliminatedOpponent + " bị loại khỏi trận đấu!"
+            : "Bạn dừng lại ở hạng " + match.humanPlacement + " của trận này.";
+        drawCentered(a.fontBig, sub, cx, 372, new Color(1, 1, 1, alpha));
+    }
+
     // Cat ten cho bang sat thuong: hau to sao " (N sao)" LUON nguyen ven. Neu ten + hau
     // to vuot be rong cot thi noi cot truoc (xem drawDamageColumn), van khong vua thi cat
     // phan TEN kem "..." o ngay truoc hau to — khong bao gio cat giua hau to nhu ban cu
@@ -2757,6 +2929,12 @@ public class MatchScreen extends ScreenAdapter {
     private void drawResultOverlay() {
         Assets a = game.assets;
         batch.begin();
+        if (finisherT > 0 && outcome != null) {
+            // Hoat canh KET LIEU dang chay: phu toan man, the ket qua phai cho
+            drawFinisher();
+            batch.end();
+            return;
+        }
         if (announceT > 0 && outcome != null) {
             // Announcer dang chay: chi hien chu ho + banner nho tren nen san (khong che the)
             drawAnnouncer();
@@ -2881,6 +3059,7 @@ public class MatchScreen extends ScreenAdapter {
         shopOpen = false; // vao giao tranh: lop shop tu dong (nut Toc do da bo — speed chi con la bien noi bo cho cong cu chup)
         playT = 0; firedIdx = 0; speed = 1;
         floatTexts.clear(); glows.clear(); projectiles.clear(); pows.clear(); battleFx.clear();
+        boomT = -1; boomShots.clear(); boomBursts.clear(); finisherT = 0; // Boom/ket lieu chi thuoc ve vong vua dau
         lastAttackAt.clear(); lastAttackTarget.clear(); lastHitAt.clear(); lastScreenPos.clear(); lastHeavyHitAt.clear();
         // Chi muc don vi toan tran (gom ca golem trieu hoi xuat hien giua tran) cho nguong don nang 15%
         unitIndex.clear();
@@ -2901,6 +3080,7 @@ public class MatchScreen extends ScreenAdapter {
     }
 
     private void advanceFromResult() {
+        finisherT = 0; boomT = -1; boomShots.clear(); boomBursts.clear(); // don sach hieu ung ket qua vong cu
         // Tinh linh dung day ve nha (het an mung/xui/doan nhat cau), san sang pha sau
         legendState = LegendState.IDLE; legendT = 0; legendIdleWait = 1.4f;
         legendX = LEGEND_HOME_X; legendY = LEGEND_HOME_Y;
@@ -2977,7 +3157,12 @@ public class MatchScreen extends ScreenAdapter {
                     }
                     return true;
                 }
-                case RESULT: advanceFromResult(); return true; // cham bat ky dau o pha ket qua = chuyen ngay
+                case RESULT: {
+                    // Dang chay hoat canh KET LIEU: cham = bo qua hoat canh sang the
+                    // ket qua (khong nhay thang sang pha sau nhu cham o the).
+                    if (finisherT > 0) { finisherT = 0; announceT = 0; return true; }
+                    advanceFromResult(); return true; // cham bat ky dau o pha ket qua = chuyen ngay
+                }
                 case OVER: {
                     if (overMenuBtn.contains(x, y)) { game.setScreen(new MenuScreen(game)); return true; }
                     if (overAgainBtn.contains(x, y)) { playAgain(); return true; }

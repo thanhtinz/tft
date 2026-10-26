@@ -186,6 +186,40 @@ public class ScreenshotMain {
                     setScreen(matchScreen);
                     break;
                 }
+                case "boomwin": {
+                    // BOOM khi MINH THANG: doi hinh sao cao danh vong PvP 1-6 — chup o pha
+                    // RESULT khi tia sao dang bay tu tuong minh sang ria san dich
+                    Match m = boomWinMatch();
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "boomlose": {
+                    // BOOM khi MINH THUA: ban trong o vong PvP 1-6 — tuong dich con song
+                    // ban tia sao vao tinh linh cua minh (dang nga xui)
+                    Match m = emptyBoardPvpMatch(100);
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "finisherwin": case "finishercard": {
+                    // KET LIEU!: nhu boomwin nhung doi thu vong nay chi con 2 mau —
+                    // thua vong la bi loai han -> hoat canh KET LIEU chay truoc the ket
+                    // qua. finishercard chup THE KET QUA sau khi hoat canh da xong.
+                    Match m = boomWinMatch();
+                    m.players.get(1).hp = 2; // bot dau tien = doi thu vong nay (opponentCursor 0)
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
+                case "finisherlose": {
+                    // BAN BI LOAI: ban trong + minh chi con 3 mau o vong PvP — thua la
+                    // het mau, bi loai han -> hoat canh BAN BI LOAI truoc man ket thuc
+                    Match m = emptyBoardPvpMatch(3);
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
                 case "stars": {
                     Match m = starShowcase();
                     matchScreen = new MatchScreen(this, m);
@@ -547,14 +581,15 @@ public class ScreenshotMain {
                     dragSet = true;
                 }
                 boolean fxMode = mode.startsWith("fx");
-                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || "battleitems".equals(mode) || "battlesunset".equals(mode) || "battleice".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode) || "battlecard".equals(mode) || "battlecardinfo".equals(mode) || "oppbattle".equals(mode) || "battletab".equals(mode) || "battledmg".equals(mode) || "legendpickup".equals(mode) || "legendwin".equals(mode) || "legendlose".equals(mode) || fxMode;
+                boolean battleMode = "battle".equals(mode) || "battle4".equals(mode) || "result".equals(mode) || "resultpanel".equals(mode) || "starbattle".equals(mode) || "battleitems".equals(mode) || "battlesunset".equals(mode) || "battleice".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode) || "battlecard".equals(mode) || "battlecardinfo".equals(mode) || "oppbattle".equals(mode) || "battletab".equals(mode) || "battledmg".equals(mode) || "legendpickup".equals(mode) || "legendwin".equals(mode) || "legendlose".equals(mode) || "boomwin".equals(mode) || "boomlose".equals(mode) || "finisherwin".equals(mode) || "finisherlose".equals(mode) || "finishercard".equals(mode) || fxMode;
                 if (battleMode && !battleStarted && frames > 30 && matchScreen != null) {
                     Method mb = MatchScreen.class.getDeclaredMethod("startBattle");
                     mb.setAccessible(true);
                     mb.invoke(matchScreen);
                     battleStarted = true;
-                    if ("result".equals(mode) || "resultpanel".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode) || "legendwin".equals(mode) || "legendlose".equals(mode)) {
-                        // Tang toc playback x3 de vao pha RESULT nhanh (announcer chi keo 1,5s)
+                    if ("result".equals(mode) || "resultpanel".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode) || "over".equals(mode) || "legendwin".equals(mode) || "legendlose".equals(mode) || "boomwin".equals(mode) || "boomlose".equals(mode) || "finisherwin".equals(mode) || "finisherlose".equals(mode) || "finishercard".equals(mode)) {
+                        // Tang toc playback x3 de vao pha RESULT nhanh (announcer chi keo 1,5s;
+                        // Boom/ket lieu chay theo thoi gian that o pha RESULT, khong bi x3)
                         Field fs = MatchScreen.class.getDeclaredField("speed");
                         fs.setAccessible(true);
                         fs.setFloat(matchScreen, 3f);
@@ -662,6 +697,37 @@ public class ScreenshotMain {
                     due = (fxCaptureAt >= 0 && frames >= fxCaptureAt) || frames >= 5400;
                     if (due && fxCaptureAt < 0) System.out.println("FX_NOT_CAPTURED wanted=" + wanted + " lastFx=" + lastFx);
                     if (due && fxCaptureAt >= 0) System.out.println("FX_CAPTURED wanted=" + wanted + " frame=" + frames);
+                } else if (("boomwin".equals(mode) || "boomlose".equals(mode)) && battleStarted) {
+                    // Chup GIUA LOAT BOOM: pha RESULT va boomT trong 0,22..0,62s — tia
+                    // sao đang bay (tia som sap cham dich, tia muon moi roi nong)
+                    Field fp = MatchScreen.class.getDeclaredField("phase");
+                    fp.setAccessible(true);
+                    Field fBoom = MatchScreen.class.getDeclaredField("boomT");
+                    fBoom.setAccessible(true);
+                    boolean inResult = "RESULT".equals(String.valueOf(fp.get(matchScreen)));
+                    float bt = fBoom.getFloat(matchScreen);
+                    due = (inResult && bt >= 0.22f && bt <= 0.62f) || frames >= 2400;
+                } else if (("finisherwin".equals(mode) || "finisherlose".equals(mode)) && battleStarted) {
+                    // Chup GIUA HOAT CANH KET LIEU: finisherT dem nguoc 1,8 -> chup khi
+                    // con 0,55..1,45 (tien trinh 0,35..1,25s: chu da phong to, chum sao
+                    // dang toa, scrim chua mo dan)
+                    Field fFin = MatchScreen.class.getDeclaredField("finisherT");
+                    fFin.setAccessible(true);
+                    float ft2 = fFin.getFloat(matchScreen);
+                    due = (ft2 > 0.55f && ft2 <= 1.45f) || frames >= 2400;
+                } else if ("finishercard".equals(mode) && battleStarted) {
+                    // Chup THE KET QUA sau hoat canh: ca finisherT lan announceT deu da
+                    // het (the da hien), chup nhanh trong cua so ~4s truoc khi tu chuyen
+                    Field fp = MatchScreen.class.getDeclaredField("phase");
+                    fp.setAccessible(true);
+                    Field fa = MatchScreen.class.getDeclaredField("announceT");
+                    fa.setAccessible(true);
+                    Field fFin = MatchScreen.class.getDeclaredField("finisherT");
+                    fFin.setAccessible(true);
+                    boolean panelUp = "RESULT".equals(String.valueOf(fp.get(matchScreen)))
+                        && fa.getFloat(matchScreen) <= 0 && fFin.getFloat(matchScreen) <= 0;
+                    if (panelUp) panelFrames++;
+                    due = panelFrames >= 12 || frames >= 2400;
                 } else if (("resultpanel".equals(mode) || "resultlose".equals(mode) || "resultpanelbig".equals(mode)) && battleStarted) {
                     // Cho announcer chay xong (announceT <= 0) de THE KET QUA GOP (ket qua +
                     // phan thuong + cot sat thuong trong cung mot khoi) da hien, chup nhanh
@@ -878,6 +944,40 @@ public class ScreenshotMain {
         placeByStar(m, h, "gogo", 3, 3, 0);
         placeByStar(m, h, "lulu", 2, 2, 3);
         placeByStar(m, h, "bobi", 1, 4, 1);
+        return m;
+    }
+
+    // Doi hinh BOOM/KET LIEU khi minh thang: doi hinh sao cao (Gogo 3 sao + Lulu 2 sao
+    // + Titan + Bobi) danh vong PvP 1-6 (round 6 khong phai vong PvE) — thang gan nhu
+    // chac chan va con nhieu tuong song de ban Boom. finisherwin dung chung doi hinh
+    // nay nhung ep doi thu vong (bot dau tien) con 2 mau de bi loai han.
+    static Match boomWinMatch() {
+        Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
+        Match.PlayerState h = m.human();
+        if (m.draftPending) m.pickDraft(0);
+        if (m.augmentPending) m.pickAugment(0);
+        h.level = 9;
+        for (int i = 0; i < 9; i++) m.addChampion(h, "gogo");
+        for (int i = 0; i < 3; i++) m.addChampion(h, "lulu");
+        m.addChampion(h, "titan");
+        m.addChampion(h, "bobi");
+        placeByStar(m, h, "gogo", 3, 3, 0);
+        placeByStar(m, h, "lulu", 2, 2, 3);
+        placeByStar(m, h, "titan", 1, 4, 0);
+        placeByStar(m, h, "bobi", 1, 2, 1);
+        m.round = 6;
+        return m;
+    }
+
+    // Ban trong (tuong lat the nam o bench) o vong PvP 1-6 -> thua chac, dich con
+    // nguyen doi hinh de ban Boom. humanHp tuy mode: 100 = boomlose (thua thuong),
+    // 3 = finisherlose (thua la het mau -> bi loai han).
+    static Match emptyBoardPvpMatch(int humanHp) {
+        Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
+        if (m.draftPending) m.pickDraft(0);
+        if (m.augmentPending) m.pickAugment(0);
+        m.human().hp = humanHp;
+        m.round = 6;
         return m;
     }
 
