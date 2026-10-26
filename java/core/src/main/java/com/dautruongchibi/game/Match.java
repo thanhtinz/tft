@@ -30,6 +30,11 @@ public final class Match {
         // Tinh linh dong hanh (id quai GameData.MONSTERS): bot duoc gan ngau nhien khi
         // startPvp; nguoi choi that do MatchScreen gan tu Profile.legendId. "" = chua co.
         public String legendId = "";
+        // San dau (khoa theme ArenaTheme.THEMES): bot duoc gan ngau nhien khi startPvp
+        // nhu tinh linh. Ban Java khong tach san nha/khach (moi tran cua nguoi choi deu
+        // ve tren mot ban cua minh) nen v1 chua render san cua bot — truong nay la du
+        // lieu loadout de sang cho co che san khach ve sau. "" = chua co.
+        public String arenaId = "";
     }
 
     public final Mode mode;
@@ -73,6 +78,7 @@ public final class Match {
             PlayerState b = new PlayerState();
             b.name = names.get(i); b.human = false; b.gold = 5; b.level = 1;
             b.legendId = GameData.MONSTERS.get(m.rng.nextInt(GameData.MONSTERS.size())).id;
+            b.arenaId = ArenaTheme.THEMES[m.rng.nextInt(ArenaTheme.THEMES.length)];
             m.players.add(b);
         }
         m.beginRound(true);

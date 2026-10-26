@@ -23,6 +23,9 @@ public final class Profile {
     // Tinh linh dong hanh (Little Legend kieu TFT): id mot quai trong GameData.MONSTERS,
     // chon o man Ho So, mac dinh la con dau tien cua bo ("slime").
     public String legendId = "slime";
+    // San dau da chon (Arena kieu TFT): khoa trong ArenaTheme.CHOICES — "auto" = Theo
+    // man (xoay theo chang nhu cu), hoac 1 theme co dinh. Mac dinh "auto".
+    public String arenaId = ArenaTheme.AUTO;
 
     public double avgPlacement() { return matches > 0 ? (double) placementSum / matches : 0; }
     public String rankLabel() { return Rank.rankLabel(rank); }
@@ -77,7 +80,8 @@ public final class Profile {
         b.append("  \"placementSum\": ").append(placementSum).append(",\n");
         b.append("  \"campaignCleared\": ").append(campaignCleared).append(",\n");
         b.append("  \"wavesBest\": ").append(wavesBest).append(",\n");
-        b.append("  \"legendId\": \"").append(esc(legendId == null ? "slime" : legendId)).append("\"\n");
+        b.append("  \"legendId\": \"").append(esc(legendId == null ? "slime" : legendId)).append("\",\n");
+        b.append("  \"arenaId\": \"").append(esc(arenaId == null ? ArenaTheme.AUTO : arenaId)).append("\"\n");
         b.append("}\n");
         return b.toString();
     }
@@ -143,6 +147,8 @@ public final class Profile {
         if ((v = intVal(json, "wavesBest")) != null) p.wavesBest = v;
         String lg = strVal(json, "legendId");
         if (GameData.isMonsterId(lg)) p.legendId = lg; // id la/khong co -> giu mac dinh "slime"
+        String ar = strVal(json, "arenaId");
+        if (ArenaTheme.isChoice(ar)) p.arenaId = ar; // khoa la/khong co -> giu mac dinh "auto"
         return p;
     }
 

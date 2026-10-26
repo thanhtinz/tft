@@ -429,6 +429,27 @@ public class HeadlessMain {
         check("Tinh linh: bot PvP gan tinh linh hop le, ho so luu/doc lua chon, id sai ve mac dinh",
             legendOk, "bot dau=" + lgm.players.get(1).legendId + ", doc lai=" + lback.legendId);
 
+        // 25) San dau: bot PvP duoc gan theme hop le; ho so luu/doc arenaId dung, khoa
+        // la -> "auto"; resolve: theme co dinh GHI DE khoa tu dong theo chang, "auto"
+        // (va khoa la) giu nguyen quy tac xoay. Mac dinh ho so moi = "auto" (Theo man).
+        Match arm = Match.startPvp(Match.Mode.PVP_RANKED, 43, "ArenaQA");
+        boolean botsArenaOk = arm.players.size() == 8;
+        for (int i = 1; i < arm.players.size(); i++) {
+            if (!com.dautruongchibi.game.ArenaTheme.isTheme(arm.players.get(i).arenaId)) botsArenaOk = false;
+        }
+        Profile ap = new Profile();
+        ap.arenaId = "ice";
+        Profile aback = Profile.fromJson(ap.toJson());
+        Profile abad = Profile.fromJson("{\"name\": \"X\", \"arenaId\": \"khong-co-san-nay\"}");
+        boolean resolveOk = "desert".equals(com.dautruongchibi.game.ArenaTheme.resolve("desert", "grass"))
+            && "grass".equals(com.dautruongchibi.game.ArenaTheme.resolve("auto", "grass"))
+            && "ice".equals(com.dautruongchibi.game.ArenaTheme.resolve("la-gi-do", "ice"))
+            && "sunset".equals(com.dautruongchibi.game.ArenaTheme.resolve("sunset", "ice"));
+        boolean arenaChoiceOk = botsArenaOk && "ice".equals(aback.arenaId) && "auto".equals(abad.arenaId)
+            && new Profile().arenaId.equals("auto") && resolveOk;
+        check("San dau: bot PvP gan theme hop le, ho so luu/doc lua chon, khoa sai ve 'auto', theme co dinh ghi de forStage",
+            arenaChoiceOk, "bot dau=" + arm.players.get(1).arenaId + ", doc lai=" + aback.arenaId);
+
         System.out.println("=== TONG KET: " + pass + " PASS / " + fail + " FAIL ===");
         if (fail > 0) { System.out.println("Muc fail: " + failures); System.exit(1); }
     }

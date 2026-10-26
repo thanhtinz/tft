@@ -8,6 +8,37 @@ package com.dautruongchibi.game;
 public final class ArenaTheme {
     private ArenaTheme() {}
 
+    // ===== LUA CHON SAN CUA NGUOI CHOI (loadout kieu TFT, luu o Profile.arenaId) =====
+    // "auto" = Theo man (giu quy tac xoay theo chang ben duoi); 4 khoa con lai la
+    // theme co dinh ghi de moi quy tac xoay. Bot PvP duoc gan ngau nhien 1 theme
+    // trong THEMES khi startPvp (nhu cach gan tinh linh).
+    public static final String AUTO = "auto";
+    public static final String[] THEMES = {"grass", "sunset", "desert", "ice"};
+    public static final String[] CHOICES = {AUTO, "grass", "sunset", "desert", "ice"};
+
+    public static boolean isTheme(String key) {
+        for (String t : THEMES) if (t.equals(key)) return true;
+        return false;
+    }
+
+    public static boolean isChoice(String key) {
+        return AUTO.equals(key) || isTheme(key);
+    }
+
+    public static String nameOf(String key) {
+        if ("sunset".equals(key)) return "Hoàng Hôn";
+        if ("desert".equals(key)) return "Sa Mạc";
+        if ("ice".equals(key)) return "Băng Tuyết";
+        if ("grass".equals(key)) return "Đồng Cỏ";
+        return "Theo màn";
+    }
+
+    // Giai quyet lua chon -> khoa san thuc te: theme co dinh thang thang; "auto"
+    // (hoac gia tri la) -> khoa tu dong theo chang da tinh san (autoKey).
+    public static String resolve(String choice, String autoKey) {
+        return isTheme(choice) ? choice : autoKey;
+    }
+
     public static String forCampaign(int chapter, boolean isBoss) {
         if (isBoss) return "sunset";
         switch ((Math.max(1, chapter) - 1) % 3) {

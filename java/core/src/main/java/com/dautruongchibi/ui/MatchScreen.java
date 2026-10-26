@@ -250,6 +250,24 @@ public class MatchScreen extends ScreenAdapter {
     private float legendTargetX = LEGEND_HOME_X, legendTargetY = LEGEND_HOME_Y;
     private float legendIdleWait = 2.0f;  // con bao lau thi di dao tiep (pha chuan bi)
     private boolean legendFlip = false;   // huong mat theo chieu di chuyen ngang
+    // ===== SAN DAU (Arena kieu TFT) =====
+    // Lua chon cua nguoi choi (Profile.arenaId): "auto" = Theo man; theme co dinh
+    // thi ghi de moi quy tac xoay chang trong arenaKey(). Trang tri san PHAN UNG
+    // theo tran (ve o drawArenaDecor + drawLossDim):
+    // - Chuoi thang >= 2: co/bang vang o mep tren ban co + lap lanh quanh ban
+    //   (chi pha CHUAN BI va KET QUA — dung chat "san an mung").
+    // - Chuoi thua >= 2: lop toi/xam nhe phu vung NGOAI ban co (khong dung tuong/chu).
+    // - Cap nguoi choi 6/8: goc ban co them rune sang / hao quang vang quanh vien.
+    // - Diem bam tuong tac: vung dat trong goc ho duoi-trai san (toa do co dinh
+    //   300,100 — ngoai panel/dia/shop/bench tren ca 4 theme; sa mac roi dung mat
+    //   ho, hoang hon dung ngay thung hoa duoi goc bien chi duong): bam thi tia
+    //   sao bung + rung nen nhe, hoi chieu 3s, chi o pha chuan bi.
+    private String myArenaChoice = ArenaTheme.AUTO;
+    static final float ARENA_CLICK_X = 300, ARENA_CLICK_Y = 100, ARENA_CLICK_R = 42;
+    private float arenaClickCd = 0;      // hoi chieu diem bam (giay)
+    private float arenaBurstT = -1;      // >=0: dang bung tia sao tu diem bam
+    private float arenaShakeT = 0;       // >0: nen san rung nhe sau khi bam
+
     private boolean pickupArmed = false;  // tran nay co do roi (outcome.droppedItem != null)
     private boolean pickupDone = false;
     private boolean orbActive = false;    // cau do dang hien tren san
@@ -313,6 +331,11 @@ public class MatchScreen extends ScreenAdapter {
         String lg = game.profile != null ? game.profile.legendId : null;
         myLegendId = GameData.isMonsterId(lg) ? lg : "slime";
         match.human().legendId = myLegendId;
+        // San dau cua nguoi choi = lua chon luu trong ho so (ArenaTheme.CHOICES);
+        // khoa la -> "auto" (Theo man, xoay theo chang nhu cu).
+        String ar = game.profile != null ? game.profile.arenaId : null;
+        myArenaChoice = ArenaTheme.isChoice(ar) ? ar : ArenaTheme.AUTO;
+        match.human().arenaId = myArenaChoice;
     }
 
     @Override
@@ -1267,8 +1290,11 @@ public class MatchScreen extends ScreenAdapter {
     private float benchCx(int i) { return BENCH_X + i * SLOT + SLOT / 2f; }
     private float benchCy() { return BENCH_Y + SLOT_H / 2f; }
 
-    // San doi theo chang (ArenaTheme): Chien Dich theo chuong, PvP/Song Quai theo stage, Boss -> hoang hon
+    // San doi theo chang (ArenaTheme): Chien Dich theo chuong, PvP/Song Quai theo stage, Boss -> hoang hon.
+    // Lua chon co dinh cua nguoi choi (Profile.arenaId) GHI DE moi quy tac xoay —
+    // ke ca khoa battleArenaKey (vi khoa do luu dung gia tri arenaKey() tra ve).
     private String arenaKey() {
+        if (ArenaTheme.isTheme(myArenaChoice)) return myArenaChoice;
         if ((phase == Phase.BATTLE || phase == Phase.RESULT) && battleArenaKey != null) return battleArenaKey;
         switch (match.mode) {
             case CAMPAIGN: {
@@ -1306,6 +1332,10 @@ public class MatchScreen extends ScreenAdapter {
         else if (battleCardUid != null && liveUnit(battleCardUid) == null) battleCardUid = null; // tuong dang xem da bi ha
         if (popupT > 0) { popupT -= delta; if (popupT <= 0) popupItemId = null; }
         updateLegend(delta);
+        // Trang tri san phan ung: dem hoi chieu diem bam + tien trinh bung sao/rung nen
+        if (arenaClickCd > 0) arenaClickCd -= delta;
+        if (arenaBurstT >= 0) { arenaBurstT += delta; if (arenaBurstT > 0.65f) arenaBurstT = -1; }
+        if (arenaShakeT > 0) arenaShakeT -= delta;
         if (combineFlashT > 0) { combineFlashT -= delta; if (combineFlashT <= 0) combineFlashIndex = -1; }
         for (int i = mergeFx.size() - 1; i >= 0; i--) { MergeFx fx = mergeFx.get(i); fx.ttl += delta; if (fx.ttl > 0.9f) mergeFx.remove(i); }
         if (phase == Phase.PLANNING) {
@@ -1356,11 +1386,21 @@ public class MatchScreen extends ScreenAdapter {
         Gdx.gl.glEnable(GL20.GL_BLEND);
         // --- Nen: tranh san TRUA VIEN lien mach, chi phu mot lop toi cuc nhe cho chu de doc ---
         batch.begin();
-        batch.draw(a.arenaFor(arenaKey()), 0, 0, 1280, 720);
+        if (arenaShakeT > 0) {
+            // Rung NHE sau khi bam diem tuong tac tren san: tranh phong to hon khung
+            // 20px de lech vai px khong ho canh; cac lop phu phia sau giu nguyen.
+            float k = arenaShakeT / 0.22f;
+            float ox = (float) Math.sin(arenaShakeT * 95f) * 2.6f * k, oy = (float) Math.cos(arenaShakeT * 83f) * 1.8f * k;
+            batch.draw(a.arenaFor(arenaKey()), -10 + ox, -8 + oy, 1300, 736);
+        } else {
+            batch.draw(a.arenaFor(arenaKey()), 0, 0, 1280, 720);
+        }
         batch.setColor(0, 0, 0, 0.07f);
         batch.draw(a.whiteTex(), 0, 0, 1280, 720);
         batch.setColor(Color.WHITE);
         drawDepthOverlay(a);
+        drawLossDim(a); // chuoi thua >= 2: vung ngoai ban co am dam di (duoi moi lop khac)
+        drawLevelGlow(a); // cap >= 8: quang sang vang mem duoi ban co (phan cung nam o drawArenaDecor)
         batch.end();
         drawBoardBase();
         // --- Don vi / bench / shop / chip toc-he ---
@@ -1369,6 +1409,7 @@ public class MatchScreen extends ScreenAdapter {
         if (phase == Phase.BATTLE || phase == Phase.RESULT) drawBattleUnits(now);
         else { drawPlanningUnits(now); drawBench(now); if (shopOpen && phase == Phase.PLANNING) drawShop(); }
         drawLegends(now); // tinh linh 2 ben + cau do: cung lop don vi, duoi panel/HUD
+        drawArenaDecor(now); // trang tri san phan ung (co/lap lanh chuoi thang, goc + hao quang theo cap, bung sao diem bam)
         drawLeftPanel(now);
         drawRightPanel(now);
         drawTopBar();
@@ -1438,6 +1479,113 @@ public class MatchScreen extends ScreenAdapter {
         batch.setColor(Color.WHITE);
         if (a.vignetteTex() != null) batch.draw(a.vignetteTex(), 0, 0, 1280, 720);
         batch.setColor(Color.WHITE);
+    }
+
+    // Chuoi thua >= 2 (streak chi co o PvP): phu lop toi-xam nhe len VUNG NGOAI ban
+    // co — 4 dai quanh khoi ban co + bench. Ve ngay tren tranh san, duoi nen ban,
+    // tuong, tinh linh va moi chu/panel: khong lam chim bat ky thong tin nao, chi
+    // lam nen san "am dam" di. Sang pha/chuoi moi (streak > -2) la tu bien mat.
+    private void drawLossDim(Assets a) {
+        if (match.human().streak > -2) return;
+        batch.setColor(0.03f, 0.03f, 0.07f, 0.22f);
+        batch.draw(a.whiteTex(), 0, 0, BX, 720);                                        // dai trai
+        batch.draw(a.whiteTex(), BX + 7 * CELLX, 0, 1280 - (BX + 7 * CELLX), 720);      // dai phai
+        batch.draw(a.whiteTex(), BX, BY + 7 * CELLY, 7 * CELLX, 720 - (BY + 7 * CELLY)); // tren ban co
+        batch.draw(a.whiteTex(), BX, 0, 7 * CELLX, BENCH_Y);                             // duoi bench
+        batch.setColor(Color.WHITE);
+    }
+
+    // Cap 8: quang sang vang mem lo ra quanh vien ban co — ve duoi moi don vi/nen
+    // ban; vien vang sac net + goc rune ve o drawArenaDecor (tren cung lop don vi).
+    private void drawLevelGlow(Assets a) {
+        if (match.human().level < 8 || a.glowTex() == null) return;
+        float pulse = 0.75f + 0.25f * (float) Math.sin(com.badlogic.gdx.utils.TimeUtils.nanoTime() / 1e9f * 2.4f);
+        batch.setColor(1f, 0.84f, 0.30f, 0.13f * pulse);
+        batch.draw(a.glowTex(), BX - 46, BY - 46, 7 * CELLX + 92, 7 * CELLY + 92);
+        batch.setColor(Color.WHITE);
+    }
+
+    // Trang tri san PHAN UNG (ve cung lop don vi, duoi panel/HUD):
+    // - Cap >= 6: 4 goc ban co co rune kim cuong vang; cap >= 8 them vien vang
+    //   nhip sang quanh ban (kem quang mem o drawLevelGlow).
+    // - Chuoi thang >= 2 (chi pha CHUAN BI / KET QUA): day co vang treo o mep
+    //   tren ban co + tia sao lap lanh quanh ban.
+    // - Bung sao cua diem bam tuong tac (arenaBurstT) — ve o moi pha no dang chay.
+    private void drawArenaDecor(float now) {
+        Assets a = game.assets;
+        Match.PlayerState h = match.human();
+        float bx0 = BX - 8, by0 = BY - 8, bw = 7 * CELLX + 16, bh = 7 * CELLY + 16;
+        if (h.level >= 8) {
+            float pulse = 0.55f + 0.30f * (float) Math.sin(now * 2.4f);
+            drawBorder(bx0, by0, bw, bh, new Color(1f, 0.84f, 0.30f, pulse), 3);
+        }
+        if (h.level >= 6) {
+            float[][] corners = {{bx0, by0}, {bx0 + bw, by0}, {bx0, by0 + bh}, {bx0 + bw, by0 + bh}};
+            for (float[] c : corners) {
+                batch.setColor(1f, 0.84f, 0.30f, 0.30f);
+                batch.draw(a.glowTex(), c[0] - 16, c[1] - 16, 32, 32);
+                batch.setColor(Ui.GOLD);
+                float s = 10;
+                batch.draw(a.whiteTex(), c[0] - s / 2, c[1] - s / 2, s / 2, s / 2, s, s, 1, 1, 45f, 0, 0, 1, 1, false, false);
+            }
+            batch.setColor(Color.WHITE);
+        }
+        if (h.streak >= 2 && (phase == Phase.PLANNING || phase == Phase.RESULT)) {
+            float topY = BY + 7 * CELLY; // mep tren ban co (642)
+            // Day treo: soi chi vang mong + co kim cuong xen ke vang/cam, lac nhe theo thoi gian
+            batch.setColor(1f, 0.84f, 0.30f, 0.85f);
+            batch.draw(a.whiteTex(), BX + 6, topY + 15, 7 * CELLX - 12, 2);
+            for (int i = 0; i < 13; i++) {
+                float cx = BX + 24 + i * 46.5f;
+                float sway = (float) Math.sin(now * 2.2f + i * 0.9f) * 2.2f;
+                float s = 13;
+                batch.setColor(i % 2 == 0 ? Ui.GOLD : new Color(1f, 0.55f, 0.25f, 1f));
+                batch.draw(a.whiteTex(), cx - s / 2 + sway, topY + 15 - s, s / 2, s, s, s, 1, 1, 45f, 0, 0, 1, 1, false, false);
+            }
+            // Lap lanh: 10 tia sao quanh chu vi ban co, nhap nhay lech pha nhau
+            for (int i = 0; i < 10; i++) {
+                float per = (i / 10f) * 2f * (bw + bh);
+                float sx, sy;
+                if (per < bw) { sx = bx0 + per; sy = by0 + bh + 6; }
+                else if (per < bw + bh) { sx = bx0 + bw + 6; sy = by0 + bh - (per - bw); }
+                else if (per < 2 * bw + bh) { sx = bx0 + bw - (per - bw - bh); sy = by0 - 6; }
+                else { sx = bx0 - 6; sy = by0 + (per - 2 * bw - bh); }
+                float tw = (float) Math.sin(now * 3.1f + i * 1.93f);
+                if (tw <= 0.15f) continue;
+                float s = 7 + 8 * tw;
+                batch.setColor(1f, 0.92f, 0.55f, 0.75f * tw);
+                batch.draw(a.glowTex(), sx - s, sy - s, s * 2, s * 2);
+            }
+            batch.setColor(Color.WHITE);
+        }
+        // Bung sao tu diem bam tuong tac: vong tron lan rong + 8 tia sao bay ra
+        if (arenaBurstT >= 0) {
+            float t = arenaBurstT / 0.65f;
+            float r = 12 + 74 * t;
+            batch.setColor(1f, 0.88f, 0.45f, 0.75f * (1 - t));
+            batch.draw(ringTex, ARENA_CLICK_X - r, ARENA_CLICK_Y - r, r * 2, r * 2);
+            batch.setColor(1f, 0.95f, 0.65f, 0.45f * (1 - t));
+            batch.draw(a.glowTex(), ARENA_CLICK_X - 30, ARENA_CLICK_Y - 30, 60, 60);
+            for (int i = 0; i < 8; i++) {
+                double ang = i * Math.PI / 4 + 0.4;
+                float d = 14 + 62 * t;
+                float px = ARENA_CLICK_X + (float) Math.cos(ang) * d, py = ARENA_CLICK_Y + (float) Math.sin(ang) * d;
+                float s = 6 * (1 - t) + 2;
+                batch.setColor(1f, 0.90f, 0.50f, 1 - t);
+                batch.draw(a.whiteTex(), px - s / 2, py - s / 2, s / 2, s / 2, s, s, 1, 1, 45f + t * 90f, 0, 0, 1, 1, false, false);
+            }
+            batch.setColor(Color.WHITE);
+        }
+    }
+
+    // Bam vao diem tuong tac tren san (pha chuan bi): bung tia sao + rung nen nhe,
+    // hoi chieu 3s chong spam. Tra ve true neu da xu ly (planningPress dung lai).
+    private boolean tryArenaClick(float x, float y) {
+        if (arenaClickCd > 0) return false;
+        if (Math.hypot(x - ARENA_CLICK_X, y - ARENA_CLICK_Y) > ARENA_CLICK_R) return false;
+        arenaClickCd = 3f; arenaBurstT = 0; arenaShakeT = 0.22f;
+        game.sound().sfx("sparkle");
+        return true;
     }
 
     // Bong do mem cho cac phan tu ve tay bang batch trong man tran (the shop, chip, panel overlay...).
@@ -3004,6 +3152,10 @@ public class MatchScreen extends ScreenAdapter {
             game.sound().sfx("click");
             return true;
         }
+        // Diem bam tuong tac tren san (goc ho duoi-trai, 258..342 x 58..142): dat o
+        // day vi moi lop modal o tren (the tuong, bang thong tin do) da xu ly xong,
+        // con vung nay khong trung khay/bench/ban/dia/shop nao ca.
+        if (tryArenaClick(x, y)) return true;
         // Khay trang bi — CHI khi tab TRANG BI dang mo (dung ban chat tab: do chi thao
         // tac trong tab cua no; tab TOC/HE mo thi vung nay la chip toc/he, khong an do).
         // Cham xuong tren icon = ung vien KEO DO (touchUp phan biet cham thuong -> mo bang

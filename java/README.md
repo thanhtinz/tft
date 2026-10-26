@@ -342,6 +342,34 @@ kiểm chứng headless mục 19–21):
   không che thanh máu. Kiểm chứng headless mục 24 + mode chụp `legendplan` / `legendlist` /
   `legendpickup` / `legendwin` / `legendlose` trong ScreenshotMain.
 
+### Sân đấu — Arena (đợt 2026-10-26)
+
+- **Chọn sân trong loadout (kiểu TFT):** màn **Hồ Sơ** có thêm hộp **SÀN ĐẤU** (cột phải, cạnh hộp chọn
+  tinh linh): 5 lựa chọn — **Theo màn** (mặc định, giữ quy tắc xoay theo chặng của `ArenaTheme`) + 4 theme
+  cố định (Đồng Cỏ / Hoàng Hôn / Sa Mạc / Băng Tuyết), mỗi ô là ảnh thu nhỏ cắt từ chính tranh sân; ô "Theo
+  màn" là ảnh ghép 2×2 của 4 sân. Lựa chọn lưu vào `Profile.arenaId` (`ArenaTheme.CHOICES`; khóa lạ trong
+  file tự về `"auto"`, không crash — kiểm chứng headless mục 25 cùng `ArenaTheme.resolve`).
+- **Mức áp dụng:** theme cố định GHI ĐÈ `MatchScreen.arenaKey()` ở mọi pha (chuẩn bị + giao tranh + kết quả)
+  và mọi chế độ (PvP, Chiến Dịch, Sóng Quái); hệ số bóng theo theme không đổi (hoàng hôn ×1.30, sa mạc
+  ×0.85, băng ×0.80). **Giới hạn v1:** bản Java không có cơ chế sân nhà/sân khách — mọi trận của người chơi
+  đều vẽ trên một bàn duy nhất của mình, nên sân đã chọn áp cho mọi trận của mình; bot PvP vẫn được
+  `Match.startPvp` gán ngẫu nhiên một theme vào `PlayerState.arenaId` (parity với tinh linh) và hồ sơ cũng
+  ghi vào `human().arenaId`, nhưng v1 chưa render sân của bot — dữ liệu đã sẵn cho cơ chế "ghé thăm" về sau.
+- **Phản ứng theo trận** (`MatchScreen.drawArenaDecor` + `drawLossDim`, tái dùng `Match` streak/level):
+  chuỗi thắng ≥ 2 (chỉ PvP có streak) → dãy cờ kim cương vàng/cam treo ở mép trên bàn cờ + 10 tia sao lấp
+  lánh quanh bàn, chỉ ở pha chuẩn bị/kết quả; chuỗi thua ≥ 2 → lớp phủ tối-xám alpha 0.22 lên 4 dải NGOÀI
+  khối bàn cờ+bench, vẽ ngay trên tranh sân (dưới nền bàn/tướng/chữ/panel nên không làm chìm thông tin nào),
+  tự biến mất ngay khi chuỗi ngắt. Cấp người chơi là trạng thái đơn điệu (chỉ tăng trong trận): cấp ≥ 6 →
+  rune kim cương vàng ở 4 góc bàn cờ; cấp ≥ 8 → thêm viền vàng nhịp sáng quanh bàn + quầng sáng vàng mềm
+  dưới bàn (`drawLevelGlow`).
+- **Điểm bấm tương tác:** một vị trí cố định theo tọa độ sân **(300,100)** bán kính 42 — vùng đất trống ở
+  góc hồ dưới-trái, không bị panel/đĩa/shop/bench/tinh linh che trên cả 4 theme (trên từng theme nó rơi vào
+  chi tiết tranh thật: sa mạc = mặt hồ, hoàng hôn = thúng hoa dưới biển chỉ đường, cỏ = đám hoa cạnh đá,
+  băng = mặt băng nứt). Chỉ bắt ở pha chuẩn bị (hook trong `planningPress` sau mọi lớp modal): bấm → bùng
+  8 tia sao + vòng lan + nền sân rung nhẹ 0,22s, sfx `sparkle`, hồi chiêu 3s chống spam; thuần giải trí,
+  không đụng gameplay. Kiểm chứng bằng mode chụp `arenaprofile` / `arenasunset` / `arenawinstreak` /
+  `arenalosestreak` / `arenalevel6` / `arenalevel8` / `arenaclick` trong ScreenshotMain.
+
 ## Cách build & chạy
 
 > **Lưu ý bản trên GitHub:** các file nhị phân (PNG sprite/scene, font TTF, `gradle-wrapper.jar`) được lưu

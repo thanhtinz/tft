@@ -115,6 +115,31 @@ public class ScreenshotMain {
                     setScreen(matchScreen);
                     break;
                 }
+                case "arenaprofile": {
+                    // Man HO SO 2 cot: hop chon SAN DAU o cot phai (o dang chon = Hoang
+                    // Hon, ep qua ho so de anh chup xac dinh)
+                    profile.arenaId = "sunset";
+                    setScreen(new com.dautruongchibi.ui.ProfileScreen(this));
+                    break;
+                }
+                case "arenasunset": case "arenawinstreak": case "arenalosestreak": case "arenalevel6": case "arenalevel8": case "arenaclick": {
+                    // SAN DAU (Arena v1): doi hinh benchShowcase nhung ep level/streak
+                    // de CO LAP tung trang tri phan ung (benchShowcase mac dinh cap 9
+                    // + streak 0 se lam nhieu cac anh kiem chung rieng le).
+                    // arenasunset: ho so chon co dinh Hoang Hon — pha chuan bi vong 1
+                    // (auto se la san co) phai ve tranh hoang hon. Cac mode con lai de
+                    // "auto" nhu choi that. PHAI ep ca hai nhanh: MainGame.dispose()
+                    // tu LUU ho so khi thoat, nen mode chay truoc de lai arenaId trong
+                    // file va lam nhieu mode chay sau (da tung dinh "sunset" dan ca lo).
+                    profile.arenaId = "arenasunset".equals(mode) ? "sunset" : "auto";
+                    Match m = benchShowcase();
+                    Match.PlayerState h = m.human();
+                    h.level = "arenalevel6".equals(mode) ? 6 : "arenalevel8".equals(mode) ? 8 : 5;
+                    h.streak = "arenawinstreak".equals(mode) ? 3 : "arenalosestreak".equals(mode) ? -3 : 0;
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    break;
+                }
                 case "legendplan": {
                     // Pha chuan bi day du (benchShowcase): tinh linh cua minh (ep ho so
                     // sang Golem Da) o ria san nha, tinh linh doi thu o ria san dich
@@ -478,6 +503,14 @@ public class ScreenshotMain {
                     Field fEl = MatchScreen.class.getDeclaredField("draftElapsed"); fEl.setAccessible(true); fEl.setFloat(matchScreen, 1.45f);
                     dragSet = true;
                 }
+                if ("arenaclick".equals(mode) && !dragSet && frames > 40 && matchScreen != null) {
+                    // Kich hoat BUNG SAO cua diem bam tuong tac tren san bang reflection
+                    // (nhu nguoi choi cham vao vung ho goc duoi-trai luc chuan bi):
+                    // arenaBurstT bat dau tu 0, due bat anh khi burst chay toi 0.12..0.5s
+                    Field fBurst = MatchScreen.class.getDeclaredField("arenaBurstT"); fBurst.setAccessible(true); fBurst.setFloat(matchScreen, 0.0001f);
+                    Field fShake = MatchScreen.class.getDeclaredField("arenaShakeT"); fShake.setAccessible(true); fShake.setFloat(matchScreen, 0.22f);
+                    dragSet = true;
+                }
                 if (("battledmg".equals(mode) || "dmgplan".equals(mode)) && !dragSet && frames > 5 && matchScreen != null) {
                     // Mo san tab SAT THUONG cua panel phai (rightTab = 1) bang reflection.
                     // frames > 5 nhu battletab: mode tran co the chup rat som khi pow no.
@@ -559,7 +592,12 @@ public class ScreenshotMain {
                     dragSet = true;
                 }
                 boolean due;
-                if ("legendpickup".equals(mode) && battleStarted) {
+                if ("arenaclick".equals(mode) && dragSet) {
+                    // Chup GIUA doan bung sao cua diem bam san (vong lan + tia sao con ro)
+                    Field fBurst = MatchScreen.class.getDeclaredField("arenaBurstT"); fBurst.setAccessible(true);
+                    float bt = fBurst.getFloat(matchScreen);
+                    due = (bt >= 0.12f && bt <= 0.5f) || frames >= 1200;
+                } else if ("legendpickup".equals(mode) && battleStarted) {
                     // Chup GIUA doan chay nhat cau: tinh linh dang o TO_ORB va da roi
                     // nha > ~90px (cau do dang hien o giua san)
                     Field fSt = MatchScreen.class.getDeclaredField("legendState"); fSt.setAccessible(true);

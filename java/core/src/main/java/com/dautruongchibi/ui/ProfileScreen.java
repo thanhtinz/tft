@@ -12,6 +12,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.dautruongchibi.data.GameData;
+import com.dautruongchibi.game.ArenaTheme;
 import com.dautruongchibi.game.Rank;
 
 // Man hinh Ho So: hang + LP, thong ke, tien do.
@@ -30,6 +31,7 @@ public class ProfileScreen extends ScreenAdapter {
         Table root = new Table();
         root.setFillParent(true);
         root.pad(10);
+        root.align(com.badlogic.gdx.utils.Align.top | com.badlogic.gdx.utils.Align.left); // mot loi goi: top + left
         stage.addActor(root);
         root.add(Ui.title(a, "HỒ SƠ NGƯỜI CHƠI", Ui.GOLD)).align(com.badlogic.gdx.utils.Align.left).padBottom(4).row();
 
@@ -49,7 +51,10 @@ public class ProfileScreen extends ScreenAdapter {
         box.add(Ui.label(a, "Chiến dịch: đã qua " + game.profile.campaignCleared + " / " + 5200 + " màn", Color.WHITE)).row();
         box.add(Ui.label(a, "Kỷ lục Sóng Quái: sóng " + game.profile.wavesBest, Color.WHITE)).row();
         box.add(Ui.labelSmall(a, "Lưu ý: chỉ PvP Hạng mới cộng/trừ LP (rank). PvP Thường và Đấu Tập chỉ tính XP + thống kê.", Ui.TEXT_DIM)).padTop(4).row();
-        root.add(box).align(com.badlogic.gdx.utils.Align.left).row();
+        // Cot trai: hop thong ke + hop tinh linh. Cot phai: hop chon SAN DAU.
+        Table left = new Table();
+        left.align(com.badlogic.gdx.utils.Align.top | com.badlogic.gdx.utils.Align.left);
+        left.add(box).align(com.badlogic.gdx.utils.Align.left).row();
 
         // ===== HANG CHON TINH LINH DONG HANH (Little Legend kieu TFT) =====
         // Du 10 con cua bo quai PvE, luoi 5x2; cham mot o = chon ngay + luu ho so.
@@ -85,7 +90,60 @@ public class ProfileScreen extends ScreenAdapter {
             if (i % 5 == 4) grid.row();
         }
         lbox.add(grid).row();
-        root.add(lbox).align(com.badlogic.gdx.utils.Align.left).padTop(8).row();
+        left.add(lbox).align(com.badlogic.gdx.utils.Align.left).padTop(8).row();
+
+        // ===== HOP CHON SAN DAU (Arena kieu TFT) =====
+        // 5 lua chon: "Theo man" (auto — o anh ghep 2x2 cua 4 tranh san) + 4 theme
+        // co dinh, moi o la anh thu nho cat tu chinh tranh san. Cham = chon + luu.
+        // San da chon ap cho MOI tran cua minh; phan ung chuoi thang/thua + trang
+        // tri vien theo cap ve o MatchScreen (drawArenaDecor/drawLossDim).
+        Table abox = new Table();
+        abox.background(Ui.bg(a, Ui.PANEL));
+        abox.pad(10);
+        abox.defaults().align(com.badlogic.gdx.utils.Align.left);
+        abox.add(Ui.labelBig(a, "SÀN ĐẤU", Ui.GOLD)).padBottom(2).row();
+        abox.add(Ui.labelSmall(a, "Nơi diễn ra mọi trận đấu của bạn.", Ui.TEXT_DIM)).row();
+        abox.add(Ui.labelSmall(a, "Chuỗi thắng: sân rực rỡ — chuỗi thua: sân ảm đạm.", Ui.TEXT_DIM)).row();
+        abox.add(Ui.labelSmall(a, "Cấp 6/8: viền bàn cờ nâng cấp thêm.", Ui.TEXT_DIM)).padBottom(4).row();
+        Table agrid = new Table();
+        for (int i = 0; i < ArenaTheme.CHOICES.length; i++) {
+            final String choice = ArenaTheme.CHOICES[i];
+            boolean sel = choice.equals(game.profile.arenaId);
+            Table cell = new Table();
+            cell.background(Ui.bg(a, sel ? new Color(1f, 0.84f, 0.3f, 0.38f) : new Color(0, 0, 0, 0.30f)));
+            cell.pad(4);
+            if (ArenaTheme.AUTO.equals(choice)) {
+                Table quad = new Table();
+                for (int q = 0; q < ArenaTheme.THEMES.length; q++) {
+                    Image qi = new Image(new TextureRegionDrawable(new com.badlogic.gdx.graphics.g2d.TextureRegion(a.arenaFor(ArenaTheme.THEMES[q]))));
+                    quad.add(qi).width(59).height(33);
+                    if (q % 2 == 1) quad.row();
+                }
+                cell.add(quad).width(118).height(66).align(com.badlogic.gdx.utils.Align.center).row();
+            } else {
+                Image img = new Image(new TextureRegionDrawable(new com.badlogic.gdx.graphics.g2d.TextureRegion(a.arenaFor(choice))));
+                cell.add(img).width(118).height(66).align(com.badlogic.gdx.utils.Align.center).row();
+            }
+            Label nm = new Label(ArenaTheme.nameOf(choice), new Label.LabelStyle(a.fontTiny, sel ? Ui.GOLD : Color.WHITE));
+            nm.setAlignment(com.badlogic.gdx.utils.Align.center);
+            cell.add(nm).width(118).align(com.badlogic.gdx.utils.Align.center).row();
+            cell.addListener(new com.badlogic.gdx.scenes.scene2d.utils.ClickListener() {
+                @Override public void clicked(com.badlogic.gdx.scenes.scene2d.InputEvent e, float x, float y) {
+                    game.profile.arenaId = choice;
+                    game.saveProfile();
+                    game.sound().sfx("click");
+                    game.setScreen(new ProfileScreen(game)); // xay lai de highlight o moi
+                }
+            });
+            agrid.add(cell).width(126).pad(2);
+            if (i % 2 == 1) agrid.row();
+        }
+        abox.add(agrid).row();
+        Table cols = new Table();
+        cols.align(com.badlogic.gdx.utils.Align.top | com.badlogic.gdx.utils.Align.left);
+        cols.add(left).align(com.badlogic.gdx.utils.Align.top | com.badlogic.gdx.utils.Align.left);
+        cols.add(abox).align(com.badlogic.gdx.utils.Align.top | com.badlogic.gdx.utils.Align.left).padLeft(10);
+        root.add(cols).align(com.badlogic.gdx.utils.Align.left).row();
 
         TextButton back = Ui.button(a, "← Quay lại menu");
         back.addListener(new com.badlogic.gdx.scenes.scene2d.utils.ChangeListener() {
