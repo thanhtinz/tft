@@ -46,7 +46,8 @@ import java.lang.reflect.Method;
 //   bat tren tinh linh cua minh / sticker KHIEU KHICH cua bot o ria san dich — trang
 //   thai tiem bang reflection trong render)
 // | plantop / planopen / plancollapse / planstreak (LAM LAI PHA CHUAN BI theo clip:
-//   dai shop TREN-GIUA luon hien + danh sach phai AN mac dinh chi con nut "<" / planopen
+//   dai shop DUOI-GIUA luon hien (ban dau o tren-giua theo clip, user chot doi xuong
+//   duoi) + danh sach phai AN mac dinh chi con nut "<" / planopen
 //   mo san danh sach dang lop phu / plancollapse ep panel trai THU GON cot icon /
 //   planstreak ep streak = 3 de huy hieu lua nam tren dia DOI LAI)
 public class ScreenshotMain {
@@ -109,8 +110,8 @@ public class ScreenshotMain {
                     if ("shopopen".equals(mode) || "plantop".equals(mode) || "planopen".equals(mode) || "planstreak".equals(mode)) {
                         // autoPlan da mua sach shop + tieu het vang: nap lai vang va lam moi
                         // de chup duoc 5 the that (chua ban) + dia DOI LAI o trang thai vang.
-                        // (shopopen la ten cu tu thoi shop con mo/dong o mep duoi — nay dai
-                        // shop LUON HIEN o tren-giua nen ca 4 mode deu ra cung mot hinh.)
+                        // (shopopen la ten cu tu thoi shop con mo/dong — nay dai shop
+                        // LUON HIEN o duoi-giua nen ca 4 mode deu ra cung mot hinh.)
                         m.human().gold = 50;
                         m.reroll();
                     }

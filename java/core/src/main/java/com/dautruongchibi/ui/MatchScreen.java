@@ -75,17 +75,20 @@ public class MatchScreen extends ScreenAdapter {
     // quy tac dung tren dat voi tuong tren ban (tam sprite = tam o, bong o cy-45, vong sao o
     // cy-41, sao cap tren dau). Hinh thuc o la DIA TRON xanh ngoc (ve trong drawBench).
     static final float BENCH_Y = 92, BENCH_X = 357, SLOT = 84, SLOT_H = 70;
-    // Shop la DAI NGANG TREN-GIUA kieu clip TFT Mobile: 5 the dung ngay duoi thanh dinh,
-    // LUON HIEN o pha chuan bi (khong con co che mo/dong), bien mat hoan toan o pha giao
-    // tranh/ket qua. The dung 148x88: chan dung o tren, icon + ten toc/he o giua, ten tuong
-    // duoi-trai, gia vang duoi-phai, khung theo bac tien (shopFrames). Dai the x 254..1026,
-    // y 586..674 — khong che panel trai (x<=216), panel phai (x>=1084) hay 2 dia goc duoi.
-    // Dong ti le odds (% that theo cap, GameData.SHOP_ODDS) la pill ngay DUOI dai the y 562..582.
-    // Luu y hinh hoc: ban co ket thuc o y=642 va sprite dich xem truoc hang tren cung cham
-    // toi y=651 nen dai shop (lop phu tren san nhu clip) phu len hang sau cua doi dich xem
-    // truoc o pha chuan bi; hang y=537 (sprite cham 581) van thoang duoi mep dai (562).
+    // Shop la DAI NGANG DUOI-GIUA: 5 the dung sat mep duoi man hinh, phia DUOI hang
+    // bench, LUON HIEN o pha chuan bi (khong con co che mo/dong), bien mat hoan toan o
+    // pha giao tranh/ket qua. (Ban dau theo clip TFT Mobile shop o tren-giua; user xem
+    // anh chot "Shop dua xuong dep hon" nen da doi xuong duoi — the giu kieu clip: chan
+    // dung o tren, icon + ten toc/he o giua, ten tuong duoi-trai, gia vang duoi-phai,
+    // khung theo bac tien (shopFrames).) Dai the x 254..1026 (can giua 640), y 4..92:
+    // mep tren TRUNG dung BENCH_Y=92 nen khong lem vao vung cham bench (92..162),
+    // khong che panel trai (x<=216) hay cum dia goc duoi (XP ket thuc x=116, vang bat
+    // dau x=1164), cung khong trung 2 vung thung rac (x<=200 / x>=1080).
+    // Dong ti le odds (% that theo cap, GameData.SHOP_ODDS) la pill ngay TREN dai the
+    // y 96..116 (nam giua bench va the). Hang dich xem truoc tren cung ban co gio hien
+    // tron ven o pha chuan bi (khong con bi dai shop phu nhu ban tren-giua).
     static final float SHOP_X = 254, CARD_W = 148, CARD_H = 88, CARD_GAP = 8;
-    static final float SHOP_CARD_Y = 586, SHOP_ODDS_Y = 562;
+    static final float SHOP_CARD_Y = 4, SHOP_ODDS_Y = 96;
     // Tam/hit-rect the shop thu i (dung chung cho ve va cham)
     private Rectangle shopCardRect(int i) { return new Rectangle(SHOP_X + i * (CARD_W + CARD_GAP), SHOP_CARD_Y, CARD_W, CARD_H); }
     // Hai nut tron dieu khien kieu TFT Mobile (ve tay bang batch, hit-test hinh tron trong BoardInput):
@@ -339,9 +342,12 @@ public class MatchScreen extends ScreenAdapter {
     // - Chuoi thua >= 2: lop toi/xam nhe phu vung NGOAI ban co (khong dung tuong/chu).
     // - Cap nguoi choi 6/8: goc ban co them rune sang / hao quang vang quanh vien.
     // - Diem bam tuong tac: vung dat trong goc ho duoi-trai san (toa do co dinh
-    //   300,100 — ngoai panel/dia/shop/bench tren ca 4 theme; sa mac roi dung mat
+    //   300,100 — ngoai panel/dia/bench tren ca 4 theme; sa mac roi dung mat
     //   ho, hoang hon dung ngay thung hoa duoi goc bien chi duong): bam thi tia
-    //   sao bung + rung nen nhe, hoi chieu 3s, chi o pha chuan bi.
+    //   sao bung + rung nen nhe, hoi chieu 3s, chi o pha chuan bi. LUU Y tu dot
+    //   shop xuong duoi: the shop 0 (x 254..402, y 4..92) phu CAP DUOI cua vong
+    //   bam (y 58..92) — tam (300,100) va cap tren van bam duoc binh thuong vi
+    //   planningPress chi mua the khi cham vao dung hinh the (y < 92).
     private String myArenaChoice = ArenaTheme.AUTO;
     static final float ARENA_CLICK_X = 300, ARENA_CLICK_Y = 100, ARENA_CLICK_R = 42;
     private float arenaClickCd = 0;      // hoi chieu diem bam (giay)
@@ -496,7 +502,7 @@ public class MatchScreen extends ScreenAdapter {
         // SO DO DIEU KHIEN MOI (TFT Mobile): khong con cum nut chu nhat o 2 goc duoi.
         // Nut tron mua XP (duoi-trai) + nut tron vang chi hien so vang (duoi-phai) + dia
         // DOI LAI o cot phai deu VE TAY bang batch (drawRoundButtons) va xu ly cham trong
-        // BoardInput; dai shop tren-giua ve trong drawShop (chi pha chuan bi).
+        // BoardInput; dai shop duoi-giua ve trong drawShop (chi pha chuan bi).
         // KHONG con nut "Cat ve bench": keo tuong tren ban tha vao o bench de cat (xem BoardInput keo-tha).
         // Thoat: nut nho do o goc tren phai
         TextButton exitBtn = Ui.button(a, "Thoát", Ui.RED, a.fontSmall);
@@ -1750,8 +1756,9 @@ public class MatchScreen extends ScreenAdapter {
         drawLegends(now); // tinh linh 2 ben + cau do: cung lop don vi, duoi panel/HUD
         drawEmoteStickers(); // sticker emote bat tren dau 2 tinh linh (cung lop, tren tinh linh)
         drawArenaDecor(now); // trang tri san phan ung (co/lap lanh chuoi thang, goc + hao quang theo cap, bung sao diem bam)
-        // Dai shop tren-giua ve SAU trang tri san: day co chuoi thang o mep tren ban
-        // (y 642..659) nam dung vung dai shop nen the phai phu len co, khong de co de the.
+        // Dai shop duoi-giua ve SAU trang tri san (thu tu lop phu duoi man hinh:
+        // shop nam tren dai dat duoi bench). Shop khong con o tren-giua nen day co
+        // chuoi thang o mep tren ban (y 642..659) hien du o ca pha chuan bi.
         // Chi pha CHUAN BI moi ve — giao tranh/ket qua bien mat hoan toan nhu clip.
         if (phase == Phase.PLANNING) drawShop();
         drawLeftPanel(now);
@@ -2242,8 +2249,9 @@ public class MatchScreen extends ScreenAdapter {
         // (Phan hoi chon tuong di qua toast o dong thong bao — khong ve them dong chu de san thoang.)
     }
 
-    // DAI SHOP TREN-GIUA (kieu clip TFT Mobile): 5 the DUNG 148x88 ngay duoi thanh dinh,
-    // chi ve o pha CHUAN BI (render chi goi khi phase == PLANNING). Bo cuc moi the:
+    // DAI SHOP DUOI-GIUA (the kieu clip TFT Mobile, vi tri duoi theo phan hoi user):
+    // 5 the DUNG 148x88 sat mep duoi, duoi hang bench, chi ve o pha CHUAN BI (render
+    // chi goi khi phase == PLANNING). Bo cuc moi the:
     // khung theo BAC TIEN (shopFrames) -> chan dung o tren (sprite 54px can giua) ->
     // dong toc/he (kim cuong vang + ten cac toc/he, fontTiny de vua ca 2 toc/he dai) ->
     // dong duoi: ten tuong trai (font, cat "..." neu tran 100px) + gia phai (xu + so).
@@ -2313,7 +2321,7 @@ public class MatchScreen extends ScreenAdapter {
     }
 
     // Dong ti le odds theo bac gia o cap hien tai (GameData.SHOP_ODDS — dung bang engine
-    // dung de roll, Engine.java) — pill toi can giua ngay DUOI dai the (y 562..582).
+    // dung de roll, Engine.java) — pill toi can giua ngay TREN dai the (y 96..116).
     private void drawShopOdds(Assets a) {
         Match.PlayerState h = match.human();
         int lvl = Math.max(1, Math.min(9, h.level));
@@ -3899,7 +3907,7 @@ public class MatchScreen extends ScreenAdapter {
     }
 
     // Nhan xuong o pha chuan bi theo SO DO DIEU KHIEN MOI, thu tu uu tien:
-    // 1) Dai shop TREN-GIUA (LUON HIEN o pha chuan bi): the tuong -> mua ngay; dia
+    // 1) Dai shop DUOI-GIUA (LUON HIEN o pha chuan bi): the tuong -> mua ngay; dia
     //    DOI LAI o cot phai -> lam moi shop (gia 2). Ca hai luc nao cung bam duoc.
     // 2) 2 nut tron goc duoi: tron XP -> mua XP; tron vang CHI LA DONG HO VANG (nuot
     //    cham, khong lam gi — khong con mo/dong shop nua).
@@ -3991,9 +3999,9 @@ public class MatchScreen extends ScreenAdapter {
         Match.PlayerState h = match.human();
         // The tuong dang mo (co tuong dang chon): nut BAN + o do trong the xu ly truoc het;
         // cham vao phan con lai cua the = nuot cham (khong bo chon, khong roi xuong dat tuong).
-        // Khoi nay phai dung TRUOC hit-test shop: the (x 954..1270, y 166..662) ve phu len
-        // goc phai dai shop moi (the shop 4 cham x 1026, dai cham y 674) — cham vao vung the
-        // phu khong duoc mua trung the shop nam duoi.
+        // Khoi nay dung TRUOC hit-test shop cho chac: the (x 954..1270, y 166..662) hien
+        // khong con chong dai shop (shop da xuong duoi, y 4..92) nhung giu thu tu nay de
+        // cham vao the khong bao gio roi xuong thao tac san/shop ben duoi.
         if (selUid != null && CARD.contains(x, y)) {
             Engine.PlacedUnit su = selectedUnit();
             if (su != null) {
@@ -4331,8 +4339,8 @@ public class MatchScreen extends ScreenAdapter {
     }
 
     // Tra ve true neu click THUC SU lam mot viec (chon/dat/deo do) — planningPress dua vao
-    // day de biet day la "cham vung trong" (khong lam gi) hay thao tac that, phuc vu quy tac dong shop.
-    // (Mua the/reroll khong con o day: lop shop duoc planningPress xu ly rieng khi dang mo.)
+    // day de biet day la "cham vung trong" (khong lam gi) hay thao tac that.
+    // (Mua the/reroll khong con o day: dai shop duoc planningPress xu ly rieng o tren.)
     private boolean planningClick(float x, float y) {
         Match.PlayerState h = match.human();
         // Bench

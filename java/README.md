@@ -444,16 +444,21 @@ User gửi clip TikTok TFT Mobile (@khoai.tft.mobile, vòng 1-1) và yêu cầu 
 bản ghi chi tiết bố cục từ clip: `~/workspace/research_notes/tft-mobile-planning-layout-from-tiktok-20261026.md`.
 Đã áp dụng (chỉ `MatchScreen` + `ScreenshotMain` + mục Học Chơi; engine/cơ chế không đổi):
 
-- **Shop lên TRÊN–GIỮA, luôn hiện ở pha chuẩn bị:** dải 5 thẻ dọc 148×88 tại y 586 (x bắt đầu 254, pitch 156)
-  ngay dưới dòng pha, **bỏ hẳn cơ chế mở/đóng shop bằng đĩa vàng** (trường `shopOpen` đã xóa). Thẻ kiểu clip:
-  khung viền theo bậc tiền (asset `shopFrames`), chân dung phía trên, dòng icon kim cương + tên tộc/hệ ở giữa,
-  tên tướng dưới-trái (cắt `...` nếu quá 100px), icon xu + giá dưới-phải theo màu bậc. Ngay dưới dải thẻ là
-  **pill tỉ lệ odds** (y 562, cao 20) lấy đúng bảng `GameData.SHOP_ODDS[level]` của engine. Pha giao
-  tranh/kết quả: dải shop **biến mất hoàn toàn**. Hệ quả đã biết và chấp nhận (giống clip — shop là lớp phủ
-  trên sân): trong pha chuẩn bị dải thẻ phủ hàng tướng địch xem trước trên cùng (sprite hàng đó vẫn ló phần
-  thân dưới mép pill; cụm thanh của hàng đó đã lật xuống dưới tướng từ đợt trước nên vẫn đọc được), và dây cờ
-  chuỗi thắng của sàn đấu (y 642–659) bị thẻ che trong pha chuẩn bị (vẫn hiện đủ ở pha kết quả) — shop được
-  vẽ SAU trang trí sân để thẻ không bị cờ đè.
+- **Shop luôn hiện ở pha chuẩn bị, vị trí DƯỚI–GIỮA (hiệu chỉnh theo phản hồi user):** bản đầu của đợt này
+  đặt shop TRÊN–GIỮA y 586 theo đúng clip; user xem ảnh chụp và chốt *"Shop đưa xuống đẹp hơn"* nên dải thẻ
+  đã dời xuống **dưới hàng bench**: 5 thẻ dọc 148×88 tại **y 4..92** (x bắt đầu 254, pitch 156, dải
+  254..1026 căn giữa 640), **bỏ hẳn cơ chế mở/đóng shop bằng đĩa vàng** (trường `shopOpen` đã xóa). Thẻ kiểu
+  clip: khung viền theo bậc tiền (asset `shopFrames`), chân dung phía trên, dòng icon kim cương + tên tộc/hệ
+  ở giữa, tên tướng dưới-trái (cắt `...` nếu quá 100px), icon xu + giá dưới-phải theo màu bậc. Ngay **trên**
+  dải thẻ là **pill tỉ lệ odds** (y 96, cao 20 — nằm giữa bench và thẻ) lấy đúng bảng
+  `GameData.SHOP_ODDS[level]` của engine. Pha giao tranh/kết quả: dải shop **biến mất hoàn toàn**. Hình học
+  đã đối chiếu: mép trên thẻ trùng đúng `BENCH_Y=92` nên không lẹm vào vùng chạm bench (92..162); dải không
+  che đĩa MUA XP (x ≤ 116), cụm ĐỔI LẠI/vàng (x ≥ 1164), 2 vùng thùng rác kéo bán (x ≤ 200 / x ≥ 1080 —
+  thùng rác vốn vẽ ở lớp kéo–thả nằm TRÊN shop), thẻ tướng (y ≥ 166) và bảng thông tin đồ (y ≥ 186). Lợi ích
+  chính của vị trí dưới: **hàng tướng địch xem trước trên cùng bàn cờ hiện trọn vẹn** trong pha chuẩn bị
+  (bản trên-giữa phủ mất hàng đó) và dây cờ chuỗi thắng của sàn đấu (y 642–659) hiện đủ ở cả pha chuẩn bị.
+  Điểm phụ: vòng bấm nghịch sân (300,100,r42) bị thẻ 0 phủ mất cáp dưới (y 58..92) — tâm và cáp trên vẫn bấm
+  được như thường.
 - **Đĩa vàng chỉ còn là đồng hồ vàng:** bỏ chữ SHOP/ĐÓNG, bỏ vòng pulse, bỏ chức năng bấm mở shop (chạm vào
   chỉ nuốt chạm). **Reroll thành đĩa riêng** "ĐỔI LẠI" r38 tại (1218, 156) ở cột phải phía trên đĩa vàng, giá
   2, mờ khi thiếu vàng; **huy hiệu lửa chuỗi thắng dời lên góc trên-trái đĩa ĐỔI LẠI** (logic streak ≥2 giữ
@@ -476,7 +481,7 @@ vẫn chứa ô đồ để xem nhanh. **(2) Không có cần điều khiển di
 linh của game tự đi lại trên sân. **(3)** Lật thẻ úp mở trận + vòng chọn x-4, đĩa MUA XP, thẻ tướng khi chạm,
 kéo–thả/kéo bán, vòng emote: giữ nguyên như các đợt trước.
 
-Kiểm chứng: mode chụp mới `plantop` (1-1 shop trên-giữa, sân cỏ), `planopen` (panel phải mở dạng lớp phủ),
+Kiểm chứng: mode chụp mới `plantop` (1-1 shop dưới-giữa, sân cỏ, địch xem trước trọn vẹn), `planopen` (panel phải mở dạng lớp phủ),
 `plancollapse` (panel trái thu gọn cột icon), `planstreak` (ép streak=3: odds + đĩa ĐỔI LẠI + huy hiệu lửa),
 cộng `battle`/`result` (shop biến mất, danh sách hiện) — ảnh `tools/shot-plan-*.png`, đã tự soi từng điểm
 theo bản ghi clip. Gates: compile PASS, `verifyHeadless` **27/27 PASS** (không đổi), `:web:buildWeb` PASS.
