@@ -222,8 +222,10 @@ public class MatchScreen extends ScreenAdapter {
         return new Rectangle(TRAY_X + col * TRAY_SLOT, TRAY_TOP - (row + 1) * TRAY_SLOT, TRAY_SLOT, TRAY_SLOT);
     }
     // Bang thong tin do: panel noi lech trai (khong che giua ban), dong bang cham ra ngoai/nut X
-    private static final Rectangle INFO_PANEL = new Rectangle(224, 186, 388, 330);
-    private static final Rectangle INFO_CLOSE = new Rectangle(224 + 388 - 42, 186 + 330 - 42, 36, 36);
+    // Dinh panel co dinh o y=516; day panel = 212 (da tru 26px sau khi bo dong goi y
+    // cuoi popup thong tin do — xem drawItemInfoPanel).
+    private static final Rectangle INFO_PANEL = new Rectangle(224, 212, 388, 304);
+    private static final Rectangle INFO_CLOSE = new Rectangle(224 + 388 - 42, 212 + 304 - 42, 36, 36);
     // The thong tin TUONG (kieu TFT Mobile): panel mep PHAI hien khi dang cham-chon 1 tuong o
     // pha chuan bi (selUid). Phu danh sach nguoi choi trong luc mo (thong tin tam thoi), nhung
     // KHONG che ban co (ket thuc x=945), bench (y<166), khay do va 2 dia tron dieu khien.
@@ -1230,11 +1232,8 @@ public class MatchScreen extends ScreenAdapter {
                 drawBorder(r.x, r.y, 48, 48, new Color(1, 0.85f, 0.3f, Math.min(1, combineFlashT / 0.3f)), 3);
             }
         }
-        // Goi y 2 dong: ban 1 dong dai ~281px TRAN khoi than panel (rong 192) — da do tren
-        // anh shot25 va tach lam 2 dong ngan nam gon trong panel.
-        float hy = TRAY_TOP - rows * TRAY_SLOT - 8;
-        drawLeft(a.fontSmall, "Kéo để ghép/đeo", PANEL_X + 8, hy, Ui.TEXT_DIM);
-        drawLeft(a.fontSmall, "Chạm xem chi tiết", PANEL_X + 8, hy - 16, Ui.TEXT_DIM);
+        // (Da bo 2 dong chu goi y "Keo de ghep/deo" / "Cham xem chi tiet" o chan khay
+        // theo yeu cau user — hanh vi keo ghep/deo + cham xem popup giu nguyen.)
     }
 
     // Bang thong tin do (cham vao icon trong khay): icon lon + ten + loai + chi so/mo ta;
@@ -1271,7 +1270,6 @@ public class MatchScreen extends ScreenAdapter {
                 batch.draw(a.itemIcon(pair[1]), px + 76, ly, 30, 30);
                 drawLeft(a.font, GameData.itemById(pair[1]).name, px + 118, ly + 21, Color.WHITE);
             }
-            drawLeft(a.fontSmall, "Kéo 2 thành phần vào nhau trong khay để ghép.", px + 18, py + 26, Ui.TEXT_DIM);
         } else {
             drawLeft(a.font, "GHÉP TỪ:", px + 18, ly, Ui.GOLD);
             String[] r = GameData.recipeFor(def.id);
@@ -1281,7 +1279,6 @@ public class MatchScreen extends ScreenAdapter {
                 batch.draw(a.itemIcon(r[1]), px + 82, ly - 50, 34, 34);
                 drawLeft(a.font, GameData.itemById(r[0]).name + " + " + GameData.itemById(r[1]).name, px + 128, ly - 28, Color.WHITE);
             }
-            drawLeft(a.fontSmall, "Kéo đồ này lên tướng để đeo (tối đa 3 món/tướng).", px + 18, py + 26, Ui.TEXT_DIM);
         }
         a.fontBig.setColor(Color.WHITE);
         batch.end();

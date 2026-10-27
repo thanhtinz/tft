@@ -438,6 +438,14 @@ kiểm chứng headless mục 19–21):
   (ảnh trước/sau `tools/shot-topfix-{ice,sunset}-{before,after}.png`); gates: compile PASS,
   `verifyHeadless` **27/27 PASS**, `:web:buildWeb` PASS.
 
+- **Bỏ nốt 3 dòng hướng dẫn nhỏ trong panel/popup đồ (đợt 2026-10-27):** nối tiếp lệnh bỏ dòng gợi ý ở đỉnh
+  màn trận, bỏ luôn footer khay đồ ở tab TRANG BỊ (*"Kéo để ghép/đeo"* / *"Chạm xem chi tiết"*) và dòng cuối
+  trong popup thông tin đồ (*"Kéo 2 thành phần vào nhau trong khay để ghép."* ở nhánh thành phần /
+  *"Kéo đồ này lên tướng để đeo (tối đa 3 món/tướng)."* ở nhánh hoàn chỉnh) — chỉ bỏ chữ, hành vi kéo
+  ghép/đeo và chạm mở popup giữ nguyên; popup thu 26px chiều cao (đáy 186 → 212, đỉnh 516 không đổi) để
+  không còn dải trống. Gates: compile PASS, `verifyHeadless` 27/27 PASS, `:web:buildWeb` PASS
+  (ảnh `tools/shot-nohint-{tabitems,iteminfo_comp,iteminfo_full}.png`).
+
 ### Làm lại pha chuẩn bị theo clip TFT Mobile (đợt 2026-10-26)
 
 User gửi clip TikTok TFT Mobile (@khoai.tft.mobile, vòng 1-1) và yêu cầu làm lại màn chuẩn bị cho khớp;
