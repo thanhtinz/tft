@@ -45,6 +45,10 @@ import java.lang.reflect.Method;
 // | emotewheel / emotepop / emotefoe (VONG EMOTE: vong quay 6 o dang mo / sticker VUI
 //   bat tren tinh linh cua minh / sticker KHIEU KHICH cua bot o ria san dich — trang
 //   thai tiem bang reflection trong render)
+// | plantop / planopen / plancollapse / planstreak (LAM LAI PHA CHUAN BI theo clip:
+//   dai shop TREN-GIUA luon hien + danh sach phai AN mac dinh chi con nut "<" / planopen
+//   mo san danh sach dang lop phu / plancollapse ep panel trai THU GON cot icon /
+//   planstreak ep streak = 3 de huy hieu lua nam tren dia DOI LAI)
 public class ScreenshotMain {
     static class ShotGame extends MainGame {
         final String mode;
@@ -99,17 +103,43 @@ public class ScreenshotMain {
                     setScreen(matchScreen);
                     break;
                 }
-                case "planning": case "shopopen": case "battle": case "result": case "resultpanel": case "drag": case "dragcell": case "select": {
+                case "planning": case "shopopen": case "plantop": case "planopen": case "planstreak": case "battle": case "result": case "resultpanel": case "drag": case "dragcell": case "select": {
                     Match m = Match.startPvp(Match.Mode.PVP_RANKED, 7, "QA Pixel");
                     m.autoPlan();
-                    if ("shopopen".equals(mode)) {
+                    if ("shopopen".equals(mode) || "plantop".equals(mode) || "planopen".equals(mode) || "planstreak".equals(mode)) {
                         // autoPlan da mua sach shop + tieu het vang: nap lai vang va lam moi
-                        // de chup duoc 5 the that (chua ban) + nut reroll o trang thai vang
+                        // de chup duoc 5 the that (chua ban) + dia DOI LAI o trang thai vang.
+                        // (shopopen la ten cu tu thoi shop con mo/dong o mep duoi — nay dai
+                        // shop LUON HIEN o tren-giua nen ca 4 mode deu ra cung mot hinh.)
                         m.human().gold = 50;
                         m.reroll();
                     }
+                    if ("planstreak".equals(mode)) m.human().streak = 3; // ep chuoi thang: huy hieu lua phai o tren dia DOI LAI
                     matchScreen = new MatchScreen(this, m);
                     setScreen(matchScreen);
+                    if ("planopen".equals(mode)) {
+                        // Mo san danh sach nguoi choi dang LOP PHU o pha chuan bi (mac
+                        // dinh AN chi con nut "<") de kiem chung ca 2 tab + dau doi thu
+                        try {
+                            Field fRL = MatchScreen.class.getDeclaredField("rightListOpen"); fRL.setAccessible(true); fRL.setBoolean(matchScreen, true);
+                        } catch (Exception ex) { throw new RuntimeException(ex); }
+                    }
+                    break;
+                }
+                case "plancollapse": {
+                    // Panel trai THU GON (cot icon): doi hinh benchShowcase + kho 8 mon
+                    // nhu tabitems, ep leftCollapsed = true — cot chi con luc giac toc/he
+                    // + icon do; nut chevron phai hien ">" o goc cot.
+                    Match m = benchShowcase();
+                    Match.PlayerState h = m.human();
+                    h.inventory.add("tpkiem"); h.inventory.add("tptim"); h.inventory.add("tpcung");
+                    h.inventory.add("tpgang"); h.inventory.add("tpgiap"); h.inventory.add("tpgay");
+                    h.inventory.add("vuot"); h.inventory.add("tim");
+                    matchScreen = new MatchScreen(this, m);
+                    setScreen(matchScreen);
+                    try {
+                        Field fLC = MatchScreen.class.getDeclaredField("leftCollapsed"); fLC.setAccessible(true); fLC.setBoolean(matchScreen, true);
+                    } catch (Exception ex) { throw new RuntimeException(ex); }
                     break;
                 }
                 case "benchshow": case "benchshop": {
@@ -559,10 +589,9 @@ public class ScreenshotMain {
                     dragSet = true;
                 }
                 if (("shopopen".equals(mode) || "benchshop".equals(mode)) && !shopSet && frames > 50 && matchScreen != null) {
-                    // Gia lap lop shop dang MO o pha chuan bi (dat thang truong shopOpen bang reflection)
-                    Field fShop = MatchScreen.class.getDeclaredField("shopOpen");
-                    fShop.setAccessible(true);
-                    fShop.setBoolean(matchScreen, true);
+                    // (Lich su: mode nay tung ep truong shopOpen de mo lop shop duoi. Nay
+                    // dai shop LUON HIEN o pha chuan bi nen khong con gi de ep — giu
+                    // nhanh nay lam no-op de cac lenh chup cu khong gay loi truong da xoa.)
                     shopSet = true;
                 }
                 if (("draftflip".equals(mode) || "draftlong".equals(mode)) && !dragSet && frames > 30 && matchScreen != null) {
@@ -601,6 +630,13 @@ public class ScreenshotMain {
                     // frames > 5 nhu battletab: mode tran co the chup rat som khi pow no.
                     Field fRT = MatchScreen.class.getDeclaredField("rightTab"); fRT.setAccessible(true); fRT.setInt(matchScreen, 1);
                     dragSet = true;
+                }
+                if (("legendlist".equals(mode) || "oppmark".equals(mode) || "dmgplan".equals(mode)) && frames > 5 && matchScreen != null) {
+                    // Cac mode kiem chung DANH SACH o pha chuan bi: nay danh sach mac dinh
+                    // AN (chi con nut "<") nen phai mo san dang lop phu, khong thi anh
+                    // chup khong con thay danh sach nua. (oppbattle/battledmg o pha tran
+                    // thi panel tu hien, khong can.)
+                    Field fRL2 = MatchScreen.class.getDeclaredField("rightListOpen"); fRL2.setAccessible(true); fRL2.setBoolean(matchScreen, true);
                 }
                 if ("menumodes".equals(mode) && !dragSet && frames > 30 && menuScreen != null) {
                     // Mo LOP CHON CHE DO o sanh bang reflection (modesOpen = true)

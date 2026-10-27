@@ -47,9 +47,10 @@ import java.util.Set;
 // contact AO duoi chan + gradient toi nhe o dai chan sprite (ban unitOnGround) de "tiep dat".
 // Bench = hang MANG DAT ngay duoi ban co trong san (tuong DUNG tren dat, khong khung hop).
 // DIEU KHIEN hoc TFT Mobile: nut tron xanh duong goc duoi
-// trai = cap + mua XP, nut tron vang goc duoi phai = vang + mo/dong SHOP (shop la lop mo/dong nam
-// DUOI hang cho, sat mep duoi man hinh, reroll tron chi co trong shop, cham vung trong thi dong shop); tran TU DONG bat dau
-// khi het 45s chuan bi; pha ket qua tu chuyen sau ~4s va bang sat thuong tu hien o pha do.
+// trai = cap + mua XP, nut tron vang goc duoi phai = CHI HIEN SO VANG (khong con mo shop);
+// SHOP la dai ngang TREN-GIUA luon hien o pha chuan bi (lam lai theo clip TFT Mobile — xem
+// muc rieng duoi), reroll la dia vang rieng "DOI LAI" o cot phai phia tren dia vang; tran TU
+// DONG bat dau khi het 45s chuan bi; pha ket qua tu chuyen sau ~4s va bang sat thuong tu hien o pha do.
 // Panel trai HOP NHAT 2 tab icon kieu TFT Mobile (khien = toc/he, tui = khay trang bi);
 // panel PHAI cung HOP NHAT 2 tab icon (nguoi = danh sach nguoi choi, bieu do = bang sat
 // thuong xem nhanh giua tran — cong don theo playT). Thanh dinh TOI GIAN kieu TFT:
@@ -69,20 +70,33 @@ public class MatchScreen extends ScreenAdapter {
     // Ti le PAINTED (chot tu ban mau so sanh): o chu nhat 84x70 (ban 588x490, 357..945 x 152..642),
     // sprite ban/tran 100px, xem truoc dich 88px.
     static final float BX = 357, BY = 152, CELLX = 84, CELLY = 70;
-    // Hang cho: 9 MANG DAT co DUNG kich thuoc o ban (84x70; dai 357..1113 x 92..162, nam gon giua
+    // Hang cho: 9 o co DUNG kich thuoc o ban (84x70; dai 357..1113 x 92..162, nam gon giua
     // 2 dia tron goc) — bench la MOT HANG NGANG NUA cua ban co: sprite DUNG 100px va dung CHUNG
     // quy tac dung tren dat voi tuong tren ban (tam sprite = tam o, bong o cy-45, vong sao o
-    // cy-41, sao cap tren dau). Mang dat (96x48) nam o phan duoi o, bao quanh vung chan cy-50.
+    // cy-41, sao cap tren dau). Hinh thuc o la DIA TRON xanh ngoc (ve trong drawBench).
     static final float BENCH_Y = 92, BENCH_X = 357, SLOT = 84, SLOT_H = 70;
-    // Shop la LOP MO/DONG (truong shopOpen): hang the nam DUOI hang cho, sat mep duoi man hinh
-    // (the y 2..84; dong odds ngay tren hang the y 86..106 — giua hang the va hang cho).
-    static final float SHOP_Y = 2, SHOP_X = 254, CARD_W = 148, CARD_H = 82;
+    // Shop la DAI NGANG TREN-GIUA kieu clip TFT Mobile: 5 the dung ngay duoi thanh dinh,
+    // LUON HIEN o pha chuan bi (khong con co che mo/dong), bien mat hoan toan o pha giao
+    // tranh/ket qua. The dung 148x88: chan dung o tren, icon + ten toc/he o giua, ten tuong
+    // duoi-trai, gia vang duoi-phai, khung theo bac tien (shopFrames). Dai the x 254..1026,
+    // y 586..674 — khong che panel trai (x<=216), panel phai (x>=1084) hay 2 dia goc duoi.
+    // Dong ti le odds (% that theo cap, GameData.SHOP_ODDS) la pill ngay DUOI dai the y 562..582.
+    // Luu y hinh hoc: ban co ket thuc o y=642 va sprite dich xem truoc hang tren cung cham
+    // toi y=651 nen dai shop (lop phu tren san nhu clip) phu len hang sau cua doi dich xem
+    // truoc o pha chuan bi; hang y=537 (sprite cham 581) van thoang duoi mep dai (562).
+    static final float SHOP_X = 254, CARD_W = 148, CARD_H = 88, CARD_GAP = 8;
+    static final float SHOP_CARD_Y = 586, SHOP_ODDS_Y = 562;
+    // Tam/hit-rect the shop thu i (dung chung cho ve va cham)
+    private Rectangle shopCardRect(int i) { return new Rectangle(SHOP_X + i * (CARD_W + CARD_GAP), SHOP_CARD_Y, CARD_W, CARD_H); }
     // Hai nut tron dieu khien kieu TFT Mobile (ve tay bang batch, hit-test hinh tron trong BoardInput):
-    // tron xanh duoi-trai = cap + MUA XP, tron vang duoi-phai = vang + mo/dong shop.
+    // tron xanh duoi-trai = cap + MUA XP, tron vang duoi-phai = CHI HIEN SO VANG (chi la dong ho vang).
     static final float XP_CX = 62, XP_CY = 58, XP_R = 54;
     static final float GOLD_CX = 1218, GOLD_CY = 58, GOLD_R = 54;
-    // Nut LAM MOI tron vang o cuoi hang shop — chi ton tai khi shop dang mo.
-    static final float REROLL_CX = 1072, REROLL_CY = SHOP_Y + CARD_H / 2, REROLL_R = 38;
+    // Nut DOI LAI (reroll): dia tron vang o COT PHAI, phia tren dia vang (kieu clip) — chu
+    // "DOI LAI" + gia 2, mo khi khong du vang; chi ton tai o pha chuan bi (ve trong
+    // drawRoundButtons). Dia chiem y 118..194: tren dia vang (ket thuc 112), duoi day
+    // panel phai (>= 220). Huy hieu lua chuoi thang (streak >= 2) de goc tren-trai dia nay.
+    static final float REROLL_CX = 1218, REROLL_CY = 156, REROLL_R = 38;
     // Dem nguoc pha chuan bi: 45 giay (ban cu 90 giay — rut ngan theo dot dieu khien TFT Mobile)
     static final float PLAN_TIME = 45f;
 
@@ -105,6 +119,17 @@ public class MatchScreen extends ScreenAdapter {
     static final int DMG_ROW_H = 30, DMG_MAX_ROWS = 11;
     private int rightTab = 0;
     static final int RTAB_PLAYERS = 0, RTAB_DAMAGE = 1;
+    // Danh sach nguoi choi o pha CHUAN BI (kieu clip TFT Mobile): mac dinh AN — chi co
+    // nut gat "<" nho o mep phai giua man hinh; cham nut -> panel hien ra dang LOP PHU
+    // (du ca 2 tab), cham nut ">" o mep trai panel hoac cham ra ngoai thi thu ve. Pha
+    // GIAO TRANH va KET QUA: panel hien day du nhu cu (trang thai nay khong lien quan).
+    // Lua chon mo/thu cua nguoi choi duoc GIU trong suot tran (khong reset theo vong).
+    private boolean rightListOpen = false;
+    static final float RTOGGLE_Y = 326, RTOGGLE_W = 34, RTOGGLE_H = 68;
+    private Rectangle rToggleRect(boolean open) {
+        // open=false: nut "<" dinh mep phai man hinh; open=true: nut ">" dinh mep trai panel
+        return new Rectangle(open ? RPANEL_X - RTOGGLE_W : 1280 - RTOGGLE_W, RTOGGLE_Y, RTOGGLE_W, RTOGGLE_H);
+    }
     private Texture peopleTex, chartTex; // icon 2 tab phai ve bang Pixmap (khong emoji)
     private Rectangle rTabRect(int t) {
         return new Rectangle(RPANEL_X + t * RTAB_W, RPANEL_TOP - RTAB_H, RTAB_W, RTAB_H);
@@ -121,7 +146,6 @@ public class MatchScreen extends ScreenAdapter {
     private Match.PlayerState markedOpponent;
     private Texture swordsTex;        // icon kiem cheo ve bang Pixmap (khong dung emoji)
     private NinePatchDrawable oppRowBg; // nen hang doi thu: trong vang + vien vang 2px
-    private boolean shopOpen = false; // lop shop dang mo hay dong (mac dinh dong nhu TFT Mobile)
     private float resultT = 0;        // dem giay o pha RESULT sau announcer: ~4s thi tu chuyen tiep
     // Chip toc/he ve tay o mep trai: {noi dung, "1" neu bac dang kich hoat}
     private final List<String[]> synChips = new ArrayList<>();
@@ -152,6 +176,36 @@ public class MatchScreen extends ScreenAdapter {
     // toc/he truoc), 1 = TRANG BI. Giu nguyen suot tran, chuyen pha khong tu nhay tab.
     private int panelTab = 0;
     static final int TAB_TRAITS = 0, TAB_ITEMS = 1;
+    // Trang thai THU GON cua panel trai (kieu clip TFT Mobile): nguoi choi TU chon bang
+    // nut tron chevron o goc tren-phai panel va trang thai GIU NGUYEN qua cac pha (khong
+    // tu thu khi vao tran nhu ban cu da tung de xuat). Thu gon = cot hep 56px chi ICON:
+    // luc giac mau theo toc/he (kem so dem) + icon do trong khay o vuong nho (cham xem
+    // bang thong tin nhu panel mo). Tab TRANG BI van giu nguyen o dang mo rong vi game
+    // can khay de ghep/deo do (thich ung da ghi trong README).
+    private boolean leftCollapsed = false;
+    static final float COLLAPSE_W = 56, COLLAPSE_BTN_CY = 686, COLLAPSE_BTN_R = 15;
+    static final int COLLAPSE_MAX_SLOTS = 10; // tong o icon (toc/he + do) toi da trong cot thu gon
+    // Ban sao CAU TRUC cua synChips (kem traitId/count/tier) cho cot thu gon ve icon —
+    // synChips chi co chu nen khong tach lai duoc.
+    private final List<Engine.SynergyInfo> synInfos = new ArrayList<>();
+    private final Map<String, Texture> traitHexTex = new HashMap<>(); // icon luc giac theo trait (Pixmap, lazy)
+    private float collapseBtnCx() { return leftCollapsed ? PANEL_X + COLLAPSE_W + 2 : PANEL_X + PANEL_W + 2; }
+    // Tam o icon thu slot trong cot thu gon: chay tu CONTENT_TOP xuong, buoc 46, o 44px;
+    // het cho (day an toan 130) thi tra null.
+    private float[] collapsedSlotCenter(int slot) {
+        float cy = CONTENT_TOP - 23 - slot * 46f;
+        if (cy - 22 < 130) return null;
+        return new float[]{PANEL_X + COLLAPSE_W / 2, cy};
+    }
+    // So o DO that su ve duoc trong cot thu gon (tru o "+N" khi tran): dung chung cho
+    // ve va hit-test de 2 ben khop nhau.
+    private int collapsedItemSlots() {
+        int inv = match.human().inventory.size();
+        int free = COLLAPSE_MAX_SLOTS - synInfos.size();
+        if (free <= 0) return 0;
+        if (inv <= free) return inv;
+        return Math.max(0, free - 1); // danh o cuoi cho nhan "+N"
+    }
     // Icon 2 tab VE BANG PIXMAP (khong emoji/ky tu): khien vang-xanh (toc/he), tui do (trang bi)
     private Texture shieldTex, bagTex;
     private Rectangle tabRect(int t) {
@@ -440,8 +494,9 @@ public class MatchScreen extends ScreenAdapter {
         // (drawLeftPanel) — khong con nhan "TRANG BI" Scene2D rieng ben duoi chip toc/he.
 
         // SO DO DIEU KHIEN MOI (TFT Mobile): khong con cum nut chu nhat o 2 goc duoi.
-        // Nut tron mua XP (duoi-trai) + nut tron vang/mo shop (duoi-phai) + nut reroll tron trong
-        // shop deu VE TAY bang batch (drawRoundButtons/drawShop) va xu ly cham trong BoardInput.
+        // Nut tron mua XP (duoi-trai) + nut tron vang chi hien so vang (duoi-phai) + dia
+        // DOI LAI o cot phai deu VE TAY bang batch (drawRoundButtons) va xu ly cham trong
+        // BoardInput; dai shop tren-giua ve trong drawShop (chi pha chuan bi).
         // KHONG con nut "Cat ve bench": keo tuong tren ban tha vao o bench de cat (xem BoardInput keo-tha).
         // Thoat: nut nho do o goc tren phai
         TextButton exitBtn = Ui.button(a, "Thoát", Ui.RED, a.fontSmall);
@@ -489,6 +544,8 @@ public class MatchScreen extends ScreenAdapter {
         }
         // Synergy -> chip nho doc mep trai (ve tay trong render)
         List<Engine.SynergyInfo> syns = Engine.computeSynergies(h.board);
+        synInfos.clear();
+        synInfos.addAll(syns); // ban sao cau truc cho cot thu gon (icon luc giac + so dem)
         synChips.clear();
         if (syns.isEmpty()) synChips.add(new String[]{"Chưa có tướng trên bàn", "0"});
         for (Engine.SynergyInfo s : syns) {
@@ -716,6 +773,7 @@ public class MatchScreen extends ScreenAdapter {
     // duoi chan + icon sang ro; tab con lai: nen toi + icon mo 50%); than panel ve theo tab.
     private void drawLeftPanel(float now) {
         Assets a = game.assets;
+        if (leftCollapsed) { drawLeftPanelCollapsed(now); drawCollapseButton(); return; }
         float bottom = panelBottom();
         drawShadowRect(PANEL_X, bottom, PANEL_W, PANEL_TOP - bottom, 0.35f);
         batch.setColor(0.05f, 0.04f, 0.11f, 0.78f);
@@ -748,6 +806,148 @@ public class MatchScreen extends ScreenAdapter {
         }
         if (panelTab == TAB_TRAITS) drawTraitTab(bottom);
         else drawItemTab(now);
+        drawCollapseButton();
+    }
+
+    // Nut tron THU GON / MO RONG panel trai: de o goc tren-phai panel (tren thanh tab,
+    // trong vung san trong y 671..701), chevron "«" khi dang mo rong (bam de thu),
+    // "»" khi dang thu gon (bam de mo). Cung ngon ngu dia dieu khien: dia toi + vien vang.
+    private void drawCollapseButton() {
+        Assets a = game.assets;
+        float cx = collapseBtnCx(), cy = COLLAPSE_BTN_CY, d = COLLAPSE_BTN_R * 2;
+        batch.setColor(0, 0, 0, 0.35f);
+        batch.draw(discTex, cx - COLLAPSE_BTN_R - 2, cy - COLLAPSE_BTN_R - 2, d + 4, d + 4);
+        batch.setColor(0.07f, 0.05f, 0.15f, 0.92f);
+        batch.draw(discTex, cx - COLLAPSE_BTN_R, cy - COLLAPSE_BTN_R, d, d);
+        batch.setColor(1f, 0.85f, 0.3f, 0.85f);
+        batch.draw(ringTex, cx - COLLAPSE_BTN_R - 1, cy - COLLAPSE_BTN_R - 1, d + 2, d + 2);
+        batch.setColor(Color.WHITE);
+        drawCentered(a.fontBig, leftCollapsed ? ">" : "<", cx, cy + 9, Color.WHITE);
+    }
+
+    // Mau dai dien theo trait cho icon luc giac o cot thu gon (bang mau co dinh theo id).
+    private static Color traitColor(String traitId) {
+        switch (traitId) {
+            case "hiepsi": return new Color(0.45f, 0.65f, 1f, 1);
+            case "phuthuy": return new Color(0.78f, 0.50f, 1f, 1);
+            case "xathu": return new Color(0.40f, 0.90f, 0.45f, 1);
+            case "satthu": return new Color(1f, 0.45f, 0.55f, 1);
+            case "hove": return new Color(1f, 0.65f, 0.30f, 1);
+            case "nguyento": return new Color(0.40f, 0.90f, 1f, 1);
+            case "tinhlinh": return new Color(1f, 0.60f, 0.90f, 1);
+            default: return new Color(1f, 0.80f, 0.20f, 1); // longtoc
+        }
+    }
+
+    // Icon LUC GIAC theo trait ve bang Pixmap 44x44 (kieu clip): luc giac mau dac trung
+    // + vien toi + loi sang nho o tren-trai. Tao 1 lan cho moi trait, loc Nearest.
+    private Texture traitHexTexture(String traitId) {
+        Texture t = traitHexTex.get(traitId);
+        if (t != null) return t;
+        int S = 44, c = 22;
+        Pixmap pm = new Pixmap(S, S, Pixmap.Format.RGBA8888);
+        Color col = traitColor(traitId);
+        // Luc giac nhon tren/duoi: 6 dinh o goc 90/150/210/270/330/30 do
+        int[][] hex = new int[6][2];
+        for (int i = 0; i < 6; i++) {
+            double ang = Math.toRadians(90 + i * 60);
+            hex[i][0] = c + (int) Math.round(Math.cos(ang) * 20);
+            hex[i][1] = c - (int) Math.round(Math.sin(ang) * 20); // Pixmap y xuong
+        }
+        pm.setColor(0.05f, 0.04f, 0.10f, 1f); // vien toi (luc giac to hon 1 lop)
+        fillHex(pm, hex, c, 20);
+        pm.setColor(col.r, col.g, col.b, 1f);
+        fillHex(pm, hex, c, 17);
+        pm.setColor(Math.min(1, col.r + 0.25f), Math.min(1, col.g + 0.25f), Math.min(1, col.b + 0.25f), 0.85f);
+        pm.fillCircle(c - 5, c - 6, 6); // loi sang
+        t = new Texture(pm);
+        t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        pm.dispose();
+        traitHexTex.put(traitId, t);
+        return t;
+    }
+
+    private void fillHex(Pixmap pm, int[][] hex, int c, int r) {
+        // Dien luc giac bang quat tam giac tu tam (hex da tinh dinh o ban kinh 20,
+        // ban kinh khac duoc co lai quanh tam)
+        for (int i = 0; i < 6; i++) {
+            int[] p1 = hex[i], p2 = hex[(i + 1) % 6];
+            int x1 = c + (p1[0] - c) * r / 20, y1 = c + (p1[1] - c) * r / 20;
+            int x2 = c + (p2[0] - c) * r / 20, y2 = c + (p2[1] - c) * r / 20;
+            pm.fillTriangle(c, c, x1, y1, x2, y2);
+        }
+    }
+
+    // COT THU GON cua panel trai (kieu clip): cot 56px — dau cot la icon khien, roi cac
+    // icon luc giac toc/he dang co tren ban (mo 55% neu chua kich hoat bac, vien vang
+    // neu dang kich hoat, huy hieu so dem o goc duoi-phai), duong ke, roi icon do trong
+    // khay dang o vuong nho (tran thi o cuoi la "+N"). Cham icon do = mo bang thong tin,
+    // cham luc giac = toast ten + mo ta (xu ly o pressLeftPanel).
+    private void drawLeftPanelCollapsed(float now) {
+        Assets a = game.assets;
+        Match.PlayerState h = match.human();
+        int traits = synInfos.size();
+        int itemSlots = collapsedItemSlots();
+        boolean overflow = h.inventory.size() > itemSlots && (traits + itemSlots) < COLLAPSE_MAX_SLOTS;
+        int totalSlots = Math.min(COLLAPSE_MAX_SLOTS, traits + itemSlots + (overflow ? 1 : 0));
+        float bottom = Math.max(126f, CONTENT_TOP - totalSlots * 46f - 8f);
+        if (totalSlots == 0) bottom = PANEL_TOP - 64;
+        drawShadowRect(PANEL_X, bottom, COLLAPSE_W, PANEL_TOP - bottom, 0.35f);
+        batch.setColor(0.05f, 0.04f, 0.11f, 0.78f);
+        batch.draw(a.whiteTex(), PANEL_X, bottom, COLLAPSE_W, PANEL_TOP - bottom);
+        batch.setColor(Color.WHITE);
+        drawBorder(PANEL_X, bottom, COLLAPSE_W, PANEL_TOP - bottom, new Color(1f, 0.85f, 0.3f, 0.35f), 2);
+        // Dau cot: icon khien (nhan dang cot la panel toc/he + trang bi thu gon)
+        batch.setColor(1, 1, 1, 0.9f);
+        batch.draw(shieldTexture(), PANEL_X + COLLAPSE_W / 2 - 12, PANEL_TOP - 38, 24, 24);
+        batch.setColor(Color.WHITE);
+        // Icon toc/he
+        for (int i = 0; i < traits; i++) {
+            float[] c = collapsedSlotCenter(i);
+            if (c == null) break;
+            Engine.SynergyInfo s = synInfos.get(i);
+            if (s.active) { // hao quang vang sau luc giac dang kich hoat
+                batch.setColor(1f, 0.85f, 0.3f, 0.55f);
+                batch.draw(ringTex, c[0] - 24, c[1] - 24, 48, 48);
+            }
+            batch.setColor(1, 1, 1, s.active ? 1f : 0.55f);
+            batch.draw(traitHexTexture(s.traitId), c[0] - 20, c[1] - 20, 40, 40);
+            batch.setColor(Color.WHITE);
+            // Huy hieu so dem: nen toi nho o goc duoi-phai icon + so trang
+            String cnt = String.valueOf(s.count);
+            float cw = measureW(a.fontTiny, cnt) + 6;
+            batch.setColor(0, 0, 0, 0.72f);
+            batch.draw(a.whiteTex(), c[0] + 18 - cw, c[1] - 21, cw, 13);
+            batch.setColor(Color.WHITE);
+            drawCentered(a.fontTiny, cnt, c[0] + 18 - cw / 2, c[1] - 10, Color.WHITE);
+        }
+        // Duong ke phan cach toc/he — trang bi (chi khi ca 2 phan deu co noi dung)
+        if (traits > 0 && (itemSlots > 0 || overflow)) {
+            float dy = CONTENT_TOP - traits * 46f;
+            batch.setColor(1f, 0.85f, 0.3f, 0.25f);
+            batch.draw(a.whiteTex(), PANEL_X + 8, dy, COLLAPSE_W - 16, 2);
+            batch.setColor(Color.WHITE);
+        }
+        // Icon do trong khay
+        for (int j = 0; j < itemSlots; j++) {
+            float[] c = collapsedSlotCenter(traits + j);
+            if (c == null) break;
+            drawShadowRect(c[0] - 21, c[1] - 21, 42, 42, 0.35f);
+            batch.setColor(0.05f, 0.04f, 0.12f, 0.55f);
+            batch.draw(a.whiteTex(), c[0] - 21, c[1] - 21, 42, 42);
+            batch.setColor(Color.WHITE);
+            drawBorder(c[0] - 21, c[1] - 21, 42, 42, new Color(1, 1, 1, 0.20f), 1);
+            batch.draw(a.itemIcon(h.inventory.get(j)), c[0] - 19, c[1] - 19, 38, 38);
+        }
+        if (overflow) {
+            float[] c = collapsedSlotCenter(traits + itemSlots);
+            if (c != null) {
+                batch.setColor(0, 0, 0, 0.55f);
+                batch.draw(discTex, c[0] - 16, c[1] - 16, 32, 32);
+                batch.setColor(Color.WHITE);
+                drawCentered(a.fontSmall, "+" + (h.inventory.size() - itemSlots), c[0], c[1] + 6, Ui.TEXT_DIM);
+            }
+        }
     }
 
     // ---------- THANH DINH TOI GIAN + PANEL PHAI 2 TAB (kieu TFT Mobile) ----------
@@ -843,6 +1043,13 @@ public class MatchScreen extends ScreenAdapter {
     // nguoi choi; tab BIEU DO -> bang sat thuong ve tay.
     private void drawRightPanel(float now) {
         Assets a = game.assets;
+        // Pha CHUAN BI + danh sach dang thu (mac dinh, kieu clip): panel BIEN MAT,
+        // chi con nut gat "<" o mep phai; danh sach Scene2D an han (khong ve de len san).
+        if (phase == Phase.PLANNING && !rightListOpen) {
+            playersBox.setVisible(false);
+            drawRightToggleTab(false);
+            return;
+        }
         // Dong bo thay/mat cua danh sach Scene2D voi tab dang chon NGAY TAI CHO VE:
         // bat cu thay doi rightTab nao (cham tab, trang thai khac...) deu dung, danh
         // sach khong bao gio ve de len tab BIEU DO.
@@ -878,6 +1085,23 @@ public class MatchScreen extends ScreenAdapter {
         }
         if (rightTab == RTAB_DAMAGE) drawDamageTab();
         else if (!match.isPvp()) drawPveInfoTab();
+        // Dang o pha chuan bi ma panel dang mo (lop phu): nut ">" dinh mep trai panel
+        // de thu ve (cham ra ngoai panel cung thu — xem pressRightToggle).
+        if (phase == Phase.PLANNING) drawRightToggleTab(true);
+    }
+
+    // Nut gat mo/thu danh sach o pha chuan bi (kieu clip): the doc 34x68 o mep phai
+    // giua man hinh — nen toi + vien vang + chevron. open=false: "<" dinh sat mep phai
+    // (panel dang an, bam de mo); open=true: ">" dinh mep trai panel (bam de thu).
+    private void drawRightToggleTab(boolean open) {
+        Assets a = game.assets;
+        Rectangle r = rToggleRect(open);
+        drawShadowRect(r.x, r.y, r.width, r.height, 0.35f);
+        batch.setColor(0.05f, 0.04f, 0.11f, 0.82f);
+        batch.draw(a.whiteTex(), r.x, r.y, r.width, r.height);
+        batch.setColor(Color.WHITE);
+        drawBorder(r.x, r.y, r.width, r.height, new Color(1f, 0.85f, 0.3f, 0.45f), 2);
+        drawCentered(a.fontBig, open ? ">" : "<", r.x + r.width / 2, r.y + r.height / 2 + 9, Ui.GOLD);
     }
 
     // Dong sat thuong cho tab BIEU DO (co cache): pha tran -> CONG DON theo playT
@@ -952,6 +1176,8 @@ public class MatchScreen extends ScreenAdapter {
     // Bam thanh tab panel PHAI -> chuyen tab NGUOI <-> BIEU DO (dong bo an/hien danh
     // sach Scene2D ngay). Tra ve true neu cham trung vung tab.
     private boolean pressRightTab(float x, float y) {
+        // Panel dang an o pha chuan bi thi khong co tab nao de bam (nut gat xu ly rieng)
+        if (phase == Phase.PLANNING && !rightListOpen) return false;
         for (int t = 0; t < 2; t++) {
             if (rTabRect(t).contains(x, y)) {
                 if (rightTab != t) {
@@ -1520,10 +1746,14 @@ public class MatchScreen extends ScreenAdapter {
         batch.begin();
         battleFx.drawGround(batch, circleTex); // vet dat theo he (chay/doc/bang) nam duoi chan tuong
         if (phase == Phase.BATTLE || phase == Phase.RESULT) drawBattleUnits(now);
-        else { drawPlanningUnits(now); drawBench(now); if (shopOpen && phase == Phase.PLANNING) drawShop(); }
+        else { drawPlanningUnits(now); drawBench(now); }
         drawLegends(now); // tinh linh 2 ben + cau do: cung lop don vi, duoi panel/HUD
         drawEmoteStickers(); // sticker emote bat tren dau 2 tinh linh (cung lop, tren tinh linh)
         drawArenaDecor(now); // trang tri san phan ung (co/lap lanh chuoi thang, goc + hao quang theo cap, bung sao diem bam)
+        // Dai shop tren-giua ve SAU trang tri san: day co chuoi thang o mep tren ban
+        // (y 642..659) nam dung vung dai shop nen the phai phu len co, khong de co de the.
+        // Chi pha CHUAN BI moi ve — giao tranh/ket qua bien mat hoan toan nhu clip.
+        if (phase == Phase.PLANNING) drawShop();
         drawLeftPanel(now);
         drawRightPanel(now);
         drawTopBar();
@@ -1964,24 +2194,33 @@ public class MatchScreen extends ScreenAdapter {
         }
     }
 
-    // Hang cho = 9 MANG DAT thuoc mat san (3 bien the luan phien + lat ngang o le cho do giong nhau).
+    // Hang cho = 9 O TRON XANH NGOC kieu clip TFT Mobile (thay cac mang dat painted cu —
+    // chi doi HINH THUC: toa do tam o, vung cham va moi quy tac dung tren dat giu nguyen).
     // Bench la MOT HANG NGANG NUA CUA BAN CO: o DUNG 84x70, sprite DUNG 100px, va dung CHUNG quy
     // tac dung tren dat voi tuong tren ban (drawPlanningUnits) — tam sprite = tam o (benchCx/benchCy),
     // bong ellipse o cy-45 rong 78, vong sao o chan qua drawGroundRing (gy = cy-41), sao cap tren dau
-    // nhu drawBars. Mang dat (96x48, tam o cy-40) nam o phan duoi o, bao quanh vung chan cy-50.
-    // O duoc chon/keo qua chi co QUANG SANG MEM bam theo mang dat, khong khung hop.
+    // nhu drawBars. O tron (duong kinh 82, tam o (benchCx, 94)) la dia 2 lop: vien xanh ngoc
+    // tram + long sang hon + gloss nua tren; chan tuong (cy-46 = 81) nam gon trong dia.
+    // O duoc chon/keo qua chi co QUANG SANG MEM bam theo o, khong khung hop.
+    static final float BENCH_CIRCLE_CY = 94;
     private void drawBench(float now) {
         Assets a = game.assets;
         Match.PlayerState h = match.human();
         float cy = benchCy();
         for (int i = 0; i < 9; i++) {
             float cx = benchCx(i);
-            com.badlogic.gdx.graphics.Texture patch = a.benchPatchTex[i % 3];
-            batch.draw(patch, cx - 48, cy - 64, 96, 48, 0, 0, patch.getWidth(), patch.getHeight(), i % 2 == 1, false);
+            // Dia tron xanh ngoc: lop ngoai tram (vien) -> long sang hon -> gloss mem nua tren
+            batch.setColor(0.05f, 0.20f, 0.23f, 0.95f);
+            batch.draw(discTex, cx - 41, BENCH_CIRCLE_CY - 41, 82, 82);
+            batch.setColor(0.13f, 0.46f, 0.49f, 0.95f);
+            batch.draw(discTex, cx - 36, BENCH_CIRCLE_CY - 36, 72, 72);
+            batch.setColor(1, 1, 1, 0.16f);
+            batch.draw(a.glowTex(), cx - 34, BENCH_CIRCLE_CY + 2, 68, 32);
+            batch.setColor(Color.WHITE);
             if (i < h.bench.size()) {
                 Engine.PlacedUnit u = h.bench.get(i);
                 if (!isUnitHidden(u.uid)) { // an sprite tai cho khi dang keo / dang truot ve
-                    if (u.uid.equals(selUid)) { // quang sang mem bam theo mang dat (thay khung vang cu)
+                    if (u.uid.equals(selUid)) { // quang sang mem bam theo o tron (thay khung vang cu)
                         float pulse = 0.30f + 0.10f * (float) Math.sin(now * 5);
                         batch.setColor(1f, 0.85f, 0.3f, pulse);
                         batch.draw(a.glowTex(), cx - 56, cy - 72, 112, 64);
@@ -2003,12 +2242,18 @@ public class MatchScreen extends ScreenAdapter {
         // (Phan hoi chon tuong di qua toast o dong thong bao — khong ve them dong chu de san thoang.)
     }
 
+    // DAI SHOP TREN-GIUA (kieu clip TFT Mobile): 5 the DUNG 148x88 ngay duoi thanh dinh,
+    // chi ve o pha CHUAN BI (render chi goi khi phase == PLANNING). Bo cuc moi the:
+    // khung theo BAC TIEN (shopFrames) -> chan dung o tren (sprite 54px can giua) ->
+    // dong toc/he (kim cuong vang + ten cac toc/he, fontTiny de vua ca 2 toc/he dai) ->
+    // dong duoi: ten tuong trai (font, cat "..." neu tran 100px) + gia phai (xu + so).
     private void drawShop() {
         Assets a = game.assets;
         Match.PlayerState h = match.human();
         float nowS = com.badlogic.gdx.utils.TimeUtils.nanoTime() / 1e9f;
         for (int i = 0; i < 5; i++) {
-            float x = SHOP_X + i * (CARD_W + 8), y = SHOP_Y;
+            Rectangle r = shopCardRect(i);
+            float x = r.x, y = r.y;
             String defId = i < match.shop.size() ? match.shop.get(i) : null;
             if (defId == null) {
                 drawShadowRect(x, y, CARD_W, CARD_H, 0.22f);
@@ -2025,15 +2270,34 @@ public class MatchScreen extends ScreenAdapter {
             batch.setColor(Color.WHITE);
             batch.draw(a.shopFrames[Math.max(0, Math.min(4, d.cost - 1))], x, y, CARD_W, CARD_H);
             batch.setColor(Color.WHITE);
-            batch.draw(a.unit(d.id), x + 8, y + 10, 56, 62);
+            // Chan dung o tren: sprite can giua the, vung y+33..y+87
+            batch.draw(a.unit(d.id), x + CARD_W / 2 - 27, y + 33, 54, 54);
+            // Dong toc/he: kim cuong vang + ten toc/he (1 hoac 2) can giua, glyph ~y+19..y+30
+            StringBuilder tb = new StringBuilder();
+            for (int t = 0; t < d.traits.length; t++) {
+                if (t > 0) tb.append(" · ");
+                tb.append(GameData.traitName(d.traits[t]));
+            }
+            String traits = tb.toString();
+            float tw = measureW(a.fontTiny, traits);
+            float groupW = tw + 13; // kim cuong 6 + dem 7
+            float gx = x + (CARD_W - groupW) / 2;
+            batch.setColor(Ui.GOLD);
+            batch.draw(a.whiteTex(), gx, y + 23, 3.5f, 3.5f, 7, 7, 1, 1, 45, 0, 0, 1, 1, false, false);
+            batch.setColor(Color.WHITE);
+            drawLeft(a.fontTiny, traits, gx + 13, y + 30, Ui.TEXT_DIM);
+            // Dong duoi: ten tuong duoi-trai (cat "..." neu tran 100px — ten dai nhat
+            // "Luna Cong Chua Trang") + gia duoi-phai (icon xu + so mau theo bac)
             Color costColor = d.cost >= 4 ? Ui.GOLD : d.cost == 3 ? new Color(0.78f, 0.62f, 1, 1) : d.cost == 2 ? new Color(0.45f, 0.8f, 1, 1) : Color.WHITE;
-            a.font.setColor(Color.WHITE);
-            layout.setText(a.font, d.name, Color.WHITE, 76, com.badlogic.gdx.utils.Align.left, true);
-            a.font.draw(batch, layout, x + 68, y + CARD_H - 10);
-            // Gia: icon dong vang + so
-            batch.draw(a.icon("coin"), x + 68, y + 7, 15, 15);
+            String nm = d.name;
+            if (measureW(a.font, nm) > 100) {
+                while (nm.length() > 1 && measureW(a.font, nm + "...") > 100) nm = nm.substring(0, nm.length() - 1);
+                nm = nm + "...";
+            }
+            drawLeft(a.font, nm, x + 9, y + 17, Color.WHITE);
+            batch.draw(a.icon("coin"), x + CARD_W - 37, y + 4, 14, 14);
             a.font.setColor(costColor);
-            a.font.draw(batch, String.valueOf(d.cost), x + 86, y + 20);
+            a.font.draw(batch, String.valueOf(d.cost), x + CARD_W - 20, y + 17);
             a.font.setColor(Color.WHITE);
             // Sap gop sao (dang co dung 2 ban 1 sao cua tuong nay): vien vang nhap nhay + nhan
             int owned = 0;
@@ -2046,38 +2310,43 @@ public class MatchScreen extends ScreenAdapter {
             }
         }
         drawShopOdds(a);
-        drawRerollButton(a, h);
     }
 
-    // Dong ti le odds theo bac gia o cap hien tai (du lieu GameData.SHOP_ODDS) — nam ngay tren hang
-    // the (giua hang the o mep duoi va hang cho phia tren).
+    // Dong ti le odds theo bac gia o cap hien tai (GameData.SHOP_ODDS — dung bang engine
+    // dung de roll, Engine.java) — pill toi can giua ngay DUOI dai the (y 562..582).
     private void drawShopOdds(Assets a) {
         Match.PlayerState h = match.human();
         int lvl = Math.max(1, Math.min(9, h.level));
-        float oy = SHOP_Y + CARD_H + 2;
-        batch.setColor(0.05f, 0.05f, 0.12f, 0.78f);
-        batch.draw(a.whiteTex(), SHOP_X - 6, oy, 330, 20);
-        batch.setColor(Color.WHITE);
-        a.fontSmall.setColor(Ui.TEXT_DIM);
-        a.fontSmall.draw(batch, "Tỉ lệ cấp " + lvl + ":", SHOP_X, oy + 15);
         String label = "Tỉ lệ cấp " + lvl + ":";
-        layout.setText(a.fontSmall, label);
-        float cx = SHOP_X + layout.width + 10;
         Color[] tierCols = { new Color(0.75f, 0.75f, 0.8f, 1), new Color(0.4f, 0.9f, 0.45f, 1), new Color(0.4f, 0.65f, 1, 1), new Color(0.78f, 0.5f, 1, 1), new Color(1, 0.8f, 0.2f, 1) };
+        String[] pcts = new String[5];
+        float contentW = measureW(a.fontSmall, label) + 10;
+        for (int c = 0; c < 5; c++) {
+            pcts[c] = GameData.SHOP_ODDS[lvl][c] + "%";
+            contentW += 14 + measureW(a.fontSmall, pcts[c]) + 10;
+        }
+        contentW -= 10; // bo khoang thua sau muc cuoi
+        float px = 640 - (contentW + 16) / 2, py = SHOP_ODDS_Y;
+        batch.setColor(0.05f, 0.05f, 0.12f, 0.78f);
+        batch.draw(a.whiteTex(), px, py, contentW + 16, 20);
+        batch.setColor(Color.WHITE);
+        float cx = px + 8;
+        a.fontSmall.setColor(Ui.TEXT_DIM);
+        a.fontSmall.draw(batch, label, cx, py + 15);
+        cx += measureW(a.fontSmall, label) + 10;
         for (int c = 0; c < 5; c++) {
             batch.setColor(tierCols[c]);
-            batch.draw(a.whiteTex(), cx, oy + 4, 11, 11);
+            batch.draw(a.whiteTex(), cx, py + 4, 11, 11);
             batch.setColor(Color.WHITE);
-            String pct = GameData.SHOP_ODDS[lvl][c] + "%";
             a.fontSmall.setColor(Color.WHITE);
-            a.fontSmall.draw(batch, pct, cx + 14, oy + 15);
-            layout.setText(a.fontSmall, pct);
-            cx += 14 + layout.width + 10;
+            a.fontSmall.draw(batch, pcts[c], cx + 14, py + 15);
+            cx += 14 + measureW(a.fontSmall, pcts[c]) + 10;
         }
         a.fontSmall.setColor(Color.WHITE);
     }
 
-    // Nut LAM MOI tron vang o cuoi hang shop (gia 2) — chi ve khi shop mo, hit-test o planningPress.
+    // Nut DOI LAI tron vang o cot phai, phia tren dia vang (gia 2) — kieu clip TFT
+    // Mobile; ve trong drawRoundButtons (chi pha chuan bi), hit-test o planningPress.
     private void drawRerollButton(Assets a, Match.PlayerState h) {
         boolean afford = h.gold >= 2;
         float d = REROLL_R * 2;
@@ -2091,20 +2360,21 @@ public class MatchScreen extends ScreenAdapter {
         batch.setColor(1, 1, 1, 0.30f);
         batch.draw(a.glowTex(), REROLL_CX - in, REROLL_CY + 2, in * 2, in - 4);
         batch.setColor(Color.WHITE);
-        drawCentered(a.fontSmall, "LÀM MỚI", REROLL_CX, REROLL_CY + 15, afford ? new Color(0.35f, 0.22f, 0.02f, 1) : Ui.TEXT_DIM);
+        drawCentered(a.fontSmall, "ĐỔI LẠI", REROLL_CX, REROLL_CY + 15, afford ? new Color(0.35f, 0.22f, 0.02f, 1) : Ui.TEXT_DIM);
         batch.draw(a.icon("coin"), REROLL_CX - 13, REROLL_CY - 22, 13, 13);
         drawCentered(a.font, "2", REROLL_CX + 8, REROLL_CY - 9, afford ? new Color(0.35f, 0.22f, 0.02f, 1) : Ui.TEXT_DIM);
     }
 
-    // Hai nut tron dieu khien o 2 goc duoi (chi pha chuan bi), ve bang batch sau HUD:
+    // Cac dia tron dieu khien (chi pha chuan bi), ve bang batch sau HUD:
     // - Trai: dia xanh duong = cap + MUA XP: vong cung tien trinh XP quanh dia, huy hieu "Lv. X"
     //   de o goc duoi-phai cua dia, trong dia co nhan MUA XP + icon xu + gia 4 + dong "XP a/b".
-    // - Phai: dia vang = so vang lon o giua + nhan SHOP/DONG; huy hieu lua + so streak khi
-    //   dang co chuoi thang (streak >= 2). Shop dang mo thi dia co vong sang nhap nhay bao quanh.
+    // - Phai duoi: dia vang = DONG HO VANG, chi hien so vang lon (khong con nhan SHOP).
+    // - Phai tren: dia DOI LAI (reroll) + huy hieu lua so streak o goc tren-trai cua no
+    //   khi dang chuoi thang (streak >= 2) — tach khoi dia vang nhu clip.
     private void drawRoundButtons(float now) {
         Assets a = game.assets;
         Match.PlayerState h = match.human();
-        // --- Vong tien trinh XP + vong bao shop-mo: ve bang ShapeRenderer truoc batch ---
+        // --- Vong tien trinh XP: ve bang ShapeRenderer truoc batch ---
         shapes.begin(ShapeRenderer.ShapeType.Filled);
         int need = Engine.xpToNext(h.level);
         float frac = h.level >= 9 ? 1f : Math.min(1f, h.xp / (float) Math.max(1, need));
@@ -2113,11 +2383,6 @@ public class MatchScreen extends ScreenAdapter {
         if (frac > 0) {
             shapes.setColor(0.35f, 0.85f, 1f, 0.95f);
             shapes.arc(XP_CX, XP_CY, XP_R + 6, 90, -360f * frac, 40);
-        }
-        if (shopOpen) {
-            float pulse = 0.55f + 0.35f * (float) Math.sin(now * 4);
-            shapes.setColor(1f, 0.82f, 0.25f, pulse);
-            shapes.circle(GOLD_CX, GOLD_CY, GOLD_R + 7);
         }
         shapes.end();
 
@@ -2163,12 +2428,14 @@ public class MatchScreen extends ScreenAdapter {
         batch.setColor(1, 1, 1, 0.30f);
         batch.draw(a.glowTex(), GOLD_CX - gin, GOLD_CY + 2, gin * 2, gin - 4);
         batch.setColor(Color.WHITE);
-        batch.draw(a.icon("coin"), GOLD_CX - 9, GOLD_CY + 16, 18, 18);
-        drawCentered(a.fontTitle, String.valueOf(h.gold), GOLD_CX, GOLD_CY + 12, new Color(0.30f, 0.19f, 0.02f, 1));
-        drawCentered(a.fontSmall, shopOpen ? "ĐÓNG" : "SHOP", GOLD_CX, GOLD_CY - 22, new Color(0.35f, 0.22f, 0.02f, 1));
-        // Huy hieu chuoi thang: dia do de goc tren-trai dia vang + ngon lua ve tay + so streak
+        batch.draw(a.icon("coin"), GOLD_CX - 9, GOLD_CY + 12, 18, 18);
+        drawCentered(a.fontTitle, String.valueOf(h.gold), GOLD_CX, GOLD_CY + 8, new Color(0.30f, 0.19f, 0.02f, 1));
+        // Dia DOI LAI o cot phai phia tren dia vang (reroll, gia 2)
+        drawRerollButton(a, h);
+        // Huy hieu chuoi thang: dia do de goc tren-trai dia DOI LAI + ngon lua ve tay + so
+        // streak (tach khoi dia vang nhu clip; logic streak giu nguyen: chi thang >= 2)
         if (h.streak >= 2) {
-            float fx = GOLD_CX - 40, fy = GOLD_CY + 40;
+            float fx = REROLL_CX - 40, fy = REROLL_CY + 40;
             batch.setColor(0.62f, 0.10f, 0.05f, 1);
             batch.draw(discTex, fx - 17, fy - 17, 34, 34);
             batch.setColor(1, 0.45f, 0.10f, 1);
@@ -3423,7 +3690,8 @@ public class MatchScreen extends ScreenAdapter {
             for (Match.PlayerState p : match.players) if (p.name.equals(outcome.opponentName)) { real = p; break; }
             if (real != markedOpponent) { markedOpponent = real; buildPlayerList(); }
         }
-        shopOpen = false; // vao giao tranh: lop shop tu dong (nut Toc do da bo — speed chi con la bien noi bo cho cong cu chup)
+        // (Dai shop khong can "dong": render chi ve shop o pha PLANNING nen vao giao
+        // tranh la tu bien mat — nut Toc do da bo, speed chi con la bien noi bo cho cong cu chup.)
         playT = 0; firedIdx = 0; speed = 1;
         floatTexts.clear(); glows.clear(); projectiles.clear(); pows.clear(); battleFx.clear();
         boomT = -1; boomShots.clear(); boomBursts.clear(); finisherT = 0; // Boom/ket lieu chi thuoc ve vong vua dau
@@ -3604,7 +3872,7 @@ public class MatchScreen extends ScreenAdapter {
     //    vung trong -> dong the.
     // 3) Chua co the: cham trung tuong (bat ky phe nao) -> mo the cua tuong do.
     private boolean battlePress(float x, float y) {
-        if (pressPanelTab(x, y)) return true; // dang dau van chuyen tab panel trai duoc
+        if (pressLeftPanel(x, y)) return true; // dang dau van chuyen tab / thu-mo panel trai duoc
         if (emoteUiPress(x, y)) return true; // vong emote dung duoc giua tran (nut/vong nam tren lop thao tac)
         if (itemInfoId != null) {
             if (INFO_CLOSE.contains(x, y) || !INFO_PANEL.contains(x, y)) { itemInfoId = null; game.sound().sfx("click"); }
@@ -3631,13 +3899,78 @@ public class MatchScreen extends ScreenAdapter {
     }
 
     // Nhan xuong o pha chuan bi theo SO DO DIEU KHIEN MOI, thu tu uu tien:
-    // 1) Lop shop (chi khi dang mo): the tuong -> mua ngay (shop van mo sau khi mua);
-    //    nut reroll tron o cuoi hang -> lam moi. Reroll KHONG ton tai khi shop dong.
-    // 2) 2 nut tron goc duoi: tron XP -> mua XP; tron vang -> MO/DONG shop.
+    // 1) Dai shop TREN-GIUA (LUON HIEN o pha chuan bi): the tuong -> mua ngay; dia
+    //    DOI LAI o cot phai -> lam moi shop (gia 2). Ca hai luc nao cung bam duoc.
+    // 2) 2 nut tron goc duoi: tron XP -> mua XP; tron vang CHI LA DONG HO VANG (nuot
+    //    cham, khong lam gi — khong con mo/dong shop nua).
     // 3) Dang cam do -> luong cham cu (planningClick).
     // 4) Tuong o bench/ban -> UNG VIEN KEO (cham thuong se chon o touchUp, keo qua nguong thi keo that).
-    // 5) Khong cham gi ca (vung san trong) -> neu shop dang mo thi DONG SHOP (dung y user:
-    //    "bam vao man hinh trong ben duoi (ben tren shop) la tat shop"), con khong thi bo chon.
+    // 5) Khong cham gi ca -> bo chon (planningClick xu ly).
+    // Nut gat danh sach nguoi choi o pha CHUAN BI (kieu clip): bam "<" o mep phai ->
+    // mo panel dang lop phu; bam ">" o mep trai panel -> thu ve; dang mo ma bam RA
+    // NGOAI panel -> thu ve NHUNG tra false de cu cham van tiep tuc lam viec cua no
+    // (dat tuong, mua do...). Chi chay o planningPress.
+    private boolean pressRightToggle(float x, float y) {
+        if (phase != Phase.PLANNING) return false;
+        if (!rightListOpen) {
+            if (rToggleRect(false).contains(x, y)) {
+                rightListOpen = true;
+                game.sound().sfx("click");
+                return true;
+            }
+            return false;
+        }
+        if (rToggleRect(true).contains(x, y)) {
+            rightListOpen = false;
+            game.sound().sfx("click");
+            return true;
+        }
+        boolean insidePanel = x >= RPANEL_X && y >= rPanelBottom() && y <= RPANEL_TOP;
+        if (!insidePanel) rightListOpen = false; // thu ve nhung khong nuot cu cham
+        return false;
+    }
+
+    // Xu ly cham vung PANEL TRAI (ca 2 trang thai), dung cho planningPress/battlePress:
+    // 1) Nut tron chevron o goc tren-phai panel -> THU GON / MO RONG (ca 2 trang thai).
+    // 2) Dang THU GON: cham icon do trong cot -> mo bang thong tin mon do (nhu cham
+    //    trong khay); cham icon luc giac toc/he -> toast ten + mo ta; cac cham khac
+    //    trong cot -> nuot (khong roi xuong thao tac san).
+    // 3) Dang MO RONG: nhu cu — bam thanh tab de chuyen tab (pressPanelTab).
+    private boolean pressLeftPanel(float x, float y) {
+        if (Math.hypot(x - collapseBtnCx(), y - COLLAPSE_BTN_CY) <= COLLAPSE_BTN_R + 5) {
+            leftCollapsed = !leftCollapsed;
+            game.sound().sfx("click");
+            return true;
+        }
+        if (!leftCollapsed) return pressPanelTab(x, y);
+        Match.PlayerState h = match.human();
+        int itemSlots = collapsedItemSlots();
+        for (int j = 0; j < itemSlots; j++) {
+            float[] c = collapsedSlotCenter(synInfos.size() + j);
+            if (c != null && Math.hypot(x - c[0], y - c[1]) <= 24) {
+                itemInfoId = h.inventory.get(j);
+                game.sound().sfx("click");
+                return true;
+            }
+        }
+        for (int i = 0; i < synInfos.size(); i++) {
+            float[] c = collapsedSlotCenter(i);
+            if (c != null && Math.hypot(x - c[0], y - c[1]) <= 24) {
+                Engine.SynergyInfo s = synInfos.get(i);
+                String desc = "";
+                for (GameData.TraitDef td : GameData.TRAITS) if (td.id.equals(s.traitId)) desc = td.desc;
+                toast(GameData.traitName(s.traitId) + " " + s.count + (s.active ? " (bậc " + s.tier + ")" : "") + " — " + desc);
+                game.sound().sfx("click");
+                return true;
+            }
+        }
+        // Cham trong than cot thu gon (khong trung icon nao): nuot, tranh roi xuong
+        // thao tac ben duoi cot (vung san trai khong co gi khac ngoai diem nghich san
+        // o y<=142 — cot cham toi y>=126 nen phai nuot ca dai do).
+        if (x >= PANEL_X && x <= PANEL_X + COLLAPSE_W + 4 && y >= 120 && y <= PANEL_TOP) return true;
+        return false;
+    }
+
     // Bam vao thanh tab cua panel trai -> chuyen tab (tra ve true neu cham trung vung
     // tab). Xu ly TRUOC moi thao tac khac o ca planningPress lan battlePress: vung tab
     // (y 628..668, x 8..216) khong trung shop/dia tron/the tuong/ban co nao ca.
@@ -3652,31 +3985,15 @@ public class MatchScreen extends ScreenAdapter {
     }
 
     private boolean planningPress(float x, float y) {
-        if (pressPanelTab(x, y)) return true; // chuyen tab TOC/HE <-> TRANG BI
-        if (emoteUiPress(x, y)) return true; // nut mo / vong emote: o tren moi lop thao tac san (ke ca shop dang mo)
+        if (pressLeftPanel(x, y)) return true; // tab trai / thu-mo panel / cot thu gon
+        if (emoteUiPress(x, y)) return true; // nut mo / vong emote: o tren moi lop thao tac san
+        if (pressRightToggle(x, y)) return true; // nut gat mo danh sach nguoi choi (thu ve thi tra false de cham tiep tuc)
         Match.PlayerState h = match.human();
-        if (shopOpen) {
-            for (int i = 0; i < 5; i++) {
-                Rectangle r = new Rectangle(SHOP_X + i * (CARD_W + 8), SHOP_Y, CARD_W, CARD_H);
-                if (r.contains(x, y)) { toast(match.buy(i)); if (match.shop.get(i) == null) game.sound().sfx("coin"); refreshPlanning(); return true; }
-            }
-            if (Math.hypot(x - REROLL_CX, y - REROLL_CY) <= REROLL_R + 4) {
-                int g0 = h.gold; toast(match.reroll()); if (h.gold < g0) game.sound().sfx("reroll");
-                refreshPlanning(); return true;
-            }
-        }
-        if (Math.hypot(x - XP_CX, y - XP_CY) <= XP_R + 4) {
-            int g0 = h.gold, lv0 = h.level; toast(match.buyXp());
-            if (h.level > lv0) game.sound().sfx("levelup"); else if (h.gold < g0) game.sound().sfx("coin");
-            refreshPlanning(); return true;
-        }
-        if (Math.hypot(x - GOLD_CX, y - GOLD_CY) <= GOLD_R + 4) {
-            shopOpen = !shopOpen;
-            game.sound().sfx("click");
-            return true;
-        }
         // The tuong dang mo (co tuong dang chon): nut BAN + o do trong the xu ly truoc het;
         // cham vao phan con lai cua the = nuot cham (khong bo chon, khong roi xuong dat tuong).
+        // Khoi nay phai dung TRUOC hit-test shop: the (x 954..1270, y 166..662) ve phu len
+        // goc phai dai shop moi (the shop 4 cham x 1026, dai cham y 674) — cham vao vung the
+        // phu khong duoc mua trung the shop nam duoi.
         if (selUid != null && CARD.contains(x, y)) {
             Engine.PlacedUnit su = selectedUnit();
             if (su != null) {
@@ -3693,6 +4010,22 @@ public class MatchScreen extends ScreenAdapter {
                 return true;
             }
         }
+        // Dai shop LUON HIEN o pha chuan bi: bam the la mua ngay, khong can mo shop.
+        for (int i = 0; i < 5; i++) {
+            if (shopCardRect(i).contains(x, y)) { toast(match.buy(i)); if (match.shop.get(i) == null) game.sound().sfx("coin"); refreshPlanning(); return true; }
+        }
+        // Dia DOI LAI o cot phai (tren dia vang): lam moi shop, gia 2.
+        if (Math.hypot(x - REROLL_CX, y - REROLL_CY) <= REROLL_R + 4) {
+            int g0 = h.gold; toast(match.reroll()); if (h.gold < g0) game.sound().sfx("reroll");
+            refreshPlanning(); return true;
+        }
+        if (Math.hypot(x - XP_CX, y - XP_CY) <= XP_R + 4) {
+            int g0 = h.gold, lv0 = h.level; toast(match.buyXp());
+            if (h.level > lv0) game.sound().sfx("levelup"); else if (h.gold < g0) game.sound().sfx("coin");
+            refreshPlanning(); return true;
+        }
+        // Dia vang chi la DONG HO hien so vang: nuot cham, khong con mo/dong shop.
+        if (Math.hypot(x - GOLD_CX, y - GOLD_CY) <= GOLD_R + 4) return true;
         if (pressRightTab(x, y)) return true; // chuyen tab NGUOI <-> BIEU DO (sau the tuong: vung tab chong mep tren cua the)
         // Bang thong tin do dang mo: cham nut X hoac cham ra ngoai bang = dong; cham vao icon
         // khac trong khay = xem mon do. Bang khong chan keo-tha tuong (dong xong moi thao tac tiep).
@@ -3740,9 +4073,7 @@ public class MatchScreen extends ScreenAdapter {
             if (selUid != null) return planningClick(x, y); // o trong + dang co tuong chon: dat theo cham nhu cu
             // O ban trong, khong co gi dang chon -> roi xuong nhanh dong shop o duoi
         }
-        boolean handled = planningClick(x, y);
-        if (!handled && shopOpen) { shopOpen = false; game.sound().sfx("click"); return true; }
-        return handled;
+        return planningClick(x, y);
     }
 
     private void beginDragCandidate(Engine.PlacedUnit u, boolean fromBench, float x, float y) {

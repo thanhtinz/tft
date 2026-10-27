@@ -438,6 +438,49 @@ kiểm chứng headless mục 19–21):
   (ảnh trước/sau `tools/shot-topfix-{ice,sunset}-{before,after}.png`); gates: compile PASS,
   `verifyHeadless` **27/27 PASS**, `:web:buildWeb` PASS.
 
+### Làm lại pha chuẩn bị theo clip TFT Mobile (đợt 2026-10-26)
+
+User gửi clip TikTok TFT Mobile (@khoai.tft.mobile, vòng 1-1) và yêu cầu làm lại màn chuẩn bị cho khớp;
+bản ghi chi tiết bố cục từ clip: `~/workspace/research_notes/tft-mobile-planning-layout-from-tiktok-20261026.md`.
+Đã áp dụng (chỉ `MatchScreen` + `ScreenshotMain` + mục Học Chơi; engine/cơ chế không đổi):
+
+- **Shop lên TRÊN–GIỮA, luôn hiện ở pha chuẩn bị:** dải 5 thẻ dọc 148×88 tại y 586 (x bắt đầu 254, pitch 156)
+  ngay dưới dòng pha, **bỏ hẳn cơ chế mở/đóng shop bằng đĩa vàng** (trường `shopOpen` đã xóa). Thẻ kiểu clip:
+  khung viền theo bậc tiền (asset `shopFrames`), chân dung phía trên, dòng icon kim cương + tên tộc/hệ ở giữa,
+  tên tướng dưới-trái (cắt `...` nếu quá 100px), icon xu + giá dưới-phải theo màu bậc. Ngay dưới dải thẻ là
+  **pill tỉ lệ odds** (y 562, cao 20) lấy đúng bảng `GameData.SHOP_ODDS[level]` của engine. Pha giao
+  tranh/kết quả: dải shop **biến mất hoàn toàn**. Hệ quả đã biết và chấp nhận (giống clip — shop là lớp phủ
+  trên sân): trong pha chuẩn bị dải thẻ phủ hàng tướng địch xem trước trên cùng (sprite hàng đó vẫn ló phần
+  thân dưới mép pill; cụm thanh của hàng đó đã lật xuống dưới tướng từ đợt trước nên vẫn đọc được), và dây cờ
+  chuỗi thắng của sàn đấu (y 642–659) bị thẻ che trong pha chuẩn bị (vẫn hiện đủ ở pha kết quả) — shop được
+  vẽ SAU trang trí sân để thẻ không bị cờ đè.
+- **Đĩa vàng chỉ còn là đồng hồ vàng:** bỏ chữ SHOP/ĐÓNG, bỏ vòng pulse, bỏ chức năng bấm mở shop (chạm vào
+  chỉ nuốt chạm). **Reroll thành đĩa riêng** "ĐỔI LẠI" r38 tại (1218, 156) ở cột phải phía trên đĩa vàng, giá
+  2, mờ khi thiếu vàng; **huy hiệu lửa chuỗi thắng dời lên góc trên-trái đĩa ĐỔI LẠI** (logic streak ≥2 giữ
+  nguyên, tách khỏi đĩa vàng như clip).
+- **Danh sách người chơi ẩn ở pha chuẩn bị:** panel phải thu về, chỉ còn nút gạt 34×68 ở mép phải (chữ `<`);
+  chạm thì panel hiện dạng lớp phủ (đủ 2 tab Người/Sát thương, dấu đối thủ kiếm chéo + viền vàng giữ nguyên),
+  nút gạt đổi thành `>` ở mép trái panel, chạm lại hoặc chạm ra ngoài là thu về (cú chạm ra ngoài vẫn tiếp
+  tục xử lý như chạm sân thường). Pha giao tranh/kết quả hiện như cũ.
+- **Panel trái thêm THU GỌN THỦ CÔNG:** nút tròn chevron r15 ở góc trên panel — thu thành cột hẹp 56px chỉ
+  gồm icon lục giác màu theo tộc/hệ (đang kích hoạt có vòng vàng; chạm xem tên + số + mô tả hiệu ứng) và ô
+  vuông đồ trong khay (chạm mở bảng thông tin; tràn thì ô cuối hiện `+N`). Trạng thái thu/mở là lựa chọn của
+  người chơi, **giữ nguyên qua mọi pha** (clip chứng minh panel không tự thu theo pha), mặc định mở rộng.
+- **Bench thành 9 ô tròn:** thay mảng đất vẽ đĩa tròn tại đúng tâm ô cũ (đĩa ngoài 82px viền tối, lòng 72px
+  xanh ngọc trầm + vệt bóng sáng nửa trên). **Tọa độ/kích thước vùng chạm bench không đổi** (mảng đất là lớp
+  vẽ tách riêng trong `drawBench` nên thay được; `benchPatchTex` vẫn được nạp cho nơi khác nếu cần).
+
+Khác biệt có chủ đích so với clip (giữ nguyên, đã ghi rõ): **(1)** panel trái vẫn có **tab trang bị** đầy đủ —
+hệ thống đồ của game cần khay để ghép/đeo/kéo, clip TFT Mobile để trang bị ở nơi khác; trạng thái thu gọn
+vẫn chứa ô đồ để xem nhanh. **(2) Không có cần điều khiển di chuyển tinh linh** ở mép trái như clip — tinh
+linh của game tự đi lại trên sân. **(3)** Lật thẻ úp mở trận + vòng chọn x-4, đĩa MUA XP, thẻ tướng khi chạm,
+kéo–thả/kéo bán, vòng emote: giữ nguyên như các đợt trước.
+
+Kiểm chứng: mode chụp mới `plantop` (1-1 shop trên-giữa, sân cỏ), `planopen` (panel phải mở dạng lớp phủ),
+`plancollapse` (panel trái thu gọn cột icon), `planstreak` (ép streak=3: odds + đĩa ĐỔI LẠI + huy hiệu lửa),
+cộng `battle`/`result` (shop biến mất, danh sách hiện) — ảnh `tools/shot-plan-*.png`, đã tự soi từng điểm
+theo bản ghi clip. Gates: compile PASS, `verifyHeadless` **27/27 PASS** (không đổi), `:web:buildWeb` PASS.
+
 ## Cách build & chạy
 
 > **Lưu ý bản trên GitHub:** các file nhị phân (PNG sprite/scene, font TTF, `gradle-wrapper.jar`) được lưu
